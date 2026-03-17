@@ -3,10 +3,10 @@ import { updateUser, deleteUser } from "@/lib/google-sheets";
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
     const user = await req.json();
     const success = await updateUser(id, user);
     if (success) {
@@ -21,9 +21,9 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = params.id;
+  const { id } = await params;
   const success = await deleteUser(id);
   if (success) {
     return NextResponse.json({ message: "User deleted successfully" });
