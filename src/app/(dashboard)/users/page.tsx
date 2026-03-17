@@ -147,7 +147,7 @@ export default function UsersPage() {
             placeholder="Filter database..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 rounded-xl focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-zinc-100 transition-all shadow-sm"
+            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-navy-950 border border-gray-100 dark:border-navy-800 rounded-xl focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-zinc-100 transition-all shadow-sm"
           />
         </div>
         <div className="flex gap-4">
@@ -162,7 +162,7 @@ export default function UsersPage() {
       </div>
 
       {/* Pagination & Filter Row */}
-      <div className="flex items-center justify-between bg-[#FFFBF0]/60 dark:bg-zinc-900/60 px-4 py-2 rounded-xl border border-orange-100/30 dark:border-zinc-800/50">
+      <div className="flex items-center justify-between bg-[#FFFBF0]/60 dark:bg-navy-900/60 px-4 py-2 rounded-xl border border-orange-100/30 dark:border-navy-800/50">
         <div className="flex items-center gap-2">
           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Page 1 of 1</p>
           <div className="flex gap-1">
@@ -177,7 +177,7 @@ export default function UsersPage() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
-            <select className="bg-white dark:bg-zinc-950 border border-orange-100 dark:border-zinc-800 rounded-lg px-2 py-0.5 text-[10px] font-bold outline-none dark:text-zinc-100">
+            <select className="bg-white dark:bg-navy-950 border border-orange-100 dark:border-navy-800 rounded-lg px-2 py-0.5 text-[10px] font-bold outline-none dark:text-zinc-100">
               <option>10</option>
               <option>25</option>
               <option>50</option>
@@ -193,7 +193,7 @@ export default function UsersPage() {
       >
         <table className="w-full text-left border-collapse table-auto">
           <thead>
-            <tr className="bg-[#FFFBF0]/50 dark:bg-zinc-950/50 text-gray-400">
+            <tr className="bg-[#FFFBF0]/50 dark:bg-navy-950/50 text-gray-400">
               <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-widest border-b border-orange-100/20 dark:border-zinc-800/50">ID</th>
               <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-widest border-b border-orange-100/20 dark:border-zinc-800/50">Details</th>
               <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-widest border-b border-orange-100/20 dark:border-zinc-800/50">Contact</th>

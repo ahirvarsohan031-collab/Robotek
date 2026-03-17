@@ -8,7 +8,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#f7eccd] to-[#f2b60c] dark:from-zinc-950 dark:to-black flex overflow-hidden transition-all duration-500">
+    <div className="min-h-screen bg-gradient-to-b from-[#f7eccd] to-[#f2b60c] dark:from-[#0B1120] dark:to-[#070B14] flex overflow-hidden transition-all duration-500">
       {/* Sidebar - Fixed Width */}
       <Sidebar />
 

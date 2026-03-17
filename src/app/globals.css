@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 @theme {
-  --color-zinc-950: #09090b;
-  --color-zinc-900: #18181b;
-  --color-zinc-800: #27272a;
+  --color-navy-950: #070B14;
+  --color-navy-900: #0B1120;
+  --color-navy-800: #0F172A;
+  --color-navy-700: #1E293B;
 }
 
 @variant dark (&:is(.dark *));
@@ -16,10 +17,10 @@
 }
 
 .dark {
-  --background: #09090b;
-  --foreground: #fafafa;
-  --panel-bg: #18181b;
-  --panel-card: #27272a;
+  --background: #0B1120;
+  --foreground: #f8fafc;
+  --panel-bg: #0F172A;
+  --panel-card: #1E293B;
 }
 
 body {

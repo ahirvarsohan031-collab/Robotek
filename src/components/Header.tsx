@@ -37,14 +37,14 @@ export default function Header() {
           <input 
             type="text" 
             placeholder="Search..." 
-            className="w-52 pl-11 pr-4 py-1.5 bg-white/50 dark:bg-zinc-900/50 border border-gray-100 dark:border-zinc-800 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#FFD500]/10 focus:border-[#FFD500] dark:focus:border-[#FFD500]/50 focus:bg-white dark:focus:bg-zinc-900 transition-all text-xs font-bold placeholder:text-gray-400 dark:text-zinc-100"
+            className="w-52 pl-11 pr-4 py-1.5 bg-white/50 dark:bg-navy-900/50 border border-gray-100 dark:border-navy-800 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#FFD500]/10 focus:border-[#FFD500] dark:focus:border-[#FFD500]/50 focus:bg-white dark:focus:bg-navy-900 transition-all text-xs font-bold placeholder:text-gray-400 dark:text-zinc-100"
           />
         </div>
 
         {/* Theme Toggle (Replaces Bell) */}
         <ThemeToggle />
 
-        <div className="h-5 w-[1px] bg-gray-200/50 dark:bg-zinc-800 mx-0.5" />
+        <div className="h-5 w-[1px] bg-gray-200/50 dark:bg-navy-800 mx-0.5" />
 
         {/* User Profile & Logout */}
         <div className="flex items-center gap-1.5">
