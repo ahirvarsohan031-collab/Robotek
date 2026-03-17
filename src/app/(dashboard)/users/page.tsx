@@ -109,8 +109,8 @@ export default function UsersPage() {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 dark:text-zinc-100 tracking-tight">Users</h1>
-          <p className="text-gray-500 dark:text-zinc-400 font-bold text-[10px] uppercase tracking-wider">System Access Control</p>
+          <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Users</h1>
+          <p className="text-gray-500 dark:text-slate-300 font-bold text-[10px] uppercase tracking-wider">System Access Control</p>
         </div>
         <button
           onClick={() => {
@@ -147,22 +147,22 @@ export default function UsersPage() {
             placeholder="Filter database..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-navy-950 border border-gray-100 dark:border-navy-800 rounded-xl focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-zinc-100 transition-all shadow-sm"
+            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-navy-950 border border-gray-100 dark:border-navy-700/50 rounded-xl focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-white transition-all shadow-sm"
           />
         </div>
         <div className="flex gap-4">
           <div 
             style={{ backgroundColor: 'var(--panel-card)' }}
-            className="px-4 py-2 rounded-xl border border-gray-100 dark:border-zinc-800 transition-colors duration-500"
+            className="px-4 py-2 rounded-xl border border-gray-100 dark:border-white/10 transition-colors duration-500"
           >
-            <p className="text-[8px] text-gray-400 font-black uppercase tracking-widest">Count</p>
-            <p className="text-sm font-black text-gray-900 dark:text-zinc-100">{users.length}</p>
+            <p className="text-[8px] text-gray-400 dark:text-slate-400 font-black uppercase tracking-widest">Count</p>
+            <p className="text-sm font-black text-gray-900 dark:text-white">{users.length}</p>
           </div>
         </div>
       </div>
 
       {/* Pagination & Filter Row */}
-      <div className="flex items-center justify-between bg-[#FFFBF0]/60 dark:bg-navy-900/60 px-4 py-2 rounded-xl border border-orange-100/30 dark:border-navy-800/50">
+      <div className="flex items-center justify-between bg-[#FFFBF0]/60 dark:bg-navy-800/40 px-4 py-2 rounded-xl border border-orange-100/30 dark:border-white/5">
         <div className="flex items-center gap-2">
           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Page 1 of 1</p>
           <div className="flex gap-1">
@@ -177,7 +177,7 @@ export default function UsersPage() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
-            <select className="bg-white dark:bg-navy-950 border border-orange-100 dark:border-navy-800 rounded-lg px-2 py-0.5 text-[10px] font-bold outline-none dark:text-zinc-100">
+            <select className="bg-white dark:bg-navy-900 border border-orange-100 dark:border-navy-700 rounded-lg px-2 py-0.5 text-[10px] font-bold outline-none dark:text-white">
               <option>10</option>
               <option>25</option>
               <option>50</option>
@@ -193,7 +193,7 @@ export default function UsersPage() {
       >
         <table className="w-full text-left border-collapse table-auto">
           <thead>
-            <tr className="bg-[#FFFBF0]/50 dark:bg-navy-950/50 text-gray-400">
+            <tr className="bg-[#FFFBF0]/50 dark:bg-navy-800/30 text-gray-400 dark:text-slate-400">
               <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-widest border-b border-orange-100/20 dark:border-zinc-800/50">ID</th>
               <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-widest border-b border-orange-100/20 dark:border-zinc-800/50">Details</th>
               <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-widest border-b border-orange-100/20 dark:border-zinc-800/50">Contact</th>
@@ -233,13 +233,13 @@ export default function UsersPage() {
                         )}
                       </div>
                       <div>
-                        <p className="font-black text-xs text-gray-900 dark:text-zinc-100 leading-tight">{user.username}</p>
-                        <p className="text-[9px] text-gray-400 font-bold lowercase truncate max-w-[120px]">{user.email}</p>
+                        <p className="font-black text-xs text-gray-900 dark:text-white leading-tight">{user.username}</p>
+                        <p className="text-[9px] text-gray-400 dark:text-slate-400 font-bold lowercase truncate max-w-[120px]">{user.email}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-2">
-                    <p className="text-[11px] font-bold text-gray-600 dark:text-zinc-400">{user.phone || "—"}</p>
+                    <p className="text-[11px] font-bold text-gray-600 dark:text-slate-300">{user.phone || "—"}</p>
                   </td>
                   <td className="px-4 py-2">
                     <span className="inline-flex items-center px-2 py-0.5 bg-orange-50 dark:bg-[#FFD500]/10 text-[#CE2029] dark:text-[#FFD500] text-[8px] font-black uppercase tracking-widest rounded-md border border-orange-100 dark:border-[#FFD500]/20">
@@ -272,14 +272,14 @@ export default function UsersPage() {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 dark:bg-black/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="relative bg-[#FFFBF0] dark:bg-zinc-900 w-full max-w-xl rounded-2xl shadow-2xl border border-orange-100/50 dark:border-zinc-800 overflow-hidden animate-in fade-in zoom-in duration-300">
+          <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
+          <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-xl rounded-2xl shadow-2xl border border-orange-100/50 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in duration-300">
             <div className="p-4 border-b border-orange-100/50 dark:border-zinc-800 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-black text-gray-900 dark:text-zinc-100 tracking-tight">
+                <h2 className="text-lg font-black text-gray-900 dark:text-white tracking-tight">
                   {editingUser ? "Edit User" : "Add New User"}
                 </h2>
-                <p className="text-gray-400 dark:text-zinc-500 font-bold text-xs uppercase tracking-widest mt-1">Profile Configuration</p>
+                <p className="text-gray-400 dark:text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">Profile Configuration</p>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -289,7 +289,7 @@ export default function UsersPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-4 space-y-4 max-h-[80vh] overflow-y-auto bg-white dark:bg-zinc-950">
+            <form onSubmit={handleSubmit} className="p-4 space-y-4 max-h-[80vh] overflow-y-auto bg-white dark:bg-navy-800/50">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Basic Info */}
                 <div className="space-y-4">

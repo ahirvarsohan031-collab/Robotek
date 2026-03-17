@@ -19,7 +19,7 @@ export default function Sidebar() {
         <div className="w-10 h-10 min-w-[40px] rounded-xl overflow-hidden shadow-lg transform group-hover/logo:-rotate-6 transition-transform duration-500 ring-1 ring-black/5 dark:ring-white/10">
           <img src="/logo_compact.png" alt="Logo" className="w-full h-full object-cover" />
         </div>
-        <span className="text-xl font-black tracking-tight text-gray-900 dark:text-slate-100 opacity-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap">
+        <span className="text-xl font-black tracking-tight text-gray-900 dark:text-white opacity-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap">
           Robotek
         </span>
       </div>

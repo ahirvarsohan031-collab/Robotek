@@ -16,8 +16,11 @@ export default function Header() {
 
   return (
     <header 
-      style={{ backgroundColor: 'var(--panel-bg)' }}
-      className="h-14 backdrop-blur-md border-b border-orange-100/20 dark:border-zinc-800/50 flex items-center justify-between px-6 sticky top-0 z-10 transition-all duration-300 shadow-sm"
+      style={{ 
+        backgroundColor: 'var(--panel-bg)',
+        borderBottom: '1px solid var(--panel-border)'
+      }}
+      className="h-14 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-10 transition-all duration-300 shadow-sm"
     >
       {/* Left Section: Welcome Message */}
       <div className="flex flex-col">

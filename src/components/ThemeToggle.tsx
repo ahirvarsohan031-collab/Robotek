@@ -24,7 +24,7 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="relative w-8.5 h-8.5 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 text-gray-400 dark:text-zinc-500 hover:text-[#CE2029] dark:hover:text-[#FFD500] rounded-xl flex items-center justify-center transition-all group shadow-sm hover:shadow-md active:scale-95"
+      className="relative w-8.5 h-8.5 bg-white dark:bg-navy-800/50 border border-gray-100 dark:border-white/10 text-gray-400 dark:text-slate-300 hover:text-[#CE2029] dark:hover:text-[#FFD500] rounded-xl flex items-center justify-center transition-all group shadow-sm hover:shadow-md active:scale-95"
       title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
     >
       <div className="relative w-4.5 h-4.5">

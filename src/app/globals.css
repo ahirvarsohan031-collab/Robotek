@@ -3,8 +3,8 @@
 @theme {
   --color-navy-950: #070B14;
   --color-navy-900: #0B1120;
-  --color-navy-800: #0F172A;
-  --color-navy-700: #1E293B;
+  --color-navy-800: #1E293B;
+  --color-navy-700: #334155;
 }
 
 @variant dark (&:is(.dark *));
@@ -14,21 +14,23 @@
   --foreground: #171717;
   --panel-bg: #FFF9E6;
   --panel-card: #ffffff;
+  --panel-border: rgba(0, 0, 0, 0.05);
 }
 
 .dark {
   --background: #0B1120;
   --foreground: #f8fafc;
-  --panel-bg: #0F172A;
+  --panel-bg: #131C2E;
   --panel-card: #1E293B;
+  --panel-border: rgba(255, 255, 255, 0.1);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  transition: all 0.5s ease;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .panel-transition {
-  transition: background-color 0.5s ease, border-color 0.5s ease, color 0.5s ease;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
