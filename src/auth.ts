@@ -37,6 +37,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.role = token.role;
         // @ts-ignore
         session.user.image = token.image_url;
+        // @ts-ignore
+        session.user.permissions = token.permissions;
       }
       return session;
     },
@@ -46,9 +48,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // @ts-ignore
         token.username = user.username;
         // @ts-ignore
+        token.name = user.username; // Map username to name for NextAuth
+        // @ts-ignore
         token.role = (user as any).role_name;
         // @ts-ignore
         token.image_url = (user as any).image_url;
+        // @ts-ignore
+        token.permissions = (user as any).permissions;
       }
       return token;
     },

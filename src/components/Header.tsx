@@ -36,7 +36,7 @@ export default function Header() {
       {/* Left Section: Welcome Message */}
       <div className="flex flex-col">
         <h1 className="text-xl font-black text-gray-900 dark:text-zinc-100 leading-none">
-          HI, {session?.user?.name?.toUpperCase() || session?.user?.email?.split("@")[0].toUpperCase() || "USER"}
+          HI, {(session?.user as any)?.username?.toUpperCase() || session?.user?.name?.toUpperCase() || session?.user?.email?.split("@")[0].toUpperCase() || "USER"}
         </h1>
         <p className="text-[10px] font-black text-[#CE2029] dark:text-[#FFD500] uppercase tracking-wider mt-1">
           {/* @ts-ignore */}

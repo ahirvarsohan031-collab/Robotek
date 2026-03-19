@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateUser, deleteUser } from "@/lib/google-sheets";
+import { updateUser, deleteUser, updateUserPermissions } from "@/lib/google-sheets";
+import { navigation } from "@/lib/navigation";
 import { uploadFileToDrive, getDriveImageUrl } from "@/lib/google-drive";
+import { User } from "@/types/user";
 
 export async function PUT(
   req: NextRequest,
@@ -24,6 +26,20 @@ export async function PUT(
       }
     } else {
       userData = await req.json();
+    }
+
+    // If permissions are provided, it's a visibility update
+    if (userData.permissions && Array.isArray(userData.permissions)) {
+      const pages = navigation.map(n => n.id);
+      const username = userData.username || "User";
+      
+      const success = await updateUserPermissions(id, username, userData.permissions, pages);
+      
+      if (success) {
+        return NextResponse.json({ message: "Permissions updated successfully" });
+      } else {
+        return NextResponse.json({ error: "Failed to update permissions" }, { status: 500 });
+      }
     }
 
     const success = await updateUser(id, userData);

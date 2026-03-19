@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUsers, addUser } from "@/lib/google-sheets";
+import { getUsers, addUser, getPagePermissions } from "@/lib/google-sheets";
 import { uploadFileToDrive, getDriveImageUrl } from "@/lib/google-drive";
+import { User } from "@/types/user";
 
 export async function GET() {
-  const users = await getUsers();
-  return NextResponse.json(users);
+  const [users, permissions] = await Promise.all([
+    getUsers(),
+    getPagePermissions()
+  ]);
+
+  const usersWithPermissions = users.map((user: User) => ({
+    ...user,
+    permissions: permissions[user.id] || []
+  }));
+
+  return NextResponse.json(usersWithPermissions);
 }
 
 export async function POST(req: NextRequest) {

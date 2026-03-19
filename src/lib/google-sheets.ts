@@ -121,6 +121,132 @@ export async function updateUser(id: string, user: User): Promise<boolean> {
   }
 }
 
+const VISIBILITY_SHEET_NAME = "page_visibility";
+
+export async function getPagePermissions(): Promise<Record<string, string[]>> {
+  try {
+    const sheets = await getSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      range: `${VISIBILITY_SHEET_NAME}!A:Z`,
+    });
+
+    const rows = response.data.values;
+    if (!rows || rows.length <= 1) return {};
+
+    const headers = rows[0]; // [ "User ID", "users", "delegations", ... ]
+    const permissions: Record<string, string[]> = {};
+
+    for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const userId = row[0];
+        const userPerms: string[] = [];
+        
+        // Skip Index 0 (User ID) and Index 1 (User Name)
+        for (let j = 2; j < headers.length; j++) {
+            if (row[j] === "TRUE" || row[j] === "true") {
+                userPerms.push(headers[j]);
+            }
+        }
+        permissions[userId] = userPerms;
+    }
+
+    return permissions;
+  } catch (error) {
+    console.error("Error fetching permissions:", error);
+    return {};
+  }
+}
+
+export async function updateUserPermissions(userId: string, username: string, userPermissions: string[], allPageIds: string[]): Promise<boolean> {
+  try {
+    const sheets = await getSheetsClient();
+    
+    // 1. Get current data
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      range: `${VISIBILITY_SHEET_NAME}!A:Z`,
+    });
+
+    let rows = response.data.values || [];
+    
+    // 2. Initialize headers if empty
+    if (rows.length === 0) {
+      const initialHeaders = ["User ID", "User Name", ...allPageIds];
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: GOOGLE_SHEET_ID,
+        range: `${VISIBILITY_SHEET_NAME}!A1`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [initialHeaders] },
+      });
+      rows = [initialHeaders];
+    }
+
+    let headers = rows[0];
+    
+    // 3. Ensure allPageIds are in headers
+    let headersChanged = false;
+    for (const pageId of allPageIds) {
+      if (!headers.includes(pageId)) {
+        headers.push(pageId);
+        headersChanged = true;
+      }
+    }
+    
+    if (headersChanged) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: GOOGLE_SHEET_ID,
+        range: `${VISIBILITY_SHEET_NAME}!A1`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [headers] },
+      });
+    }
+
+    // 4. Find user row
+    const rowIndex = rows.findIndex(row => row[0] === userId);
+    
+    // 5. Construct user row
+    const newRow = [userId, username];
+    for (let i = 2; i < headers.length; i++) {
+        const pageId = headers[i];
+        newRow.push(userPermissions.includes(pageId) ? "TRUE" : "FALSE");
+    }
+
+    if (rowIndex === -1) {
+      // Append new user
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: GOOGLE_SHEET_ID,
+        range: `${VISIBILITY_SHEET_NAME}!A:A`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [newRow] },
+      });
+    } else {
+      // Update existing user
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: GOOGLE_SHEET_ID,
+        range: `${VISIBILITY_SHEET_NAME}!A${rowIndex + 1}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [newRow] },
+      });
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error updating user permissions:", error);
+    return false;
+  }
+}
+
+function getColumnLetter(column: number): string {
+  let temp, letter = '';
+  while (column > 0) {
+    temp = (column - 1) % 26;
+    letter = String.fromCharCode(temp + 65) + letter;
+    column = (column - temp - 1) / 26;
+  }
+  return letter;
+}
+
 export async function deleteUser(id: string): Promise<boolean> {
   try {
     const sheets = await getSheetsClient();
@@ -169,7 +295,7 @@ export async function getUserByUsernameOrEmail(identifier: string): Promise<User
 
     if (!userRow) return null;
 
-    return {
+    const user: User = {
       id: userRow[0],
       username: userRow[1],
       email: userRow[2],
@@ -180,6 +306,17 @@ export async function getUserByUsernameOrEmail(identifier: string): Promise<User
       image_url: userRow[7],
       dob: userRow[8],
     };
+
+    // Fetch and attach permissions for this user
+    try {
+      const allPermissions = await getPagePermissions();
+      user.permissions = allPermissions[user.id] || [];
+    } catch (permError) {
+      console.error("Error fetching permissions for login:", permError);
+      user.permissions = [];
+    }
+
+    return user;
   } catch (error) {
     console.error("Error fetching user from Google Sheets:", error);
     return null;

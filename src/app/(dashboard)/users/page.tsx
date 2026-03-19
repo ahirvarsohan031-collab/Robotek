@@ -12,19 +12,27 @@ import {
   ChevronRightIcon,
   ChevronUpIcon,
   ChevronDownIcon,
-  ArrowDownTrayIcon
+  ArrowDownTrayIcon,
+  UsersIcon,
+  EyeIcon
 } from "@heroicons/react/24/outline";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
 
+import { navigation } from "@/lib/navigation";
+
 export default function UsersPage() {
+  const [activeTab, setActiveTab] = useState<'list' | 'visibility'>('list');
   const [users, setUsers] = useState<User[]>([]);
+  const [isSavingPermissions, setIsSavingPermissions] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: keyof User; direction: 'asc' | 'desc' } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -210,6 +218,38 @@ export default function UsersPage() {
     }
   };
 
+  const handlePermissionToggle = async (userId: string, pageId: string) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+
+    const currentPermissions = user.permissions || [];
+    const newPermissions = currentPermissions.includes(pageId)
+      ? currentPermissions.filter(p => p !== pageId)
+      : [...currentPermissions, pageId];
+
+    // Optimistic update
+    setUsers(prev => prev.map(u => 
+      u.id === userId ? { ...u, permissions: newPermissions } : u
+    ));
+
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...user, permissions: newPermissions }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update permissions");
+    } catch (error) {
+      console.error(error);
+      // Revert on error
+      setUsers(prev => prev.map(u => 
+        u.id === userId ? { ...u, permissions: currentPermissions } : u
+      ));
+      alert("Failed to update permission. Please try again.");
+    }
+  };
+
   const filteredUsers = users.filter((u) =>
     Object.values(u).some((val) =>
       val?.toString().toLowerCase().includes(searchTerm.toLowerCase())
@@ -227,9 +267,18 @@ export default function UsersPage() {
   const sortedUsers = [...filteredUsers].sort((a, b) => {
     if (!sortConfig) return 0;
     const { key, direction } = sortConfig;
-    const aValue = a[key] || "";
-    const bValue = b[key] || "";
+    let aValue = a[key] || "";
+    let bValue = b[key] || "";
     
+    // Numeric sort for ID
+    if (key === 'id') {
+      const aNum = parseInt(String(aValue));
+      const bNum = parseInt(String(bValue));
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return direction === 'asc' ? aNum - bNum : bNum - aNum;
+      }
+    }
+
     if (aValue < bValue) return direction === 'asc' ? -1 : 1;
     if (aValue > bValue) return direction === 'asc' ? 1 : -1;
     return 0;
@@ -242,6 +291,10 @@ export default function UsersPage() {
       <ChevronDownIcon className="w-3 h-3 ml-1 text-[#FFD500]" />;
   };
 
+  const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedUsers = sortedUsers.slice(startIndex, startIndex + itemsPerPage);
+
   return (
     <div className="space-y-4">
       {/* Standalone Title Row */}
@@ -251,43 +304,76 @@ export default function UsersPage() {
           <p className="text-gray-500 dark:text-slate-300 font-bold text-[10px] uppercase tracking-wider">System Access Control</p>
         </div>
         
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleExport}
-            className="flex items-center justify-center gap-2 bg-white dark:bg-navy-800 border-2 border-[#003875] dark:border-[#FFD500] text-[#003875] dark:text-[#FFD500] px-4 py-2 rounded-xl font-black transition-all shadow-sm active:scale-95 uppercase tracking-widest text-[10px] hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/5"
-          >
-            <ArrowDownTrayIcon className="w-4 h-4" />
-            Export
-          </button>
-          
-          <button
-            onClick={() => {
-              setEditingUser(null);
-              setFormData({
-                id: Date.now().toString(),
-                username: "",
-                email: "",
-                password: "",
-                phone: "",
-                role_name: "",
-                late_long: "",
-                image_url: "",
-                dob: "",
-              });
-              setIsModalOpen(true);
-            }}
-            className="flex items-center justify-center gap-2 bg-[#003875] dark:bg-[#FFD500] hover:bg-[#002855] dark:hover:bg-[#FFC000] text-white dark:text-black px-4 py-2 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px]"
-          >
-            <PlusIcon className="w-4 h-4" />
-            Add User
-          </button>
+        <div className="flex flex-wrap items-center">
+          {/* Single Cylinder Container for All Actions */}
+          <div className="flex items-center rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] overflow-hidden shadow-sm transition-all active:translate-y-[2px] active:border-b-2">
+            {/* Tab: User List */}
+            <button
+              onClick={() => setActiveTab('list')}
+              className={`flex items-center gap-2 px-5 py-2 font-black uppercase tracking-widest text-[10px] transition-all ${
+                activeTab === 'list' 
+                ? 'bg-white dark:bg-navy-800 text-[#CE2029] dark:text-[#FFD500] scale-105' 
+                : 'bg-white dark:bg-navy-800 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
+              }`}
+            >
+              <UsersIcon className={`w-4 h-4 ${activeTab === 'list' ? 'text-[#CE2029] dark:text-[#FFD500]' : ''}`} />
+              User List
+            </button>
+            
+            {/* Tab: Page Visibility */}
+            <button
+              onClick={() => setActiveTab('visibility')}
+              className={`flex items-center gap-2 px-5 py-2 font-black uppercase tracking-widest text-[10px] transition-all border-l-2 border-[#003875] dark:border-[#FFD500] ${
+                activeTab === 'visibility' 
+                ? 'bg-white dark:bg-navy-800 text-[#CE2029] dark:text-[#FFD500] scale-105' 
+                : 'bg-white dark:bg-navy-800 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
+              }`}
+            >
+              <EyeIcon className={`w-4 h-4 ${activeTab === 'visibility' ? 'text-[#CE2029] dark:text-[#FFD500]' : ''}`} />
+              Page Visibility
+            </button>
+
+            {/* Action: Export */}
+            <button
+              onClick={handleExport}
+              className="flex items-center justify-center gap-2 bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] px-5 py-2 font-black transition-colors hover:bg-gray-50 dark:hover:bg-navy-700 uppercase tracking-widest text-[10px] border-l-2 border-[#003875] dark:border-[#FFD500]"
+            >
+              <ArrowDownTrayIcon className="w-4 h-4" />
+              Export
+            </button>
+            
+            {/* Action: Add User */}
+            <button
+              onClick={() => {
+                setEditingUser(null);
+                setFormData({
+                  id: Date.now().toString(),
+                  username: "",
+                  email: "",
+                  password: "",
+                  phone: "",
+                  role_name: "",
+                  late_long: "",
+                  image_url: "",
+                  dob: "",
+                });
+                setIsModalOpen(true);
+              }}
+              className="flex items-center justify-center bg-white dark:bg-navy-800 hover:bg-gray-50 dark:hover:bg-navy-700 text-[#003875] dark:text-[#FFD500] px-5 py-2 transition-colors border-l-2 border-[#003875] dark:border-[#FFD500]"
+              title="Add User"
+            >
+              <PlusIcon className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
 
-      <div 
-        style={{ borderColor: 'var(--panel-border)' }}
-        className="rounded-2xl border overflow-hidden shadow-sm transition-all duration-500"
-      >
+
+      {activeTab === 'list' ? (
+        <div 
+          style={{ borderColor: 'var(--panel-border)' }}
+          className="rounded-2xl border overflow-hidden shadow-sm transition-all duration-500"
+        >
         {/* Integrated Control Bar */}
         <div 
           style={{ 
@@ -309,23 +395,54 @@ export default function UsersPage() {
 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Page 1 of 1</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                Page <span className="text-[#003875] dark:text-[#FFD500]">{currentPage}</span> of {totalPages || 1}
+              </p>
               <div className="flex gap-0.5">
-                <button className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 rounded-md transition-all">
+                <button 
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all"
+                >
+                  First
+                </button>
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all"
+                >
                   <ChevronLeftIcon className="w-4 h-4" />
                 </button>
-                <button className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 rounded-md transition-all">
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all"
+                >
                   <ChevronRightIcon className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="px-2 py-1 text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all"
+                >
+                  Last
                 </button>
               </div>
             </div>
             <div className="h-4 w-[1px] bg-gray-200 dark:bg-white/10" />
             <div className="flex items-center gap-2">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
-              <select className="bg-transparent border-none p-0 text-[10px] font-bold outline-none dark:text-white cursor-pointer">
-                <option>10</option>
-                <option>25</option>
-                <option>50</option>
+              <select 
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-transparent border-none p-0 text-[10px] font-bold outline-none dark:text-white cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
               </select>
             </div>
           </div>
@@ -341,25 +458,25 @@ export default function UsersPage() {
               <tr 
                 className="bg-[#003875] dark:bg-navy-950 text-white dark:text-slate-200"
               >
-                <th onClick={() => handleSort('id')} className="px-4 py-3 text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('id')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
                   <div className="flex items-center">ID <SortIcon column="id" /></div>
                 </th>
-                <th onClick={() => handleSort('username')} className="px-4 py-3 text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('username')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
                   <div className="flex items-center">Details <SortIcon column="username" /></div>
                 </th>
-                <th onClick={() => handleSort('phone')} className="px-4 py-3 text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('phone')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
                   <div className="flex items-center">Contact <SortIcon column="phone" /></div>
                 </th>
-                <th onClick={() => handleSort('role_name')} className="px-4 py-3 text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('role_name')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
                   <div className="flex items-center">Role <SortIcon column="role_name" /></div>
                 </th>
-                <th onClick={() => handleSort('dob')} className="px-4 py-3 text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('dob')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
                   <div className="flex items-center">DOB <SortIcon column="dob" /></div>
                 </th>
-                <th onClick={() => handleSort('late_long')} className="px-4 py-3 text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('late_long')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
                   <div className="flex items-center">Coordinates <SortIcon column="late_long" /></div>
                 </th>
-                <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-right">Actions</th>
+                <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-right">Actions</th>
               </tr>
             </thead>
           <tbody className="divide-y divide-orange-50/30">
@@ -370,19 +487,19 @@ export default function UsersPage() {
                   <p className="text-gray-400 font-bold uppercase tracking-widest text-[8px]">Syncing...</p>
                 </td>
               </tr>
-            ) : sortedUsers.length === 0 ? (
+            ) : paginatedUsers.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center">
                   <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No entries found</p>
                 </td>
               </tr>
             ) : (
-              sortedUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-orange-50/10 border-b border-gray-100 dark:border-white/5 last:border-0 transition-colors group">
-                  <td className="px-4 py-2">
-                    <span className="font-mono text-[10px] text-gray-400 font-bold">{user.id}</span>
+              paginatedUsers.map((user) => (
+                <tr key={user.id} className="hover:bg-orange-50/10 border-b-2 border-gray-200 dark:border-white/10 last:border-0 transition-colors group">
+                  <td className="px-4 py-3">
+                    <span className="font-mono text-xs text-gray-400 font-bold">{user.id}</span>
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-zinc-800 overflow-hidden border border-gray-100 dark:border-zinc-700 flex-shrink-0">
                         {user.image_url ? (
@@ -392,35 +509,34 @@ export default function UsersPage() {
                             className="w-full h-full object-cover"
                             referrerPolicy="no-referrer"
                             onError={(e) => {
-                              // Fallback if image fails to load - use 2 letters
                               (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random&color=fff&length=2`;
                             }}
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center font-black text-gray-400 dark:text-zinc-500 text-[10px]">
+                          <div className="w-full h-full flex items-center justify-center font-black text-gray-400 dark:text-zinc-500 text-xs">
                             {user.username?.substring(0, 2).toUpperCase()}
                           </div>
                         )}
                       </div>
                       <div>
                         <p className="font-black text-xs text-gray-900 dark:text-white leading-tight">{user.username}</p>
-                        <p className="text-[9px] text-gray-400 dark:text-slate-400 font-bold lowercase truncate max-w-[120px]">{user.email}</p>
+                        <p className="text-[10px] text-gray-400 dark:text-slate-400 font-bold lowercase truncate max-w-[120px]">{user.email}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-2">
-                    <p className="text-[11px] font-bold text-gray-600 dark:text-slate-300">{user.phone || "—"}</p>
+                  <td className="px-4 py-3">
+                    <p className="text-xs font-bold text-gray-600 dark:text-slate-300">{user.phone || "—"}</p>
                   </td>
-                  <td className="px-4 py-2">
-                    <span className="inline-flex items-center px-2 py-0.5 bg-orange-50 dark:bg-[#FFD500]/10 text-[#CE2029] dark:text-[#FFD500] text-[8px] font-black uppercase tracking-widest rounded-md border border-orange-100 dark:border-[#FFD500]/20">
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center px-2 py-0.5 bg-orange-50 dark:bg-[#FFD500]/10 text-[#CE2029] dark:text-[#FFD500] text-[10px] font-black uppercase tracking-widest rounded-md border border-orange-100 dark:border-[#FFD500]/20">
                       {user.role_name || "MEMBER"}
                     </span>
                   </td>
-                  <td className="px-4 py-2">
-                    <p className="text-[10px] font-bold text-gray-600 dark:text-slate-300">{user.dob || "—"}</p>
+                  <td className="px-4 py-3">
+                    <p className="text-xs font-bold text-gray-600 dark:text-slate-300">{user.dob || "—"}</p>
                   </td>
-                  <td className="px-4 py-2">
-                    <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 font-mono italic">{user.late_long || "—"}</p>
+                  <td className="px-4 py-3">
+                    <p className="text-xs font-bold text-gray-400 dark:text-slate-500 font-mono italic">{user.late_long || "—"}</p>
                   </td>
                   <td className="px-4 py-2 text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -445,8 +561,71 @@ export default function UsersPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
-    </div>
+      ) : (
+        /* Page Visibility Matrix */
+        <div 
+          style={{ borderColor: 'var(--panel-border)', backgroundColor: 'var(--panel-card)' }}
+          className="rounded-2xl border overflow-hidden shadow-sm transition-all duration-500"
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse table-auto">
+              <thead>
+                <tr className="bg-[#003875] dark:bg-navy-950 text-white dark:text-slate-200">
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-r border-white/10 w-64">User Name</th>
+                  {navigation.map(page => (
+                    <th key={page.id} className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center">
+                      {page.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-white/10">
+                {users.map(user => (
+                  <tr key={user.id} className="hover:bg-orange-50/10 transition-colors group">
+                    <td className="px-6 py-4 border-r border-gray-200 dark:border-white/10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-zinc-800 overflow-hidden border border-gray-100 dark:border-zinc-700 flex-shrink-0">
+                          {user.image_url ? (
+                            <img 
+                              src={getNormalizedImageUrl(user.image_url)} 
+                              alt={user.username} 
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center font-black text-gray-400 dark:text-zinc-500 text-xs">
+                              {user.username?.substring(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-black text-sm text-gray-900 dark:text-white leading-tight">{user.username}</p>
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{user.role_name || "MEMBER"}</p>
+                        </div>
+                      </div>
+                    </td>
+                    {navigation.map(page => (
+                      <td key={page.id} className="px-6 py-4 text-center">
+                        <label className="relative inline-flex items-center cursor-pointer group/check">
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer"
+                            checked={user.permissions?.includes(page.id) || false}
+                            onChange={() => handlePermissionToggle(user.id, page.id)}
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-[#CE2029] dark:peer-checked:bg-[#FFD500]"></div>
+                        </label>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
     {/* Modal */}
       {isModalOpen && (

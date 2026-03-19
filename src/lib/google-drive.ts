@@ -16,7 +16,7 @@ async function getDriveClient() {
   return google.drive({ version: "v3", auth: oauth2Client });
 }
 
-export async function uploadFileToDrive(file: File): Promise<string | null> {
+export async function uploadFileToDrive(file: File, folderId?: string): Promise<string | null> {
   try {
     const drive = await getDriveClient();
     
@@ -29,7 +29,7 @@ export async function uploadFileToDrive(file: File): Promise<string | null> {
 
     const fileMetadata = {
       name: `${Date.now()}-${file.name}`,
-      parents: [IMAGE_FOLDER_ID],
+      parents: [folderId || IMAGE_FOLDER_ID],
     };
 
     const media = {
@@ -67,4 +67,30 @@ export async function uploadFileToDrive(file: File): Promise<string | null> {
 export function getDriveImageUrl(fileId: string) {
   // Use the thumbnail endpoint which is much more reliable for direct embedding
   return `https://drive.google.com/thumbnail?sz=w400&id=${fileId}`;
+}
+
+export async function getFileStream(fileId: string) {
+  try {
+    const drive = await getDriveClient();
+    const response = await drive.files.get(
+      { fileId: fileId, alt: "media" },
+      { responseType: "stream" }
+    );
+    
+    // Also get metadata for MIME type
+    const metadata = await drive.files.get({
+      fileId: fileId,
+      fields: "mimeType, size, name"
+    });
+
+    return {
+      stream: response.data,
+      mimeType: metadata.data.mimeType,
+      size: metadata.data.size,
+      name: metadata.data.name
+    };
+  } catch (error) {
+    console.error("Error getting file stream from Drive:", error);
+    return null;
+  }
 }
