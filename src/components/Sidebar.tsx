@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navigation } from "@/lib/navigation";
@@ -16,6 +17,87 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const { data: session } = useSession();
   const pathname = usePathname();
   
+  const [delegationsPendingCount, setDelegationsPendingCount] = useState(0);
+  const [checklistsPendingCount, setChecklistsPendingCount] = useState(0);
+  const [ticketsOpenCount, setTicketsOpenCount] = useState(0);
+
+  useEffect(() => {
+    if (!session?.user) return;
+    
+    // @ts-ignore
+    const userRole = session.user.role || 'USER';
+    const currentUser = (session.user as any)?.username || "";
+
+    const fetchCounts = async () => {
+      try {
+        const [delRes, checkRes, tickRes] = await Promise.all([
+          fetch('/api/delegations'),
+          fetch('/api/checklists'),
+          fetch('/api/tickets')
+        ]);
+        
+        let delData = [];
+        let checkData = [];
+        let tickData = [];
+        if (delRes.ok) delData = await delRes.json();
+        if (checkRes.ok) checkData = await checkRes.json();
+        if (tickRes.ok) tickData = await tickRes.json();
+
+        // Filter for USER role
+        const baseDel = userRole === 'USER' ? delData.filter((d: any) => d.assigned_to === currentUser) : delData;
+        const baseCheck = userRole === 'USER' ? checkData.filter((c: any) => c.assigned_to === currentUser) : checkData;
+
+        // Common helper
+        const getEarliestDate = (dateString?: string) => {
+          if (!dateString) return null;
+          if (!dateString.includes(',')) {
+            if (dateString.includes('/')) {
+              const parts = dateString.split(' ')[0].split('/');
+              if (parts.length === 3) {
+                  return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+              }
+            }
+            return new Date(dateString);
+          }
+          const dates = dateString.split(',').map(d => new Date(d.trim()));
+          const validDates = dates.filter(d => !isNaN(d.getTime()));
+          if (validDates.length === 0) return null;
+          return validDates.reduce((earliest, current) => current < earliest ? current : earliest);
+        };
+
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        const isDelayedOrToday = (item: any) => {
+          const s = item.status;
+          if (s === 'Completed' || s === 'Approved') return false;
+          
+          if (!item.due_date) return false;
+          
+          const due = getEarliestDate(item.due_date);
+          if (!due || isNaN(due.getTime())) return false;
+          
+          due.setHours(0, 0, 0, 0);
+          const diffDays = Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          
+          return diffDays <= 0; // Negative is delayed, 0 is today
+        };
+
+        setDelegationsPendingCount(baseDel.filter(isDelayedOrToday).length);
+        setChecklistsPendingCount(baseCheck.filter(isDelayedOrToday).length);
+        setTicketsOpenCount(tickData.filter((t: any) => t.status !== 'Closed').length);
+      } catch (err) {
+        console.error("Failed to fetch sidebar counts:", err);
+      }
+    };
+
+    fetchCounts();
+    
+    // Refresh counts every 2 minutes
+    const interval = setInterval(fetchCounts, 120000);
+    return () => clearInterval(interval);
+  }, [session]);
+
   // @ts-ignore
   const userPermissions = session?.user?.permissions || [];
   const isAdmin = (session?.user as any)?.role === 'ADMIN';
@@ -90,9 +172,26 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                 <div className="flex items-center justify-center w-6 min-w-[24px]">
                   <item.icon className={`w-6 h-6 transition-all font-bold ${isActive ? 'text-white' : 'group-hover/item:text-[#003875] dark:group-hover/item:text-[#FFD500] group-hover/item:scale-110'}`} />
                 </div>
-                <span className={`text-sm tracking-wide transition-all duration-300 whitespace-nowrap ${mobileOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0'}`}>
+                <span className={`flex-1 text-sm tracking-wide transition-all duration-300 whitespace-nowrap ${mobileOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0'}`}>
                   {item.name}
                 </span>
+                
+                {/* Pending Counts Badge */}
+                {item.id === 'delegations' && delegationsPendingCount > 0 && (
+                  <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                    {delegationsPendingCount}
+                  </span>
+                )}
+                {item.id === 'checklists' && checklistsPendingCount > 0 && (
+                  <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                    {checklistsPendingCount}
+                  </span>
+                )}
+                {item.id === 'tickets' && ticketsOpenCount > 0 && (
+                  <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                    {ticketsOpenCount}
+                  </span>
+                )}
               </Link>
             );
           })}

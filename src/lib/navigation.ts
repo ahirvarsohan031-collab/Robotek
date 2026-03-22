@@ -2,7 +2,8 @@ import {
   UsersIcon, 
   DocumentTextIcon,
   Squares2X2Icon,
-  ClipboardDocumentListIcon
+  ClipboardDocumentListIcon,
+  TicketIcon
 } from "@heroicons/react/24/outline";
 
 export const navigation = [
@@ -10,4 +11,5 @@ export const navigation = [
   { name: 'Users', id: 'users', href: '/users', icon: UsersIcon },
   { name: 'Delegations', id: 'delegations', href: '/delegations', icon: DocumentTextIcon },
   { name: 'Checklists', id: 'checklists', href: '/checklists', icon: ClipboardDocumentListIcon },
+  { name: 'Help Tickets', id: 'tickets', href: '/tickets', icon: TicketIcon },
 ];

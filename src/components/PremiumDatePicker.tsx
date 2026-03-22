@@ -115,7 +115,7 @@ export default function PremiumDatePicker({
       )}
       <div 
         onClick={() => setIsOpen(true)}
-        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus-within:border-[#FFD500] cursor-pointer flex items-center justify-between gap-4 group transition-all shadow-sm"
+        className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-navy-700 focus-within:border-[#FFD500] cursor-pointer flex items-center justify-between gap-4 group transition-all shadow-sm"
       >
         <div className="flex-1 min-w-0">
           <span className="font-bold text-xs text-gray-800 dark:text-zinc-100 block">
@@ -124,7 +124,7 @@ export default function PremiumDatePicker({
         </div>
 
         {multiSelect && selectedDates.length > 1 && (
-          <div className="flex-1 min-w-0 border-l border-orange-100 dark:border-zinc-800 pl-3 py-0.5 max-h-[40px] overflow-y-auto custom-scrollbar no-scrollbar">
+          <div className="flex-1 min-w-0 border-l border-orange-100 dark:border-navy-800 pl-3 py-0.5 max-h-[40px] overflow-y-auto custom-scrollbar no-scrollbar">
             <span className="text-[9px] text-gray-400 font-bold block leading-relaxed">
               {selectedDates.slice(1).map(d => {
                 const [y, m, day] = d.split('-').map(Number);

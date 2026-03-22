@@ -296,9 +296,11 @@ export default function UsersPage() {
   const paginatedUsers = sortedUsers.slice(startIndex, startIndex + itemsPerPage);
 
   return (
-    <div className="space-y-4">
-      {/* Standalone Title Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+    <div className="space-y-6">
+      {/* Sticky Top Header & Tabs */}
+      <div className="space-y-4 mb-2">
+        {/* Standalone Title Row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
         <div>
           <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight">Users</h1>
           <p className="text-gray-500 dark:text-slate-300 font-bold text-[8px] md:text-[10px] uppercase tracking-wider">System Access Control</p>
@@ -372,92 +374,64 @@ export default function UsersPage() {
           </div>
         </div>
       </div>
-
+    </div>
 
       {activeTab === 'list' ? (
         <div 
           style={{ borderColor: 'var(--panel-border)' }}
           className="rounded-2xl border overflow-hidden shadow-sm transition-all duration-500"
         >
-        {/* Integrated Control Bar */}
-        <div 
-          style={{ 
-            backgroundColor: 'var(--panel-card)',
-            borderBottom: '1px solid var(--panel-border)'
-          }}
-          className="p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
-        >
-          <div className="relative group flex-1 max-w-full lg:max-w-sm">
-            <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
-            <input
-              type="text"
-              placeholder="Search database..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-1.5 bg-gray-50 dark:bg-navy-900 border border-gray-100 dark:border-navy-700/50 rounded-lg focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-white transition-all shadow-sm"
-            />
-          </div>
+          {/* Integrated Search & Pagination Row */}
+          <div 
+            style={{ 
+              backgroundColor: 'var(--panel-card)',
+              borderBottom: '1px solid var(--panel-border)',
+            }}
+            className="px-3 md:px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+          >
+            <div className="relative group flex-1 max-w-full lg:max-w-sm">
+              <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
+              <input
+                type="text"
+                placeholder="Search database..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-1.5 bg-gray-50 dark:bg-navy-900 border border-gray-100 dark:border-navy-700/50 rounded-lg focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-white transition-all shadow-sm"
+              />
+            </div>
 
-          <div className="flex flex-wrap items-center gap-3 md:gap-4">
-            <div className="flex items-center gap-2">
-              <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                Page <span className="text-[#003875] dark:text-[#FFD500]">{currentPage}</span> of {totalPages || 1}
-              </p>
-              <div className="flex gap-0.5">
-                <button 
-                  onClick={() => setCurrentPage(1)}
-                  disabled={currentPage === 1}
-                  className="px-1.5 py-1 text-[9px] md:text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all whitespace-nowrap"
+            <div className="flex flex-wrap items-center gap-3 md:gap-4">
+              <div className="flex items-center gap-2">
+                <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                  Page <span className="text-[#003875] dark:text-[#FFD500]">{currentPage}</span> of {totalPages || 1}
+                </p>
+                <div className="flex gap-0.5">
+                  <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-1.5 py-1 text-[9px] md:text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all whitespace-nowrap">First</button>
+                  <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all"><ChevronLeftIcon className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || totalPages === 0} className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all"><ChevronRightIcon className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="px-1.5 py-1 text-[9px] md:text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all whitespace-nowrap">Last</button>
+                </div>
+              </div>
+              <div className="hidden xs:block h-4 w-[1px] bg-gray-200 dark:bg-white/10" />
+              <div className="flex items-center gap-2">
+                <label className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
+                <select 
+                  value={itemsPerPage}
+                  onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                  className="bg-transparent border-none p-0 text-[10px] font-bold outline-none dark:text-white cursor-pointer"
                 >
-                  First
-                </button>
-                <button 
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all"
-                >
-                  <ChevronLeftIcon className="w-3.5 h-3.5" />
-                </button>
-                <button 
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all"
-                >
-                  <ChevronRightIcon className="w-3.5 h-3.5" />
-                </button>
-                <button 
-                  onClick={() => setCurrentPage(totalPages)}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className="px-1.5 py-1 text-[9px] md:text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all whitespace-nowrap"
-                >
-                  Last
-                </button>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
               </div>
             </div>
-            <div className="hidden xs:block h-4 w-[1px] bg-gray-200 dark:bg-white/10" />
-            <div className="flex items-center gap-2">
-              <label className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
-              <select 
-                value={itemsPerPage}
-                onChange={(e) => {
-                  setItemsPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="bg-transparent border-none p-0 text-[9px] md:text-[10px] font-bold outline-none dark:text-white cursor-pointer"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-            </div>
           </div>
-        </div>
-
-        {/* Table Section - Direct continuation of controls */}
-        <div 
-          style={{ backgroundColor: 'var(--panel-card)' }}
-          className="overflow-x-auto transition-colors duration-500"
-        >
+          {/* Table Section - Direct continuation of controls */}
+          <div 
+            style={{ backgroundColor: 'var(--panel-card)' }}
+            className="overflow-x-auto transition-colors duration-500"
+          >
           <table className="w-full text-left border-collapse table-auto">
             <thead>
               <tr 

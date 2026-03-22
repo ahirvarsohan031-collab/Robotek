@@ -587,17 +587,26 @@ export default function ChecklistsPage() {
   };
 
   // Filtering
-  const filteredChecklists = checklists.filter((c) => {
+  const currentUser = (session?.user as any)?.username || "";
+  const baseChecklists = userRole === 'USER' 
+    ? checklists.filter(c => c.assigned_to === currentUser)
+    : checklists;
+
+  const filteredChecklists = baseChecklists.filter((c) => {
     const matchesSearch = Object.values(c).some((val) =>
       val?.toString().toLowerCase().includes(searchTerm.toLowerCase())
     );
     
     const matchesStatus = activeStatusFilters.length === 0 || activeStatusFilters.includes(getDisplayStatus(c));
     
-    const currentUser = (session?.user as any)?.username || "";
     let matchesAssignment = true;
-    if (assignmentFilter === 'ToMe') matchesAssignment = c.assigned_to === currentUser;
-    else if (assignmentFilter === 'ByMe') matchesAssignment = c.assigned_by === currentUser;
+    
+    if (userRole === 'USER') {
+      matchesAssignment = c.assigned_to === currentUser;
+    } else {
+      if (assignmentFilter === 'ToMe') matchesAssignment = c.assigned_to === currentUser;
+      else if (assignmentFilter === 'ByMe') matchesAssignment = c.assigned_by === currentUser;
+    }
 
     let matchesDate = true;
     if (dateFilters.length > 0) {
@@ -659,7 +668,7 @@ export default function ChecklistsPage() {
   });
 
   const getDateFilterCount = (filter: string) => {
-    return checklists.filter(c => {
+    return baseChecklists.filter(c => {
       const displayStatus = getDisplayStatus(c);
       if (!c.due_date || displayStatus === 'Completed' || displayStatus === 'Approved') return false;
       const now = new Date();
@@ -785,8 +794,10 @@ export default function ChecklistsPage() {
   const allUsers = Array.from(new Set(checklists.flatMap(c => [c.assigned_by, c.assigned_to]).filter(Boolean)));
 
   return (
-    <div className="space-y-4">
-      {/* Responsive Title Row */}
+    <div className="space-y-6">
+      {/* Sticky Top Header & Filters */}
+      <div className="sticky top-0 z-30 bg-[var(--panel-bg)] -mx-2 -mt-2 p-2 pt-0.5 md:-mx-4 md:-mt-4 md:p-4 md:pt-1 border-b border-gray-100 dark:border-white/5 shadow-sm space-y-4">
+        {/* Responsive Title Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
         <div>
           <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight">Checklists</h1>
@@ -865,7 +876,7 @@ export default function ChecklistsPage() {
             { label: 'Approved', icon: <ShieldCheckIcon className="w-3 h-3" />, color: 'bg-green-50 text-green-600 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700' },
             { label: 'Overdue', icon: <ExclamationTriangleIcon className="w-3 h-3" />, color: 'bg-red-50 text-red-600 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700' },
           ].map(tile => {
-            const count = tile.label === 'All' ? checklists.length : checklists.filter(c => getDisplayStatus(c) === tile.label).length;
+            const count = tile.label === 'All' ? baseChecklists.length : baseChecklists.filter(c => getDisplayStatus(c) === tile.label).length;
             const isActive = tile.label === 'All' ? activeStatusFilters.length === 0 : activeStatusFilters.includes(tile.label);
             return (
               <button
@@ -931,28 +942,30 @@ export default function ChecklistsPage() {
                 />
               </div>
 
-              <div className="flex items-center bg-gray-100 dark:bg-navy-900 rounded-full p-1 border border-gray-200 dark:border-navy-700 flex-shrink-0">
-                <button 
-                  onClick={() => { setAssignmentFilter(assignmentFilter === 'ToMe' ? 'All' : 'ToMe'); setCurrentPage(1); }}
-                  className={`px-2 md:px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all h-[26px] flex items-center gap-1 ${assignmentFilter === 'ToMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
-                >
-                  <span className="hidden xs:inline">To Me</span>
-                  <span className="xs:hidden">To</span>
-                  <span className={`px-1 rounded-full text-[8px] ${assignmentFilter === 'ToMe' ? 'bg-white/20' : 'bg-gray-200 dark:bg-navy-800'}`}>
-                    {checklists.filter(c => c.assigned_to === ((session?.user as any)?.username || "")).length}
-                  </span>
-                </button>
-                <button 
-                  onClick={() => { setAssignmentFilter(assignmentFilter === 'ByMe' ? 'All' : 'ByMe'); setCurrentPage(1); }}
-                  className={`px-2 md:px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all h-[26px] flex items-center gap-1 ${assignmentFilter === 'ByMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
-                >
-                  <span className="hidden xs:inline">By Me</span>
-                  <span className="xs:hidden">By</span>
-                  <span className={`px-1 rounded-full text-[8px] ${assignmentFilter === 'ByMe' ? 'bg-white/20' : 'bg-gray-200 dark:bg-navy-800'}`}>
-                    {checklists.filter(c => c.assigned_by === ((session?.user as any)?.username || "")).length}
-                  </span>
-                </button>
-              </div>
+              {userRole !== 'USER' && (
+                <div className="flex items-center bg-gray-100 dark:bg-navy-900 rounded-full p-1 border border-gray-200 dark:border-navy-700 flex-shrink-0">
+                  <button 
+                    onClick={() => { setAssignmentFilter(assignmentFilter === 'ToMe' ? 'All' : 'ToMe'); setCurrentPage(1); }}
+                    className={`px-2 md:px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all h-[26px] flex items-center gap-1 ${assignmentFilter === 'ToMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                  >
+                    <span className="hidden xs:inline">To Me</span>
+                    <span className="xs:hidden">To</span>
+                    <span className={`px-1 rounded-full text-[8px] ${assignmentFilter === 'ToMe' ? 'bg-white/20' : 'bg-gray-200 dark:bg-navy-800'}`}>
+                      {baseChecklists.filter(c => c.assigned_to === ((session?.user as any)?.username || "")).length}
+                    </span>
+                  </button>
+                  <button 
+                    onClick={() => { setAssignmentFilter(assignmentFilter === 'ByMe' ? 'All' : 'ByMe'); setCurrentPage(1); }}
+                    className={`px-2 md:px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all h-[26px] flex items-center gap-1 ${assignmentFilter === 'ByMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                  >
+                    <span className="hidden xs:inline">By Me</span>
+                    <span className="xs:hidden">By</span>
+                    <span className={`px-1 rounded-full text-[8px] ${assignmentFilter === 'ByMe' ? 'bg-white/20' : 'bg-gray-200 dark:bg-navy-800'}`}>
+                      {baseChecklists.filter(c => c.assigned_by === ((session?.user as any)?.username || "")).length}
+                    </span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Date Filters */}
@@ -1023,6 +1036,7 @@ export default function ChecklistsPage() {
             </div>
           </div>
         </div>
+      </div>
 
         {viewMode === 'list' ? (
           /* Table View - Scrollable on mobile */
@@ -2038,7 +2052,7 @@ export default function ChecklistsPage() {
                         {['Pending', 'Planned', 'Need Clarity', 'Need Revision', 'Completed', 'Approved', 'Hold', 'Re-Open', 'Overdue']
                           .filter(s => s.toLowerCase().includes(modalStatusSearch.toLowerCase()))
                           .map(s => {
-                            const count = checklists.filter(c => getDisplayStatus(c) === s).length;
+                            const count = baseChecklists.filter(c => getDisplayStatus(c) === s).length;
                             const isSelected = modalStatusFilter.includes(s);
                             return (
                               <div key={s} 
@@ -2087,7 +2101,7 @@ export default function ChecklistsPage() {
                     <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
                        <div className="max-h-48 overflow-y-auto p-1 custom-scrollbar">
                         {['Low', 'Medium', 'High'].map(p => {
-                          const count = checklists.filter(c => c.priority === p).length;
+                          const count = baseChecklists.filter(c => c.priority === p).length;
                           const isSelected = modalPriorityFilter.includes(p);
                           return (
                             <div key={p} 
@@ -2145,7 +2159,7 @@ export default function ChecklistsPage() {
                         {usersList
                           .filter(u => u.username.toLowerCase().includes(modalAssignedToSearch.toLowerCase()))
                           .map(u => {
-                            const count = checklists.filter(c => c.assigned_to === u.username).length;
+                            const count = baseChecklists.filter(c => c.assigned_to === u.username).length;
                             const isSelected = modalAssignedToFilter.includes(u.username);
                             return (
                               <div key={u.id} 
@@ -2203,7 +2217,7 @@ export default function ChecklistsPage() {
                         {usersList
                           .filter(u => ['ADMIN', 'EA'].includes(u.role_name?.toUpperCase() || '') && u.username.toLowerCase().includes(modalAssignedBySearch.toLowerCase()))
                           .map(u => {
-                            const count = checklists.filter(c => c.assigned_by === u.username).length;
+                            const count = baseChecklists.filter(c => c.assigned_by === u.username).length;
                             const isSelected = modalAssignedByFilter.includes(u.username);
                             return (
                               <div key={u.id} 
@@ -2261,7 +2275,7 @@ export default function ChecklistsPage() {
                         {predefinedDepartments
                           .filter(d => d.toLowerCase().includes(modalDepartmentSearch.toLowerCase()))
                           .map(d => {
-                            const count = checklists.filter(del => del.department === d).length;
+                            const count = baseChecklists.filter(del => del.department === d).length;
                             const isSelected = modalDepartmentFilter.includes(d);
                             return (
                               <div key={d} 
@@ -2319,7 +2333,7 @@ export default function ChecklistsPage() {
                         {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Half Yearly', 'Yearly']
                           .filter(f => f.toLowerCase().includes(modalFrequencySearch.toLowerCase()))
                           .map(f => {
-                            const count = checklists.filter(c => c.frequency === f).length;
+                            const count = baseChecklists.filter(c => c.frequency === f).length;
                             const isSelected = modalFrequencyFilter.includes(f);
                             return (
                               <div key={f} 

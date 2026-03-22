@@ -628,7 +628,12 @@ export default function DelegationsPage() {
     return 'Pending';
   };
 
-  const filteredDelegations = delegations.filter((d) => {
+  const currentUser = (session?.user as any)?.username || "";
+  const baseDelegations = userRole === 'USER' 
+    ? delegations.filter(d => d.assigned_to === currentUser)
+    : delegations;
+
+  const filteredDelegations = baseDelegations.filter((d) => {
     // Search match
     const matchesSearch = Object.values(d).some((val) =>
       val?.toString().toLowerCase().includes(searchTerm.toLowerCase())
@@ -638,12 +643,16 @@ export default function DelegationsPage() {
     const matchesStatus = activeStatusFilters.length === 0 || activeStatusFilters.includes(getDisplayStatus(d));
     
     // Assignment match
-    const currentUser = (session?.user as any)?.username || "";
     let matchesAssignment = true;
-    if (assignmentFilter === 'ToMe') {
+    
+    if (userRole === 'USER') {
       matchesAssignment = d.assigned_to === currentUser;
-    } else if (assignmentFilter === 'ByMe') {
-      matchesAssignment = d.assigned_by === currentUser;
+    } else {
+      if (assignmentFilter === 'ToMe') {
+        matchesAssignment = d.assigned_to === currentUser;
+      } else if (assignmentFilter === 'ByMe') {
+        matchesAssignment = d.assigned_by === currentUser;
+      }
     }
 
     // Date match
@@ -738,7 +747,7 @@ export default function DelegationsPage() {
   });
 
   const getDateFilterCount = (filter: string) => {
-    return delegations.filter(d => {
+    return baseDelegations.filter(d => {
       const displayStatus = getDisplayStatus(d);
       if (!d.due_date || displayStatus === 'Completed' || displayStatus === 'Approved') return false;
       
@@ -929,8 +938,10 @@ export default function DelegationsPage() {
   const paginatedDelegations = sortedDelegations.slice(startIndex, startIndex + itemsPerPage);
 
   return (
-    <div className="space-y-4">
-      {/* Responsive Title Row */}
+    <div className="space-y-6">
+      {/* Sticky Top Header & Filters */}
+      <div className="sticky top-0 z-30 bg-[var(--panel-bg)] -mx-2 -mt-2 p-2 pt-0.5 md:-mx-4 md:-mt-4 md:p-4 md:pt-1 border-b border-gray-100 dark:border-white/5 shadow-sm space-y-4">
+        {/* Responsive Title Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
         <div className="min-w-0">
           <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight truncate">Delegations</h1>
@@ -1014,7 +1025,7 @@ export default function DelegationsPage() {
             { label: 'Re-Open', icon: <BoltIcon className="w-3 h-3" />, color: 'bg-violet-50 text-violet-600 border-violet-300 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-700' },
             { label: 'Overdue', icon: <ExclamationTriangleIcon className="w-3 h-3" />, color: 'bg-red-50 text-red-600 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700' },
           ].map(tile => {
-            const count = tile.label === 'All' ? delegations.length : delegations.filter(d => getDisplayStatus(d) === tile.label).length;
+            const count = tile.label === 'All' ? baseDelegations.length : baseDelegations.filter(d => getDisplayStatus(d) === tile.label).length;
             const isActive = tile.label === 'All' ? activeStatusFilters.length === 0 : activeStatusFilters.includes(tile.label);
             return (
               <button
@@ -1074,26 +1085,28 @@ export default function DelegationsPage() {
                 />
               </div>
 
-              <div className="flex items-center bg-gray-50 dark:bg-navy-900 p-0.5 rounded-xl border border-gray-100 dark:border-white/5 shadow-sm shrink-0">
-                <button
-                  onClick={() => { setAssignmentFilter(assignmentFilter === 'ToMe' ? 'All' : 'ToMe'); setCurrentPage(1); }}
-                  className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${assignmentFilter === 'ToMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  title="To Me"
-                >
-                  <span className="hidden xs:inline">To Me</span>
-                  <span className="xs:hidden">To</span>
-                  <span className="text-[8px] opacity-70">{delegations.filter(d => d.assigned_to === ((session?.user as any)?.username || "")).length}</span>
-                </button>
-                <button 
-                  onClick={() => { setAssignmentFilter(assignmentFilter === 'ByMe' ? 'All' : 'ByMe'); setCurrentPage(1); }}
-                  className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${assignmentFilter === 'ByMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  title="By Me"
-                >
-                  <span className="hidden xs:inline">By Me</span>
-                  <span className="xs:hidden">By</span>
-                  <span className="text-[8px] opacity-70">{delegations.filter(d => d.assigned_by === ((session?.user as any)?.username || "")).length}</span>
-                </button>
-              </div>
+              {userRole !== 'USER' && (
+                <div className="flex items-center bg-gray-50 dark:bg-navy-900 p-0.5 rounded-xl border border-gray-100 dark:border-white/5 shadow-sm shrink-0">
+                  <button
+                    onClick={() => { setAssignmentFilter(assignmentFilter === 'ToMe' ? 'All' : 'ToMe'); setCurrentPage(1); }}
+                    className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${assignmentFilter === 'ToMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    title="To Me"
+                  >
+                    <span className="hidden xs:inline">To Me</span>
+                    <span className="xs:hidden">To</span>
+                    <span className="text-[8px] opacity-70">{baseDelegations.filter(d => d.assigned_to === ((session?.user as any)?.username || "")).length}</span>
+                  </button>
+                  <button 
+                    onClick={() => { setAssignmentFilter(assignmentFilter === 'ByMe' ? 'All' : 'ByMe'); setCurrentPage(1); }}
+                    className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${assignmentFilter === 'ByMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    title="By Me"
+                  >
+                    <span className="hidden xs:inline">By Me</span>
+                    <span className="xs:hidden">By</span>
+                    <span className="text-[8px] opacity-70">{baseDelegations.filter(d => d.assigned_by === ((session?.user as any)?.username || "")).length}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Date Filters Row */}
@@ -1163,6 +1176,7 @@ export default function DelegationsPage() {
             </div>
           </div>
         </div>
+      </div>
 
         {/* Conditional View: List (Table) or Tile (Cards) */}
         {viewMode === 'list' ? (
@@ -2221,7 +2235,7 @@ export default function DelegationsPage() {
                           {['Pending', 'Planned', 'Need Clarity', 'Need Revision', 'Completed', 'Approved', 'Hold', 'Re-Open', 'Overdue']
                             .filter(s => s.toLowerCase().includes(modalStatusSearch.toLowerCase()))
                             .map(s => {
-                              const count = delegations.filter(d => getDisplayStatus(d) === s).length;
+                              const count = baseDelegations.filter(d => getDisplayStatus(d) === s).length;
                               const isSelected = modalStatusFilter.includes(s);
                               return (
                                 <div key={s} 
@@ -2263,7 +2277,7 @@ export default function DelegationsPage() {
                       <div className="absolute z-20 w-full mt-2 bg-white dark:bg-zinc-900 border border-orange-50 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
                         <div className="p-1 max-h-48 overflow-y-auto">
                           {['Low', 'Medium', 'High'].map(p => {
-                            const count = delegations.filter(d => d.priority === p).length;
+                            const count = baseDelegations.filter(d => d.priority === p).length;
                             const isSelected = modalPriorityFilter.includes(p);
                             return (
                               <div key={p} 
@@ -2314,7 +2328,7 @@ export default function DelegationsPage() {
                           {usersList
                             .filter(u => u.username.toLowerCase().includes(modalAssignedToSearch.toLowerCase()))
                             .map(u => {
-                              const count = delegations.filter(d => d.assigned_to === u.username).length;
+                              const count = baseDelegations.filter(d => d.assigned_to === u.username).length;
                               const isSelected = modalAssignedToFilter.includes(u.username);
                               return (
                                 <div key={u.id} 
@@ -2365,7 +2379,7 @@ export default function DelegationsPage() {
                           {usersList
                             .filter(u => ['ADMIN', 'EA'].includes(u.role_name?.toUpperCase() || '') && u.username.toLowerCase().includes(modalAssignedBySearch.toLowerCase()))
                             .map(u => {
-                              const count = delegations.filter(d => d.assigned_by === u.username).length;
+                              const count = baseDelegations.filter(d => d.assigned_by === u.username).length;
                               const isSelected = modalAssignedByFilter.includes(u.username);
                               return (
                                 <div key={u.id} 
@@ -2416,7 +2430,7 @@ export default function DelegationsPage() {
                           {predefinedDepartments
                             .filter(d => d.toLowerCase().includes(modalDepartmentSearch.toLowerCase()))
                             .map(d => {
-                              const count = delegations.filter(del => del.department === d).length;
+                              const count = baseDelegations.filter(del => del.department === d).length;
                               const isSelected = modalDepartmentFilter.includes(d);
                               return (
                                 <div key={d} 
