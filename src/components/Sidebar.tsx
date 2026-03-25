@@ -20,6 +20,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const [delegationsPendingCount, setDelegationsPendingCount] = useState(0);
   const [checklistsPendingCount, setChecklistsPendingCount] = useState(0);
   const [ticketsOpenCount, setTicketsOpenCount] = useState(0);
+  const [o2dPendingCount, setO2dPendingCount] = useState(0);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -30,10 +31,12 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
     const fetchCounts = async () => {
       try {
-        const [delRes, checkRes, tickRes] = await Promise.all([
+        const [delRes, checkRes, tickRes, o2dRes, configRes] = await Promise.all([
           fetch('/api/delegations'),
           fetch('/api/checklists'),
-          fetch('/api/tickets')
+          fetch('/api/tickets'),
+          fetch('/api/o2d'),
+          fetch('/api/o2d/config')
         ]);
         
         let delData = [];
@@ -42,6 +45,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         if (delRes.ok) delData = await delRes.json();
         if (checkRes.ok) checkData = await checkRes.json();
         if (tickRes.ok) tickData = await tickRes.json();
+
+        let o2dData = [];
+        let configData: any = { configs: [] };
+        if (o2dRes.ok) o2dData = await o2dRes.json();
+        if (configRes.ok) configData = await configRes.json();
 
         // Filter for USER role
         const baseDel = userRole === 'USER' ? delData.filter((d: any) => d.assigned_to === currentUser) : delData;
@@ -86,6 +94,45 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         setDelegationsPendingCount(baseDel.filter(isDelayedOrToday).length);
         setChecklistsPendingCount(baseCheck.filter(isDelayedOrToday).length);
         setTicketsOpenCount(tickData.filter((t: any) => t.status !== 'Closed').length);
+
+        // O2D Logic
+        let delayed = 0;
+        let today = 0;
+
+        o2dData.forEach((order: any) => {
+          if (order.hold || order.cancelled) return;
+
+          // Find pending step
+          let pendingStepIdx = -1;
+          for (let i = 1; i <= 11; i++) {
+            const status = order[`status_${i}`];
+            if (status !== 'Yes' && status !== 'Done') {
+              pendingStepIdx = i;
+              break;
+            }
+          }
+
+          if (pendingStepIdx !== -1) {
+            // Role Filter
+            const stepConfig = configData.configs?.find((c: any) => c.step === pendingStepIdx);
+            if (userRole.toUpperCase() === 'USER' && stepConfig) {
+              if (stepConfig.responsible_person !== currentUser) return;
+            }
+
+            // Date Filter
+            const plannedDateStr = order[`planned_${pendingStepIdx}`];
+            if (plannedDateStr) {
+              const plannedDate = new Date(plannedDateStr);
+              plannedDate.setHours(0, 0, 0, 0);
+              const diff = Math.round((plannedDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              
+              if (diff < 0) delayed++;
+              else if (diff === 0) today++;
+            }
+          }
+        });
+
+        setO2dPendingCount(delayed + today);
       } catch (err) {
         console.error("Failed to fetch sidebar counts:", err);
       }
@@ -190,6 +237,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                 {item.id === 'tickets' && ticketsOpenCount > 0 && (
                   <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
                     {ticketsOpenCount}
+                  </span>
+                )}
+                {item.id === 'o2d' && o2dPendingCount > 0 && (
+                  <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                    {o2dPendingCount}
                   </span>
                 )}
               </Link>
