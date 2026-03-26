@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 import { getO2Ds, addO2D, addO2Ds, getO2DDetails } from "@/lib/o2d-sheets";
 import { uploadFileToDrive } from "@/lib/google-drive";
 import { O2D } from "@/types/o2d";

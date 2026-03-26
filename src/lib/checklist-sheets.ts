@@ -10,31 +10,54 @@ class ChecklistService extends BaseSheetsService<Checklist> {
   protected range = "A:N";
   protected idColumnIndex = 0;
 
+
   mapRowToItem(row: any[]): Checklist {
+    const get = (h: string) => row[this.hMap[h.toLowerCase()]] || "";
     return {
-      id: row[0] || "",
-      task: row[1] || "",
-      assigned_by: row[2] || "",
-      assigned_to: row[3] || "",
-      priority: row[4] || "",
-      department: row[5] || "",
-      verification_required: row[6] || "",
-      attachment_required: row[7] || "",
-      frequency: row[8] || "",
-      due_date: row[9] || "",
-      status: row[10] || "",
-      group_id: row[11] || "",
-      created_at: row[12] || "",
-      updated_at: row[13] || "",
+      id: get("id"),
+      task: get("task"),
+      assigned_by: get("assigned_by"),
+      assigned_to: get("assigned_to"),
+      priority: get("priority"),
+      department: get("department"),
+      verification_required: get("verification_required"),
+      attachment_required: get("attachment_required"),
+      frequency: get("frequency"),
+      due_date: get("due_date"),
+      status: get("status"),
+      group_id: get("group_id"),
+      created_at: get("created_at"),
+      updated_at: get("updated_at"),
     };
   }
 
   mapItemToRow(c: Checklist): any[] {
-    return [
-      String(c.id), c.task, c.assigned_by, c.assigned_to, c.priority, c.department,
-      c.verification_required, c.attachment_required, c.frequency, c.due_date,
-      c.status, c.group_id, c.created_at, c.updated_at
-    ];
+    const row: any[] = [];
+    const set = (h: string, val: any) => {
+      const idx = this.hMap[h.toLowerCase()];
+      if (idx !== undefined) row[idx] = val;
+    };
+    
+    set("id", String(c.id));
+    set("task", c.task);
+    set("assigned_by", c.assigned_by);
+    set("assigned_to", c.assigned_to);
+    set("priority", c.priority);
+    set("department", c.department);
+    set("verification_required", c.verification_required);
+    set("attachment_required", c.attachment_required);
+    set("frequency", c.frequency);
+    set("due_date", c.due_date);
+    set("status", c.status);
+    set("group_id", c.group_id);
+    set("created_at", c.created_at);
+    set("updated_at", c.updated_at);
+
+    const maxIdx = Math.max(...Object.values(this.hMap), 0);
+    for (let i = 0; i <= maxIdx; i++) {
+        if (row[i] === undefined) row[i] = "";
+    }
+    return row;
   }
 }
 export const checklistService = new ChecklistService();

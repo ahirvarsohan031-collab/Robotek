@@ -39,16 +39,29 @@ import {
   ListBulletIcon,
   FunnelIcon
 } from "@heroicons/react/24/outline";
+import useSWR from "swr";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
 import { User } from "@/types/user";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function DelegationsPage() {
   const { data: session } = useSession();
   const userRole = (session?.user as any)?.role || 'USER';
 
   const [delegations, setDelegations] = useState<Delegation[]>([]);
+  const { data: swrDelegations, mutate: mutateDelegations } = useSWR<Delegation[]>("/api/delegations", fetcher, {
+    refreshInterval: 60000, // Sync every 60 seconds
+  });
+
+  useEffect(() => {
+    if (swrDelegations) {
+      setDelegations(swrDelegations);
+    }
+  }, [swrDelegations]);
+
   const [usersList, setUsersList] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -227,9 +240,9 @@ export default function DelegationsPage() {
         // Update local state immediately for both sidebar and main list
         if (data.delegation) {
           setSelectedTask(prev => prev?.id === data.delegation.id ? data.delegation : prev);
-          setDelegations(prev => prev.map(d => String(d.id) === String(data.delegation.id) ? data.delegation : d));
+          mutateDelegations(); // Re-fetch all to ensure consistency
         } else {
-          fetchDelegations(); // Fallback to full fetch
+          mutateDelegations(); 
         }
         
         fetchTaskHistory(selectedTask.id); // Refresh history timeline
@@ -287,9 +300,17 @@ export default function DelegationsPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
-    fetchDelegations();
     fetchUsers();
+    // No need to fetch delegations here, useSWR handles it
   }, []);
+
+  useEffect(() => {
+    if (!swrDelegations && delegations.length === 0) {
+       setIsLoading(true);
+    } else {
+       setIsLoading(false);
+    }
+  }, [swrDelegations, delegations]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -314,16 +335,7 @@ export default function DelegationsPage() {
   };
 
   const fetchDelegations = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/delegations");
-      const data = await res.json();
-      setDelegations(data);
-    } catch (error) {
-      console.error("Failed to fetch delegations:", error);
-    } finally {
-      setIsLoading(false);
-    }
+    mutateDelegations();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -374,7 +386,7 @@ export default function DelegationsPage() {
         setIsStatusModalOpen(false);
         setIsModalOpen(false);
         resetForm();
-        fetchDelegations();
+        mutateDelegations();
       } else {
         const errData = await res.json();
         throw new Error(errData.error || "Failed to save delegation");
@@ -579,7 +591,7 @@ export default function DelegationsPage() {
       const res = await fetch(`/api/delegations/${pendingDeleteId}`, { method: "DELETE" });
       if (res.ok) {
         setIsStatusModalOpen(false);
-        fetchDelegations();
+        mutateDelegations();
       } else {
         throw new Error("Delete failed");
       }
@@ -1395,24 +1407,24 @@ export default function DelegationsPage() {
             {/* Sidebar Content */}
             <div className="absolute top-0 right-0 h-full w-full max-w-md bg-white dark:bg-navy-900 shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 ease-out border-l border-gray-100 dark:border-white/5">
               {/* Header */}
-              <div className="py-3 px-6 flex items-center justify-between bg-[#CE2029] sticky top-0 z-20 shadow-lg shadow-red-900/10">
-                <div className="flex items-center gap-4">
-                  <div className="p-2.5 bg-white/10 rounded-xl text-white backdrop-blur-md border border-white/20">
+              <div className="py-3 px-6 flex items-start justify-between bg-[#CE2029] sticky top-0 z-20 shadow-lg shadow-red-900/10">
+                <div className="flex items-start gap-4 flex-1 min-w-0">
+                  <div className="p-2.5 bg-white/10 rounded-xl text-white backdrop-blur-md border border-white/20 shrink-0 mt-1">
                     <ArrowPathIcon className="w-6 h-6 animate-spin-slow" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
+                  <div className="flex-1 min-w-0 py-1">
+                    <div className="flex items-center gap-2 mb-1">
                       <h2 className="text-xl font-black text-white tracking-tight">Follow Up</h2>
-                      <span className="text-[10px] font-mono text-white bg-white/10 px-2 py-0.5 rounded border border-white/20 uppercase tracking-widest font-black">#{selectedTask.id}</span>
+                      <span className="text-[10px] font-mono text-white bg-white/10 px-2 py-0.5 rounded border border-white/20 uppercase tracking-widest font-black shrink-0">#{selectedTask.id}</span>
                     </div>
-                    <p className="text-[10px] font-black text-white/70 uppercase tracking-widest truncate max-w-[400px]">
+                    <p className="text-[10px] font-black text-white/90 uppercase tracking-widest leading-normal break-words">
                       {selectedTask.title}
                     </p>
                   </div>
                 </div>
                 <button 
                   onClick={() => setSelectedTask(null)}
-                  className="p-2 hover:bg-white/10 rounded-xl transition-all text-white/70 hover:text-white group"
+                  className="p-2 hover:bg-white/10 rounded-xl transition-all text-white/70 hover:text-white group shrink-0 ml-2"
                 >
                   <XMarkIcon className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
                 </button>

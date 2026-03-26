@@ -34,6 +34,9 @@ import {
 import { ShieldCheckIcon, LockClosedIcon, BoltIcon } from "@heroicons/react/24/solid";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ConfirmModal from "@/components/ConfirmModal";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 interface Ticket {
   id: string;
@@ -70,6 +73,16 @@ export default function TicketsPage() {
   const currentUser = (session?.user as any)?.username || "";
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const { data: swrTickets, mutate: mutateTickets } = useSWR<Ticket[]>("/api/tickets", fetcher, {
+    refreshInterval: 60000,
+  });
+
+  useEffect(() => {
+    if (swrTickets) {
+      setTickets(swrTickets);
+    }
+  }, [swrTickets]);
+
   const [usersList, setUsersList] = useState<{username: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -116,9 +129,16 @@ export default function TicketsPage() {
   const categories = ["Software", "Hardware/IT", "HR / Admin", "Finance", "Other"];
 
   useEffect(() => {
-    fetchTickets();
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (!swrTickets && tickets.length === 0) {
+      setLoading(true);
+    } else {
+      setLoading(false);
+    }
+  }, [swrTickets, tickets]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -131,14 +151,7 @@ export default function TicketsPage() {
   }, [isRecording]);
 
   const fetchTickets = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/tickets");
-      if (res.ok) {
-        const data = await res.json();
-        setTickets(data);
-      }
-    } catch (error) { console.error(error); } finally { setLoading(false); }
+    mutateTickets();
   };
 
   const fetchUsers = async () => {
@@ -248,13 +261,12 @@ export default function TicketsPage() {
       const res = await fetch("/api/tickets", { method: "POST", body: payload });
       
       if (res.ok) {
-        const result = await res.json();
-        setTickets([result.ticket, ...tickets]);
         setIsNewModalOpen(false);
         setNewTicket({title: "", description: "", category: "Software", priority: "Medium", solver_person: "", planned_resolution: ""});
         setVoiceNoteFile(null);
         setRefDocFile(null);
         setIsStatusModalOpen(false);
+        mutateTickets();
       } else throw new Error();
     } catch {
       setIsStatusModalOpen(false);
@@ -281,12 +293,11 @@ export default function TicketsPage() {
       });
       
       if (res.ok) {
-        const result = await res.json();
-        setTickets(tickets.map(t => t.id === editingTicket.id ? result.ticket : t));
         setEditingTicket(null);
         setVoiceNoteFile(null);
         setRefDocFile(null);
         setIsStatusModalOpen(false);
+        mutateTickets();
       } else throw new Error();
     } catch {
       setIsStatusModalOpen(false);
@@ -309,14 +320,11 @@ export default function TicketsPage() {
       if (hasStatusChange && pendingStatus) {
         const updatedTicket = { ...selectedTicket, status: pendingStatus, updated_at: new Date().toISOString() };
         
-        // Update local status immediately for UI responsiveness
-        setTickets(tickets.map(t => t.id === selectedTicket.id ? updatedTicket : t));
-        setSelectedTicket(updatedTicket);
-
         // API Update for Ticket
         await fetch(`/api/tickets/${selectedTicket.id}`, {
           method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updatedTicket)
         });
+        mutateTickets();
       }
 
       // 2. Submit History Entry (Merged if both exist)
@@ -373,6 +381,7 @@ export default function TicketsPage() {
       if (historyRes.ok) {
         const hr = await historyRes.json();
         setTicketHistory([hr.history, ...ticketHistory]);
+        mutateTickets();
       }
     } catch {
       alert("Failed to update status");
@@ -395,7 +404,7 @@ export default function TicketsPage() {
     try {
       const res = await fetch(`/api/tickets/${pendingDeleteId}`, { method: "DELETE" });
       if (res.ok) {
-        setTickets(tickets.filter(t => t.id !== pendingDeleteId));
+        mutateTickets();
         setIsStatusModalOpen(false);
       } else throw new Error();
     } catch {
@@ -903,20 +912,23 @@ export default function TicketsPage() {
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setSelectedTicket(null)} />
           <div className="relative w-full max-w-md bg-white dark:bg-navy-900 shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 border-l border-gray-200 dark:border-navy-700">
             {/* Header */}
-            <div className="bg-[#CE2029] py-3 px-5 flex items-center justify-between text-white shrink-0 sticky top-0 z-20 shadow-md">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/20">
+            <div className="bg-[#CE2029] py-3 px-5 flex items-start justify-between text-white shrink-0 sticky top-0 z-20 shadow-md">
+              <div className="flex items-start gap-3 flex-1 min-w-0">
+                <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/20 shrink-0 mt-0.5">
                   <TicketIcon className="w-5 h-5" />
                 </div>
-                <div>
-                  <div className="flex gap-2 text-[9px] font-black uppercase tracking-widest mb-0.5 opacity-90">
-                    <span className="bg-white/20 px-1.5 py-0.5 rounded border border-white/10">#{selectedTicket.id.split('-').pop()}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex gap-2 text-[9px] font-black uppercase tracking-widest mb-1 opacity-90">
+                    <span className="bg-white/20 px-1.5 py-0.5 rounded border border-white/10 shrink-0">#{selectedTicket.id.split('-').pop()}</span>
                     <span>{selectedTicket.priority}</span>
                   </div>
-                  <h2 className="text-sm font-black tracking-tight line-clamp-1">{selectedTicket.title}</h2>
+                  <h2 className="text-sm font-black tracking-tight leading-snug break-words">{selectedTicket.title}</h2>
                 </div>
               </div>
-              <button onClick={() => setSelectedTicket(null)} className="p-1.5 hover:bg-white/10 rounded-xl transition-all">
+              <button 
+                onClick={() => setSelectedTicket(null)} 
+                className="p-1.5 hover:bg-white/10 rounded-xl transition-all shrink-0 ml-2"
+              >
                 <XMarkIcon className="w-5 h-5" />
               </button>
             </div>

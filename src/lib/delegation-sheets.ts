@@ -10,31 +10,54 @@ class DelegationService extends BaseSheetsService<Delegation> {
   protected range = "A:N";
   protected idColumnIndex = 0;
 
+
   mapRowToItem(row: any[]): Delegation {
+    const get = (h: string) => row[this.hMap[h.toLowerCase()]] || "";
     return {
-      id: row[0] || "",
-      title: row[1] || "",
-      description: row[2] || "",
-      assigned_by: row[3] || "",
-      assigned_to: row[4] || "",
-      department: row[5] || "",
-      priority: row[6] || "",
-      due_date: row[7] || "",
-      status: row[8] || "",
-      voice_note_url: row[9] || "",
-      reference_docs: row[10] || "",
-      evidence_required: row[11] || "",
-      created_at: row[12] || "",
-      updated_at: row[13] || "",
+      id: get("id"),
+      title: get("title"),
+      description: get("description"),
+      assigned_by: get("assigned_by"),
+      assigned_to: get("assigned_to"),
+      department: get("department"),
+      priority: get("priority"),
+      due_date: get("due_date"),
+      status: get("status"),
+      voice_note_url: get("voice_note_url"),
+      reference_docs: get("reference_docs"),
+      evidence_required: get("evidence_required"),
+      created_at: get("created_at"),
+      updated_at: get("updated_at"),
     };
   }
 
   mapItemToRow(d: Delegation): any[] {
-    return [
-      String(d.id), d.title, d.description, d.assigned_by, d.assigned_to, d.department,
-      d.priority, d.due_date, d.status, d.voice_note_url, d.reference_docs,
-      d.evidence_required, d.created_at, d.updated_at
-    ];
+    const row: any[] = [];
+    const set = (h: string, val: any) => {
+      const idx = this.hMap[h.toLowerCase()];
+      if (idx !== undefined) row[idx] = val;
+    };
+
+    set("id", String(d.id));
+    set("title", d.title);
+    set("description", d.description);
+    set("assigned_by", d.assigned_by);
+    set("assigned_to", d.assigned_to);
+    set("department", d.department);
+    set("priority", d.priority);
+    set("due_date", d.due_date);
+    set("status", d.status);
+    set("voice_note_url", d.voice_note_url);
+    set("reference_docs", d.reference_docs);
+    set("evidence_required", d.evidence_required);
+    set("created_at", d.created_at);
+    set("updated_at", d.updated_at);
+
+    const maxIdx = Math.max(...Object.values(this.hMap), 0);
+    for (let i = 0; i <= maxIdx; i++) {
+        if (row[i] === undefined) row[i] = "";
+    }
+    return row;
   }
 }
 

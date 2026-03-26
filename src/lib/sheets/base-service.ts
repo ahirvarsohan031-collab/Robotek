@@ -1,5 +1,4 @@
 import { google } from "googleapis";
-import { broadcast } from "@/app/api/sse/route";
 
 export interface SheetItem {
   id: string | number;
@@ -13,11 +12,18 @@ export abstract class BaseSheetsService<T extends SheetItem> {
   protected abstract idColumnIndex: number; // 0-based
 
   // Memory cache (per instance)
-  private static cacheMap: Record<string, { data: any[]; timestamp: number }> = {};
-  private CACHE_TTL = 300000; // 5 minutes (default)
+  protected static cacheMap: Record<string, { data: any[]; timestamp: number }> = {};
+  protected static headerCache: Record<string, string[]> = {};
+  protected hMap: Record<string, number> = {};
+  private CACHE_TTL = 10000; // 10 seconds for real-time sync
 
   protected abstract mapRowToItem(row: any[]): T;
   protected abstract mapItemToRow(item: T): any[];
+
+  protected async ensureHeaders() {
+    if (Object.keys(this.hMap).length > 0) return;
+    this.hMap = await this.getHeaderMap();
+  }
 
   protected async getSheetsClient() {
     const oauth2Client = new google.auth.OAuth2(
@@ -33,6 +39,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
   }
 
   async getAll(): Promise<T[]> {
+    await this.ensureHeaders();
     const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
     const now = Date.now();
     const cached = BaseSheetsService.cacheMap[cacheKey];
@@ -49,8 +56,11 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       });
 
       const rows = response.data.values;
-      const data = rows ? rows.slice(1).map((row) => this.mapRowToItem(row)) : [];
+      if (rows && rows.length > 0) {
+        BaseSheetsService.headerCache[cacheKey] = rows[0].map((h: any) => h.toString().toLowerCase().trim());
+      }
       
+      const data = rows ? rows.slice(1).map((row) => this.mapRowToItem(row)) : [];
       BaseSheetsService.cacheMap[cacheKey] = { data, timestamp: now };
       return data;
     } catch (error) {
@@ -59,7 +69,39 @@ export abstract class BaseSheetsService<T extends SheetItem> {
     }
   }
 
+  async getHeaders(): Promise<string[]> {
+    const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
+    if (BaseSheetsService.headerCache[cacheKey]) {
+      return BaseSheetsService.headerCache[cacheKey];
+    }
+    
+    try {
+      const sheets = await this.getSheetsClient();
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${this.sheetName}!1:1`,
+      });
+      
+      const headers = response.data.values?.[0]?.map((h: any) => h.toString().toLowerCase().trim()) || [];
+      BaseSheetsService.headerCache[cacheKey] = headers;
+      return headers;
+    } catch (error) {
+      console.error(`Error fetching headers for ${this.sheetName}:`, error);
+      return [];
+    }
+  }
+
+  async getHeaderMap(): Promise<Record<string, number>> {
+    const headers = await this.getHeaders();
+    const map: Record<string, number> = {};
+    headers.forEach((h, i) => {
+      map[h] = i;
+    });
+    return map;
+  }
+
   async add(item: T): Promise<boolean> {
+    await this.ensureHeaders();
     try {
       const sheets = await this.getSheetsClient();
       await sheets.spreadsheets.values.append({
@@ -72,7 +114,6 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       });
 
       this.invalidateCache();
-      this.broadcastChange('ADD', item);
       return true;
     } catch (error) {
       console.error(`Error adding to ${this.sheetName}:`, error);
@@ -81,6 +122,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
   }
 
   async update(id: string | number, item: T): Promise<boolean> {
+    await this.ensureHeaders();
     try {
       const sheets = await this.getSheetsClient();
       
@@ -113,7 +155,6 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       });
 
       this.invalidateCache();
-      this.broadcastChange('UPDATE', item);
       return true;
     } catch (error) {
       console.error(`Error updating ${this.sheetName}:`, error);
@@ -153,7 +194,6 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       });
 
       this.invalidateCache();
-      this.broadcastChange('DELETE', { id } as any);
       return true;
     } catch (error) {
       console.error(`Error deleting from ${this.sheetName}:`, error);
@@ -164,13 +204,6 @@ export abstract class BaseSheetsService<T extends SheetItem> {
   protected invalidateCache() {
     const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
     delete BaseSheetsService.cacheMap[cacheKey];
-  }
-
-  protected broadcastChange(action: 'ADD' | 'UPDATE' | 'DELETE', item: T) {
-    broadcast({
-      module: this.sheetName,
-      action,
-      data: item
-    });
+    delete BaseSheetsService.headerCache[cacheKey];
   }
 }
