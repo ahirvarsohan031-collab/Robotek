@@ -51,13 +51,26 @@ import {
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
+import useSWR from "swr";
 
 import { User } from "@/types/user";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function ChecklistsPage() {
   const { data: session } = useSession();
   const userRole = (session?.user as any)?.role || "USER";
   const [checklists, setChecklists] = useState<Checklist[]>([]);
+  const { data: swrChecklists, mutate: mutateChecklists } = useSWR<Checklist[]>("/api/checklists", fetcher, {
+    refreshInterval: 60000,
+  });
+
+  useEffect(() => {
+    if (swrChecklists) {
+      setChecklists(swrChecklists);
+    }
+  }, [swrChecklists]);
+
   const [usersList, setUsersList] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -148,9 +161,16 @@ export default function ChecklistsPage() {
   const [pendingDeleteGroupId, setPendingDeleteGroupId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchChecklists();
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (!swrChecklists && checklists.length === 0) {
+      setIsLoading(true);
+    } else {
+      setIsLoading(false);
+    }
+  }, [swrChecklists, checklists]);
 
   useEffect(() => {
     if (selectedTask) {
@@ -210,7 +230,7 @@ export default function ChecklistsPage() {
         setEvidenceFile(null);
         setRevisedDueDate("");
         fetchHistory(selectedTask.id);
-        fetchChecklists(); // Refresh main list
+        mutateChecklists(); // Refresh main list
       } else {
         const err = await res.json();
         alert(err.error || "Failed to update status");
@@ -260,16 +280,7 @@ export default function ChecklistsPage() {
   };
 
   const fetchChecklists = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/checklists");
-      const data = await res.json();
-      setChecklists(data);
-    } catch (error) {
-      console.error("Failed to fetch checklists:", error);
-    } finally {
-      setIsLoading(false);
-    }
+    mutateChecklists();
   };
 
   const resetForm = () => {
@@ -394,7 +405,7 @@ export default function ChecklistsPage() {
       setIsStatusModalOpen(false);
       setIsModalOpen(false);
       resetForm();
-      fetchChecklists();
+      mutateChecklists();
     } catch (error: any) {
       setIsStatusModalOpen(false);
       alert(error.message || "Something went wrong while saving. Please try again.");
@@ -548,7 +559,7 @@ export default function ChecklistsPage() {
       const res = await fetch(url, { method: "DELETE" });
       if (res.ok) {
         setIsStatusModalOpen(false);
-        fetchChecklists();
+        mutateChecklists();
       } else {
         throw new Error("Delete failed");
       }
@@ -1674,24 +1685,24 @@ export default function ChecklistsPage() {
             {/* Sidebar Content */}
             <div className="absolute top-0 right-0 h-full w-full max-w-md bg-white dark:bg-navy-900 shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 ease-out border-l border-gray-100 dark:border-white/5">
               {/* Header */}
-              <div className="py-3 px-6 flex items-center justify-between bg-[#CE2029] sticky top-0 z-20 shadow-lg shadow-red-900/10">
-                <div className="flex items-center gap-4">
-                  <div className="p-2.5 bg-white/10 rounded-xl text-white backdrop-blur-md border border-white/20">
+              <div className="py-3 px-6 flex items-start justify-between bg-[#CE2029] sticky top-0 z-20 shadow-lg shadow-red-900/10">
+                <div className="flex items-start gap-4 flex-1 min-w-0">
+                  <div className="p-2.5 bg-white/10 rounded-xl text-white backdrop-blur-md border border-white/20 shrink-0 mt-1">
                     <ArrowPathIcon className="w-6 h-6 animate-spin-slow" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
+                  <div className="flex-1 min-w-0 py-1">
+                    <div className="flex items-center gap-2 mb-1">
                       <h2 className="text-xl font-black text-white tracking-tight">Follow Up</h2>
-                      <span className="text-[10px] font-mono text-white bg-white/10 px-2 py-0.5 rounded border border-white/20 uppercase tracking-widest font-black">#{selectedTask.id}</span>
+                      <span className="text-[10px] font-mono text-white bg-white/10 px-2 py-0.5 rounded border border-white/20 uppercase tracking-widest font-black shrink-0">#{selectedTask.id}</span>
                     </div>
-                    <p className="text-[10px] font-black text-white/70 uppercase tracking-widest truncate max-w-[400px]">
+                    <p className="text-[10px] font-black text-white/90 uppercase tracking-widest leading-normal break-words">
                       {selectedTask.task}
                     </p>
                   </div>
                 </div>
                 <button 
                   onClick={() => setSelectedTask(null)}
-                  className="p-2 hover:bg-white/10 rounded-xl transition-all text-white/70 hover:text-white group"
+                  className="p-2 hover:bg-white/10 rounded-xl transition-all text-white/70 hover:text-white group shrink-0 ml-2"
                 >
                   <XMarkIcon className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
                 </button>

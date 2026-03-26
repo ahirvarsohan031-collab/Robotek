@@ -5,6 +5,7 @@ export interface O2D {
   item_name: string;
   item_qty: string;
   est_amount: string;
+  item_specification: string;
   remark: string;
   order_screenshot: string; // File ID or URL
   filled_by: string;
@@ -61,9 +62,11 @@ export interface O2D {
 }
 
 export interface O2DItem {
+  id?: string;
   item_name: string;
   item_qty: string;
   est_amount: string;
+  item_specification: string;
 }
 
 export interface O2DStepConfig {

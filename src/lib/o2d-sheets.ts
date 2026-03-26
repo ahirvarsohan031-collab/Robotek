@@ -1,129 +1,193 @@
 import { BaseSheetsService } from "./sheets/base-service";
 import { O2D, O2DStepConfig } from "@/types/o2d";
-import { broadcast } from "@/app/api/sse/route";
 import { google } from "googleapis";
 
 const GOOGLE_SHEET_ID = "1T0vSzAgHoO21DifCUcPMRLR4yOy-kFteJ2bv6pG-UTc";
 const SHEET_NAME = "O2D";
-const CONFIG_SHEET_NAME = "O2D_Config";
+const CONFIG_SHEET_NAME = "Step Configuration";
 
 class O2DService extends BaseSheetsService<O2D> {
   protected spreadsheetId = GOOGLE_SHEET_ID;
   protected sheetName = SHEET_NAME;
-  protected range = "A:BG";
+  protected range = "A:BH";
   protected idColumnIndex = 0;
 
+
   mapRowToItem(row: any[]): O2D {
-    return {
-      id: row[0] || "",
-      order_no: row[1] || "",
-      party_name: row[2] || "",
-      item_name: row[3] || "",
-      item_qty: row[4] || "",
-      est_amount: row[5] || "",
-      remark: row[6] || "",
-      order_screenshot: row[7] || "",
-      filled_by: row[8] || "",
-      created_at: row[9] || "",
-      updated_at: row[10] || "",
-      planned_1: row[11] || "", actual_1: row[12] || "", status_1: row[13] || "",
-      final_amount_1: row[14] || "", so_number_1: row[15] || "", merge_order_with_1: row[16] || "", upload_so_1: row[17] || "",
-      planned_2: row[18] || "", actual_2: row[19] || "", status_2: row[20] || "",
-      planned_3: row[21] || "", actual_3: row[22] || "", status_3: row[23] || "",
-      planned_4: row[24] || "", actual_4: row[25] || "", status_4: row[26] || "",
-      planned_5: row[27] || "", actual_5: row[28] || "", status_5: row[29] || "",
-      planned_6: row[30] || "", actual_6: row[31] || "", status_6: row[32] || "",
-      num_of_parcel_6: row[33] || "", upload_pi_6: row[34] || "", actual_date_of_order_packed_6: row[35] || "",
-      planned_7: row[36] || "", actual_7: row[37] || "", status_7: row[38] || "",
-      voucher_num_7: row[39] || "",
-      planned_8: row[40] || "", actual_8: row[41] || "", status_8: row[42] || "",
-      order_details_checked_8: row[43] || "", voucher_num_51_8: row[44] || "", t_amt_8: row[45] || "",
-      planned_9: row[46] || "", actual_9: row[47] || "", status_9: row[48] || "",
-      attach_bilty_9: row[49] || "", num_of_parcel_9: row[50] || "",
-      planned_10: row[51] || "", actual_10: row[52] || "", status_10: row[53] || "",
-      planned_11: row[54] || "", actual_11: row[55] || "", status_11: row[56] || "",
-      hold: row[57] || "",
-      cancelled: row[58] || "",
+    const get = (h: string) => row[this.hMap[h.toLowerCase()]] || "";
+    
+    const item: any = {
+      id: get("id"),
+      order_no: get("order_no."),
+      party_name: get("party_name"),
+      item_name: get("item_name"),
+      item_qty: get("item_qty"),
+      est_amount: get("est._amount"),
+      item_specification: get("item_specification"),
+      remark: get("remark"),
+      order_screenshot: get("order_screenshot"),
+      filled_by: get("filled_by"),
+      created_at: get("created_at"),
+      updated_at: get("updated_at"),
+      hold: get("hold"),
+      cancelled: get("cancelled"),
     };
+
+    // Map steps 1-11
+    for (let i = 1; i <= 11; i++) {
+        item[`planned_${i}`] = get(`planned_${i}`);
+        item[`actual_${i}`] = get(`acual_${i}`); // Note the typo "acual" from sheet
+        item[`status_${i}`] = get(`status_${i}`);
+        
+        if (i === 1) {
+            item.final_amount_1 = get("final_amount_1");
+            item.so_number_1 = get("so_number_1");
+            item.merge_order_with_1 = get("merge_order_with_1");
+            item.upload_so_1 = get("upload_so_(attachment)_1");
+        } else if (i === 6) {
+            item.num_of_parcel_6 = get("num_of_parcel_6");
+            item.upload_pi_6 = get("upoad_pi_(attachment)_6"); // Note typo "upoad"
+            item.actual_date_of_order_packed_6 = get("actual_date_of_order_packed_6");
+        } else if (i === 7) {
+            item.voucher_num_7 = get("voucher_num_7");
+        } else if (i === 8) {
+            item.order_details_checked_8 = get("order_details_checked_in_order_sheet_(yes,no)_8");
+            item.voucher_num_51_8 = get("voucher_num_(51)_8");
+            item.t_amt_8 = get("t._amt_8");
+        } else if (i === 9) {
+            item.attach_bilty_9 = get("attach_billty_(attachment)_9"); // Note typo "billty"
+            item.num_of_parcel_9 = get("num_of_parcel_9");
+        }
+    }
+
+    return item as O2D;
   }
 
   mapItemToRow(o2d: O2D): any[] {
-    return [
-      o2d.id,
-      o2d.order_no,
-      o2d.party_name,
-      o2d.item_name,
-      o2d.item_qty,
-      o2d.est_amount,
-      o2d.remark,
-      o2d.order_screenshot,
-      o2d.filled_by,
-      o2d.created_at,
-      o2d.updated_at,
-      // Step 1
-      o2d.planned_1, o2d.actual_1, o2d.status_1, o2d.final_amount_1 || "", o2d.so_number_1 || "", o2d.merge_order_with_1 || "", o2d.upload_so_1 || "",
-      // Step 2
-      o2d.planned_2, o2d.actual_2, o2d.status_2,
-      // Step 3
-      o2d.planned_3, o2d.actual_3, o2d.status_3,
-      // Step 4
-      o2d.planned_4, o2d.actual_4, o2d.status_4,
-      // Step 5
-      o2d.planned_5, o2d.actual_5, o2d.status_5,
-      // Step 6
-      o2d.planned_6, o2d.actual_6, o2d.status_6, o2d.num_of_parcel_6 || "", o2d.upload_pi_6 || "", o2d.actual_date_of_order_packed_6 || "",
-      // Step 7
-      o2d.planned_7, o2d.actual_7, o2d.status_7, o2d.voucher_num_7 || "",
-      // Step 8
-      o2d.planned_8, o2d.actual_8, o2d.status_8, o2d.order_details_checked_8 || "", o2d.voucher_num_51_8 || "", o2d.t_amt_8 || "",
-      // Step 9
-      o2d.planned_9, o2d.actual_9, o2d.status_9, o2d.attach_bilty_9 || "", o2d.num_of_parcel_9 || "",
-      // Step 10
-      o2d.planned_10, o2d.actual_10, o2d.status_10,
-      // Step 11
-      o2d.planned_11, o2d.actual_11, o2d.status_11,
-      // Final
-      o2d.hold || "",
-      o2d.cancelled || ""
-    ];
+    const row: any[] = [];
+    const set = (h: string, val: any) => {
+        const idx = this.hMap[h.toLowerCase()];
+        if (idx !== undefined) row[idx] = val;
+    };
+
+    set("id", o2d.id);
+    set("order_no.", o2d.order_no);
+    set("party_name", o2d.party_name);
+    set("item_name", o2d.item_name);
+    set("item_qty", o2d.item_qty);
+    set("est._amount", o2d.est_amount);
+    set("item_specification", o2d.item_specification);
+    set("remark", o2d.remark);
+    set("order_screenshot", o2d.order_screenshot);
+    set("filled_by", o2d.filled_by);
+    set("created_at", o2d.created_at);
+    set("updated_at", o2d.updated_at);
+    set("hold", o2d.hold || "");
+    set("cancelled", o2d.cancelled || "");
+
+    for (let i = 1; i <= 11; i++) {
+        set(`planned_${i}`, (o2d as any)[`planned_${i}`]);
+        set(`acual_${i}`, (o2d as any)[`actual_${i}`]);
+        set(`status_${i}`, (o2d as any)[`status_${i}`]);
+        
+        if (i === 1) {
+            set("final_amount_1", o2d.final_amount_1);
+            set("so_number_1", o2d.so_number_1);
+            set("merge_order_with_1", o2d.merge_order_with_1);
+            set("upload_so_(attachment)_1", o2d.upload_so_1);
+        } else if (i === 6) {
+            set("num_of_parcel_6", o2d.num_of_parcel_6);
+            set("upoad_pi_(attachment)_6", o2d.upload_pi_6);
+            set("actual_date_of_order_packed_6", o2d.actual_date_of_order_packed_6);
+        } else if (i === 7) {
+            set("voucher_num_7", o2d.voucher_num_7);
+        } else if (i === 8) {
+            set("order_details_checked_in_order_sheet_(yes,no)_8", o2d.order_details_checked_8);
+            set("voucher_num_(51)_8", o2d.voucher_num_51_8);
+            set("t._amt_8", o2d.t_amt_8);
+        } else if (i === 9) {
+            set("attach_billty_(attachment)_9", o2d.attach_bilty_9);
+            set("num_of_parcel_9", o2d.num_of_parcel_9);
+        }
+    }
+
+    // Fill gaps with empty string
+    const maxIdx = Math.max(...Object.values(this.hMap));
+    for (let i = 0; i <= maxIdx; i++) {
+        if (row[i] === undefined) row[i] = "";
+    }
+
+    return row;
   }
 
   // Override to handle multi-row updates and broadcast all affected items
   async updateOrder(orderNo: string, o2ds: O2D[]): Promise<boolean> {
+    await this.ensureHeaders();
     try {
       const sheets = await this.getSheetsClient();
+      
+      // 1. Find all existing rows for this order
+      const orderNoColIdx = this.hMap["order_no."];
+      const colLetter = String.fromCharCode(65 + orderNoColIdx);
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!B:B`,
+        range: `${this.sheetName}!${colLetter}:${colLetter}`,
       });
-
       const rows = response.data.values;
-      if (!rows) return false;
+      if (!rows) return await this.addMany(o2ds);
 
-      const indicesToUpdate = rows
+      const indices = rows
         .map((row, index) => (row[0] === orderNo ? index : -1))
-        .filter(index => index !== -1)
-        .sort((a, b) => a - b);
+        .filter(index => index !== -1);
+      
+      if (indices.length === 0) return await this.addMany(o2ds);
 
-      if (indicesToUpdate.length === 0) {
-         return await this.addMany(o2ds);
+      const startRowIdx = Math.min(...indices);
+      const oldCount = indices.length;
+      const newCount = o2ds.length;
+
+      const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: this.spreadsheetId });
+      const sheetId = spreadsheet.data.sheets?.find(s => s.properties?.title === this.sheetName)?.properties?.sheetId;
+      if (sheetId === undefined) return false;
+
+      const requests: any[] = [];
+
+      // 2. Adjust row count at the exact position to maintain order's place
+      if (newCount > oldCount) {
+        // Insert rows after the existing block
+        requests.push({
+          insertDimension: {
+            range: { sheetId, dimension: "ROWS", startIndex: startRowIdx + oldCount, endIndex: startRowIdx + newCount },
+            inheritFromBefore: true
+          }
+        });
+      } else if (newCount < oldCount) {
+        // Delete extra rows from the block
+        requests.push({
+          deleteDimension: {
+            range: { sheetId, dimension: "ROWS", startIndex: startRowIdx + newCount, endIndex: startRowIdx + oldCount }
+          }
+        });
       }
 
-      // Perform update
-      await sheets.spreadsheets.values.batchUpdate({
+      if (requests.length > 0) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: { requests }
+        });
+      }
+
+      // 3. Overwrite the resulting range with the new data
+      await sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
+        range: `${this.sheetName}!A${startRowIdx + 1}:BH${startRowIdx + newCount}`,
+        valueInputOption: "USER_ENTERED",
         requestBody: {
-          valueInputOption: "USER_ENTERED",
-          data: indicesToUpdate.map((idx, i) => ({
-            range: `${this.sheetName}!A${idx + 1}:BG${idx + 1}`,
-            values: [this.mapItemToRow(o2ds[i] || o2ds[0])] // Fallback if o2ds array is shorter
-          }))
+          values: o2ds.map(o => this.mapItemToRow(o))
         }
       });
 
       this.invalidateCache();
-      // Broadcast all updated items
-      o2ds.forEach(item => this.broadcastChange('UPDATE', item));
       return true;
     } catch (error) {
       console.error("Error updating order:", error);
@@ -136,14 +200,13 @@ class O2DService extends BaseSheetsService<O2D> {
       const sheets = await this.getSheetsClient();
       await sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!A:BG`,
+        range: `${this.sheetName}!A:BH`,
         valueInputOption: "USER_ENTERED",
         requestBody: {
           values: o2ds.map(o => this.mapItemToRow(o)),
         },
       });
       this.invalidateCache();
-      o2ds.forEach(item => this.broadcastChange('ADD', item));
       return true;
     } catch (error) {
        return false;
@@ -151,9 +214,11 @@ class O2DService extends BaseSheetsService<O2D> {
   }
 
   async delete(id: string | number): Promise<boolean> {
+    await this.ensureHeaders();
     try {
       const sheets = await this.getSheetsClient();
-      const idColLetter = String.fromCharCode(65 + this.idColumnIndex);
+      const idColIdx = this.hMap["id"];
+      const idColLetter = String.fromCharCode(65 + idColIdx);
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: `${this.sheetName}!${idColLetter}:${idColLetter}`,
@@ -182,7 +247,6 @@ class O2DService extends BaseSheetsService<O2D> {
       });
 
       this.invalidateCache();
-      broadcast({ module: this.sheetName, action: 'DELETE', data: { id } });
       return true;
     } catch (error) {
       console.error("Error deleting O2D:", error);
@@ -191,28 +255,44 @@ class O2DService extends BaseSheetsService<O2D> {
   }
 
   async updateOrderToggleStatus(orderNo: string, action: 'hold' | 'cancelled', value: string): Promise<boolean> {
+    await this.ensureHeaders();
     try {
       const sheets = await this.getSheetsClient();
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!B:B`,
-      });
+      let indicesToUpdate: number[] = [];
+      const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
+      const cached = O2DService.cacheMap[cacheKey];
 
-      const rows = response.data.values;
-      if (!rows) return false;
+      if (cached && cached.data) {
+        indicesToUpdate = cached.data
+          .map((item: O2D, index: number) => (item.order_no === orderNo ? index + 1 : -1))
+          .filter((index: number) => index !== -1);
+      }
 
-      const indicesToUpdate = rows
-        .map((row, index) => (row[0] === orderNo ? index : -1))
-        .filter(index => index !== -1);
+      if (indicesToUpdate.length === 0) {
+        const orderNoColIdx = this.hMap["order_no."];
+        const colLetter = String.fromCharCode(65 + orderNoColIdx);
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId: this.spreadsheetId,
+          range: `${this.sheetName}!${colLetter}:${colLetter}`,
+        });
+        const rows = response.data.values;
+        if (!rows) return false;
+        indicesToUpdate = rows
+          .map((row, index) => (row[0] === orderNo ? index : -1))
+          .filter(index => index !== -1);
+      }
 
       if (indicesToUpdate.length === 0) return false;
 
-      const updatedLoc = action === "hold" ? "BF" : "BG";
+      const updatedColIdx = this.hMap[action];
+      const updatedLoc = String.fromCharCode(65 + updatedColIdx);
+      const updatedAtColIdx = this.hMap["updated_at"];
+      const updatedAtLoc = String.fromCharCode(65 + updatedAtColIdx);
       const timestamp = new Date().toISOString();
 
       const data = indicesToUpdate.flatMap(index => [
         { range: `${this.sheetName}!${updatedLoc}${index + 1}`, values: [[value]] },
-        { range: `${this.sheetName}!K${index + 1}`, values: [[timestamp]] }
+        { range: `${this.sheetName}!${updatedAtLoc}${index + 1}`, values: [[timestamp]] }
       ]);
 
       await sheets.spreadsheets.values.batchUpdate({
@@ -221,8 +301,6 @@ class O2DService extends BaseSheetsService<O2D> {
       });
 
       this.invalidateCache();
-      // Since toggle updates multiple rows, we send a generic refresh for the order
-      broadcast({ module: this.sheetName, action: 'REFRESH_ORDER', data: { orderNo, action, value } });
       return true;
     } catch (error) {
        return false;
@@ -230,35 +308,62 @@ class O2DService extends BaseSheetsService<O2D> {
   }
 
   async removeFollowUp(orderNo: string, startStep: number, onlyThisStep: boolean): Promise<boolean> {
+    await this.ensureHeaders();
     try {
       const sheets = await this.getSheetsClient();
+      let indicesToUpdate: number[] = [];
+      const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
+      const cached = O2DService.cacheMap[cacheKey];
+
+      if (cached && cached.data) {
+        indicesToUpdate = cached.data
+          .map((item: O2D, index: number) => (item.order_no === orderNo ? index + 1 : -1))
+          .filter((index: number) => index !== -1);
+      }
+
+      if (indicesToUpdate.length === 0) {
+        const orderNoColIdx = this.hMap["order_no."];
+        const colLetter = String.fromCharCode(65 + orderNoColIdx);
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId: this.spreadsheetId,
+          range: `${this.sheetName}!${colLetter}:${colLetter}`,
+        });
+        const rows = response.data.values;
+        if (!rows) return false;
+        indicesToUpdate = rows
+          .map((row, index) => (row[0] === orderNo ? index : -1))
+          .filter(index => index !== -1);
+      }
+      if (indicesToUpdate.length === 0) return false;
+
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!A:BG`,
+        range: `${this.sheetName}!A:BH`,
       });
-
       const rows = response.data.values;
       if (!rows) return false;
 
-      const indicesToUpdate = rows
-        .map((row, index) => (row[1] === orderNo ? index : -1))
-        .filter(index => index !== -1);
-
-      if (indicesToUpdate.length === 0) return false;
-
       const endStep = onlyThisStep ? startStep : 11;
       const timestamp = new Date().toISOString();
+      const updatedAtColIdx = this.hMap["updated_at"];
 
       const data = indicesToUpdate.map(index => {
         const row = [...rows[index]];
-        while (row.length < 59) row.push("");
+        const maxIdx = Math.max(...Object.values(this.hMap));
+        while (row.length <= maxIdx) row.push("");
+        
         for (let s = startStep; s <= endStep; s++) {
-          let baseIdx = s === 1 ? 11 : (s <= 6 ? 18 + (s - 2) * 3 : (s === 7 ? 36 : (s === 8 ? 40 : (s === 9 ? 46 : (s === 10 ? 51 : 54)))));
-          if (s > startStep) row[baseIdx] = ""; 
-          row[baseIdx + 1] = ""; row[baseIdx + 2] = "";
+          const pIdx = this.hMap[`planned_${s}`];
+          const aIdx = this.hMap[`acual_${s}`];
+          const stIdx = this.hMap[`status_${s}`];
+          
+          if (s > startStep && pIdx !== undefined) row[pIdx] = "";
+          if (aIdx !== undefined) row[aIdx] = "";
+          if (stIdx !== undefined) row[stIdx] = "";
         }
-        row[10] = timestamp;
-        return { range: `${this.sheetName}!A${index + 1}:BG${index + 1}`, values: [row] };
+        
+        if (updatedAtColIdx !== undefined) row[updatedAtColIdx] = timestamp;
+        return { range: `${this.sheetName}!A${index + 1}:BH${index + 1}`, values: [row] };
       });
 
       await sheets.spreadsheets.values.batchUpdate({
@@ -267,7 +372,6 @@ class O2DService extends BaseSheetsService<O2D> {
       });
 
       this.invalidateCache();
-      broadcast({ module: this.sheetName, action: 'REFRESH_ORDER', data: { orderNo } });
       return true;
     } catch (error) {
       return false;
@@ -304,20 +408,31 @@ class O2DService extends BaseSheetsService<O2D> {
   async deleteOrderByNo(orderNo: string): Promise<boolean> {
     try {
       const sheets = await this.getSheetsClient();
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!B:B`,
-      });
+      let indicesToDelete: number[] = [];
+      const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
+      const cached = O2DService.cacheMap[cacheKey];
 
-      const rows = response.data.values;
-      if (!rows) return false;
+      if (cached && cached.data) {
+        indicesToDelete = cached.data
+          .map((item: O2D, index: number) => (item.order_no === orderNo ? index + 1 : -1))
+          .filter((index: number) => index !== -1);
+      }
 
-      const indicesToDelete: number[] = [];
-      rows.forEach((row, idx) => {
-        if (String(row[0]).trim() === orderNo.trim()) {
-          indicesToDelete.push(idx);
-        }
-      });
+      if (indicesToDelete.length === 0) {
+        const orderNoColIdx = this.hMap["order_no."];
+        const colLetter = String.fromCharCode(65 + orderNoColIdx);
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId: this.spreadsheetId,
+          range: `${this.sheetName}!${colLetter}:${colLetter}`,
+        });
+        const rows = response.data.values;
+        if (!rows) return false;
+        rows.forEach((row, idx) => {
+          if (String(row[0]).trim() === orderNo.trim()) {
+            indicesToDelete.push(idx);
+          }
+        });
+      }
 
       if (indicesToDelete.length === 0) return false;
 
@@ -338,7 +453,6 @@ class O2DService extends BaseSheetsService<O2D> {
       });
 
       this.invalidateCache();
-      this.broadcastChange('DELETE', { order_no: orderNo } as any);
       return true;
     } catch (error) {
       return false;

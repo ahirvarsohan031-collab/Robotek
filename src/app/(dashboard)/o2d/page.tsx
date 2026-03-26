@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { O2D, O2DItem, O2D_STEPS, O2D_STEP_SHORTS, O2DStepConfig } from "@/types/o2d";
-import { useLiveSheet } from "@/hooks/useLiveSheet";
-import { mutate } from "swr";
+import useSWR, { mutate } from "swr";
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 import { 
   PlusIcon, 
   PencilSquareIcon, 
@@ -137,12 +137,12 @@ export default function O2DPage() {
   const { data: session } = useSession();
   const currentUser = (session?.user as any)?.username || "";
 
-  const { data: o2ds = [], isLoading: isDataLoading } = useLiveSheet<O2D>({
-    module: "O2D",
-    fetcher: async () => {
-      const res = await fetch("/api/o2d");
-      return res.json();
-    }
+  const { data: o2ds = [], isLoading: isDataLoading } = useSWR<O2D[]>("O2D", async () => {
+    const res = await fetch("/api/o2d", { cache: "no-store" });
+    return res.json();
+  }, {
+    revalidateOnFocus: true,
+    refreshInterval: 60000,
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -159,7 +159,7 @@ export default function O2DPage() {
 
   // Form State
   const [commonData, setCommonData] = useState({ order_no: "", party_name: "", remark: "" });
-  const [items, setItems] = useState<O2DItem[]>([{ item_name: "", item_qty: "", est_amount: "" }]);
+  const [items, setItems] = useState<O2DItem[]>([{ item_name: "", item_qty: "", est_amount: "", item_specification: "" }]);
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -195,25 +195,42 @@ export default function O2DPage() {
   }, []);
 
   const fetchO2Ds = async () => {
-    // Now handled by useLiveSheet + SWR
+    // Now handled by SWR
     // We just trigger a revalidation if needed
     mutate("O2D");
   };
 
   const fetchDetails = async () => {
     try {
-      const [detailsRes, configRes] = await Promise.all([
+      const [detailsRes, configRes, partiesRes] = await Promise.all([
         fetch("/api/o2d?type=details"),
-        fetch("/api/o2d/config")
+        fetch("/api/o2d/config"),
+        fetch("/api/party-management")
       ]);
       const data = await detailsRes.json();
       const configData = await configRes.json();
-      setParties(data.parties || []);
+      const partiesData = await partiesRes.json();
+      
+      if (Array.isArray(partiesData) && partiesData.length > 0) {
+        const partyNames = partiesData.map((p: any) => p.partyName).filter(Boolean);
+        setParties(partyNames.length > 0 ? partyNames : (data.parties || []));
+      } else {
+        setParties(data.parties || []);
+      }
+      
       setDropdownItems(data.items || []);
       
-      if (configData && configData.length > 0) {
-        setGlobalConfigs(configData);
-        setStepConfigs(configData);
+      if (configData && Array.isArray(configData)) {
+        const mergedConfigs = O2D_STEPS.map((step, idx) => {
+          const found = configData.find(c => c.step_name === step) || configData[idx];
+          return {
+            step_name: step,
+            tat: found?.tat || "24 Hrs",
+            responsible_person: found?.responsible_person || ""
+          };
+        });
+        setGlobalConfigs(mergedConfigs);
+        setStepConfigs(mergedConfigs);
       } else {
         const fallback = O2D_STEPS.map(step => ({ step_name: step, tat: "24 Hrs", responsible_person: "" }));
         setGlobalConfigs(fallback);
@@ -249,9 +266,24 @@ export default function O2DPage() {
     const firstItem = orderItems[0] as any;
     let pendingStepIdx = -1;
     for (let i = 1; i <= 11; i++) {
-      const status = firstItem[`status_${i}`];
-      if (status !== 'Done' && status !== 'Yes') {
+      const status = (firstItem[`status_${i}`] || "").toString().trim().toLowerCase();
+      
+      // Skip Step 5 if Step 4 was "Yes"
+      if (i === 5) {
+        const status4 = (firstItem[`status_4`] || "").toString().trim().toLowerCase();
+        if (status4 === 'yes') continue;
+      }
+
+      const isCompleted = status === 'done' || status === 'yes' || (i === 4 && status === 'no') || (i === 5 && status === 'no');
+
+      if (!isCompleted) {
         pendingStepIdx = i;
+        break;
+      }
+
+      // If Step 5 is "No", the process ends
+      if (i === 5 && status === 'no') {
+        pendingStepIdx = -1;
         break;
       }
     }
@@ -323,7 +355,7 @@ export default function O2DPage() {
       .sort((a, b) => b.localeCompare(a));
   }, [groupedOrders, searchTerm, dateFilter]);
 
-  const addItemRow = () => setItems([...items, { item_name: "", item_qty: "", est_amount: "" }]);
+  const addItemRow = () => setItems([...items, { item_name: "", item_qty: "", est_amount: "", item_specification: "" }]);
   const removeItemRow = (index: number) => items.length > 1 && setItems(items.filter((_, i) => i !== index));
 
   const handleItemChange = (index: number, field: keyof O2DItem, value: string) => {
@@ -350,7 +382,7 @@ export default function O2DPage() {
 
   const resetForm = () => {
     setCommonData({ order_no: generateOrderNo(o2ds), party_name: "", remark: "" });
-    setItems([{ item_name: "", item_qty: "", est_amount: "" }]);
+    setItems([{ item_name: "", item_qty: "", est_amount: "", item_specification: "" }]);
     setScreenshotFile(null); setImagePreview(null);
     setEditingOrderNo(null);
   };
@@ -424,80 +456,139 @@ export default function O2DPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setActionStatus('loading');
-    setActionMessage(editingOrderNo ? "Updating Order..." : "Executing Order...");
-    setIsStatusModalOpen(true);
     const now = new Date().toISOString();
+    
+    // Optimistic Update
+    const currentO2Ds = o2ds;
+    let optimisticO2Ds = [...o2ds];
+    let currentMaxId = o2ds.length > 0 ? Math.max(...o2ds.map(o => parseInt(o.id) || 0)) : 0;
+    
     try {
       if (editingOrderNo) {
         let baseRecord = { ...groupedOrders[editingOrderNo][0] };
         
-        // Cascading logic: "every step planned depend on last step actual"
+        // Cascading logic
         let currentBase = baseRecord.created_at || now;
         for (let i = 0; i < 11; i++) {
           const tat = globalConfigs[i]?.tat || "24 Hrs";
           const pKey = `planned_${i+1}`;
-          const aKey = `actual_${i+1}`;
-          
           if (i === 0) {
-            if (!(baseRecord as any)[pKey]) {
-              (baseRecord as any)[pKey] = calculatePlannedDate(currentBase, tat);
-            }
+            if (!(baseRecord as any)[pKey]) (baseRecord as any)[pKey] = calculatePlannedDate(currentBase, tat);
           } else {
-            const prevAKey = `actual_${i}`;
-            const prevActual = (baseRecord as any)[prevAKey];
+            const prevActual = (baseRecord as any)[`actual_${i}`];
             if (prevActual && prevActual !== "-" && prevActual.trim() !== "") {
               (baseRecord as any)[pKey] = calculatePlannedDate(prevActual, tat);
             } else {
-              (baseRecord as any)[pKey] = ""; // Only generate if previous actual exists
+              (baseRecord as any)[pKey] = "";
             }
           }
         }
 
-        const updatedItems = items.map(item => ({
-            ...baseRecord,
-            item_name: item.item_name,
-            item_qty: item.item_qty,
-            est_amount: item.est_amount,
-            party_name: commonData.party_name,
-            remark: commonData.remark,
-            updated_at: now
-        }));
+        const updatedItems = items.map(item => {
+            let idToUse = item.id;
+            if (!idToUse) {
+                currentMaxId++;
+                idToUse = currentMaxId.toString();
+            }
+            const updated = {
+                ...baseRecord,
+                id: idToUse,
+                item_name: item.item_name,
+                item_qty: item.item_qty,
+                est_amount: item.est_amount,
+                item_specification: item.item_specification,
+                party_name: commonData.party_name,
+                remark: commonData.remark,
+                updated_at: now
+            } as O2D;
+
+            // Recalculate cascading logic for THIS item/row
+            let currentBase = updated.created_at || now;
+            for (let i = 0; i < 11; i++) {
+              const tat = globalConfigs[i]?.tat || "24 Hrs";
+              const pKey = `planned_${i+1}`;
+              const stepIdx = i + 1;
+
+              if (i === 0) {
+                if (!(updated as any)[pKey]) (updated as any)[pKey] = calculatePlannedDate(currentBase, tat);
+              } else {
+                const prevActual = (updated as any)[`actual_${i}`];
+                const prevStatus = (updated as any)[`status_${i}`];
+                
+                // Skip logic: if Step 4 is Yes, skip Step 5 and go to Step 6
+                if (stepIdx === 5 && prevStatus === "Yes" && i === 4) {
+                   (updated as any)[pKey] = ""; // Skip Step 5
+                   continue;
+                }
+                if (stepIdx === 6 && (updated as any)[`status_4`] === "Yes") {
+                   const actual4 = (updated as any)[`actual_4`];
+                   if (actual4 && actual4 !== "-" && actual4.trim() !== "") {
+                      (updated as any)[pKey] = calculatePlannedDate(actual4, tat);
+                      continue;
+                   }
+                }
+
+                if (prevActual && prevActual !== "-" && prevActual.trim() !== "") {
+                  (updated as any)[pKey] = calculatePlannedDate(prevActual, tat);
+                } else {
+                  (updated as any)[pKey] = "";
+                }
+              }
+            }
+            return updated;
+        });
         
+        optimisticO2Ds = optimisticO2Ds.filter(o => o.order_no !== editingOrderNo);
+        optimisticO2Ds = [...updatedItems, ...optimisticO2Ds];
+
+        mutate("O2D", optimisticO2Ds, false);
+        setIsModalOpen(false);
+        resetForm();
+
+        const formData = new FormData();
+        formData.append("o2dData", JSON.stringify(updatedItems));
+        if (screenshotFile) formData.append("order_screenshot", screenshotFile);
+
         const res = await fetch(`/api/o2d/order/${editingOrderNo}`, {
-          method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updatedItems),
+          method: "PUT",
+          body: formData,
         });
         if (!res.ok) throw new Error("Update failed");
       } else {
-        const formData = new FormData();
-        let currentMaxId = o2ds.length > 0 ? Math.max(...o2ds.map(o => parseInt(o.id) || 0)) : 0;
-        
-        // Refined logic for new order: only set planned_1
-        let initRecord: Record<string, string> = {};
         const tat1 = globalConfigs[0]?.tat || "24 Hrs";
-        initRecord['planned_1'] = calculatePlannedDate(now, tat1);
-        for (let i = 2; i <= 11; i++) {
-          initRecord[`planned_${i}`] = "";
-        }
+        let initRecord: any = { planned_1: calculatePlannedDate(now, tat1) };
+        for (let i = 2; i <= 11; i++) initRecord[`planned_${i}`] = "";
 
-        const o2dDataArray = items.map(item => {
+        const newItems = items.map(item => {
           currentMaxId++;
           return {
             ...initRecord,
             id: currentMaxId.toString(), order_no: commonData.order_no, party_name: commonData.party_name,
             item_name: item.item_name, item_qty: item.item_qty, est_amount: item.est_amount,
+            item_specification: item.item_specification,
             remark: commonData.remark, filled_by: currentUser, created_at: now, updated_at: now
-          };
+          } as O2D;
         });
-        formData.append("o2dData", JSON.stringify(o2dDataArray));
+
+        optimisticO2Ds = [...newItems, ...optimisticO2Ds];
+        mutate("O2D", optimisticO2Ds, false);
+        setIsModalOpen(false);
+        resetForm();
+
+        const formData = new FormData();
+        formData.append("o2dData", JSON.stringify(newItems));
         if (screenshotFile) formData.append("order_screenshot", screenshotFile);
         const res = await fetch("/api/o2d", { method: "POST", body: formData });
         if (!res.ok) throw new Error("Creation failed");
       }
-      setIsStatusModalOpen(false); setIsModalOpen(false); resetForm(); mutate("O2D");
+      mutate("O2D"); // Revalidate to get real IDs/Server state
     } catch (error: any) {
-      setActionStatus('error'); setActionMessage(error.message); setTimeout(() => setIsStatusModalOpen(false), 2000);
+      console.error(error);
+      mutate("O2D", currentO2Ds, false); // Rollback
+      setActionStatus('error'); 
+      setActionMessage(error.message); 
+      setIsStatusModalOpen(true);
+      setTimeout(() => setIsStatusModalOpen(false), 2000);
     }
   };
 
@@ -510,9 +601,11 @@ export default function O2DPage() {
       remark: orderItems[0].remark
     });
     setItems(orderItems.map(o => ({
+      id: o.id,
       item_name: o.item_name,
       item_qty: o.item_qty,
-      est_amount: o.est_amount
+      est_amount: o.est_amount,
+      item_specification: o.item_specification || ""
     })));
     setImagePreview(orderItems[0].order_screenshot ? getDriveImageUrl(orderItems[0].order_screenshot) : null);
     setIsModalOpen(true);
@@ -526,13 +619,26 @@ export default function O2DPage() {
   const performDelete = async () => {
     const orderNo = confirmPayload?.orderNo;
     if (!orderNo) return;
-    setActionStatus('loading'); setActionMessage("Terminating Order..."); setIsStatusModalOpen(true);
+    
+    const currentO2Ds = o2ds;
+    const optimisticO2Ds = o2ds.filter(o => o.order_no !== orderNo);
+    
+    mutate("O2D", optimisticO2Ds, false);
+    setSelectedOrderNo(null);
+    setConfirmPayload(null);
+    setIsConfirmOpen(false);
+
     try {
       const res = await fetch(`/api/o2d/order/${orderNo}`, { method: "DELETE" });
-      if (res.ok) { setIsStatusModalOpen(false); mutate("O2D"); setSelectedOrderNo(null); }
-      else throw new Error("Delete failed");
-    } catch (error) { setActionStatus('error'); setActionMessage("Failed"); setTimeout(() => setIsStatusModalOpen(false), 2000); }
-    finally { setConfirmPayload(null); }
+      if (!res.ok) throw new Error("Delete failed");
+      mutate("O2D");
+    } catch (error) { 
+      mutate("O2D", currentO2Ds, false);
+      setActionStatus('error'); 
+      setActionMessage("Delete Failed"); 
+      setIsStatusModalOpen(true);
+      setTimeout(() => setIsStatusModalOpen(false), 2000); 
+    }
   };
 
   const handleOpenSetup = async () => {
@@ -549,8 +655,16 @@ export default function O2DPage() {
       
       setUsersList(usersData.map((u: any) => u.username));
       
-      if (configData && configData.length === O2D_STEPS.length) {
-        setStepConfigs(configData);
+      if (configData && Array.isArray(configData)) {
+        const mergedConfigs = O2D_STEPS.map((step, idx) => {
+          const found = configData.find(c => c.step_name === step) || configData[idx];
+          return {
+            step_name: step,
+            tat: found?.tat || "",
+            responsible_person: found?.responsible_person || ""
+          };
+        });
+        setStepConfigs(mergedConfigs);
       } else {
         setStepConfigs(O2D_STEPS.map(step => ({
           step_name: step,
@@ -599,10 +713,13 @@ export default function O2DPage() {
   const handleToggleStatus = async (orderNo: string, action: 'hold' | 'cancelled', currentValue: string | undefined) => {
     if (!orderNo) return;
     
-    const newValue = !currentValue;
-    setActionStatus('loading');
-    setActionMessage(`Applying ${action.toUpperCase()} Protocol...`);
-    setIsStatusModalOpen(true);
+    const newValue = !currentValue ? new Date().toISOString() : "";
+    const currentO2Ds = o2ds;
+    const optimisticO2Ds = o2ds.map(o => o.order_no === orderNo ? { ...o, [action]: newValue } : o);
+    
+    mutate("O2D", optimisticO2Ds, false);
+    setConfirmPayload(null);
+    setIsConfirmOpen(false);
 
     try {
       const res = await fetch("/api/o2d/toggle-status", {
@@ -612,14 +729,12 @@ export default function O2DPage() {
       });
 
       if (!res.ok) throw new Error(`Failed to toggle ${action}`);
-
       mutate("O2D");
-      setActionStatus('success');
-      setActionMessage(`Order ${newValue ? "Marked as" : "Removed from"} ${action.toUpperCase()}`);
-      setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (e: any) {
+      mutate("O2D", currentO2Ds, false);
       setActionStatus('error');
       setActionMessage(e.message || "Action failed");
+      setIsStatusModalOpen(true);
       setTimeout(() => setIsStatusModalOpen(false), 2000);
     }
   };
@@ -686,16 +801,31 @@ export default function O2DPage() {
 
   const getCurrentStep = (order: O2D[]) => {
     const first = order[0];
+    if (!first) return 1;
     for (let i = 1; i <= 11; i++) {
-      const status = (first as any)[`status_${i}`];
-      if (status !== 'Yes' && status !== 'Done') return i;
+      const status = ((first as any)[`status_${i}`] || "").toString().trim().toLowerCase();
+      
+      // Skip Step 5 if Step 4 was "Yes"
+      if (i === 5) {
+        const status4 = ((first as any)[`status_4`] || "").toString().trim().toLowerCase();
+        if (status4 === 'yes') continue;
+      }
+
+      const isCompleted = status === 'yes' || status === 'done' || (i === 4 && status === 'no') || (i === 5 && status === 'no');
+      
+      if (!isCompleted) return i;
+
+      // If Step 5 is "No", the process ends
+      if (i === 5 && status === 'no') return -1;
     }
-    return 11; // All steps done, or show last step
+    return 11; // All steps done
   };
 
   const openStepUpdateModal = () => {
     if (!selectedOrder) return;
     const stepIdx = getCurrentStep(selectedOrder);
+    if (stepIdx === -1) return; // Process ended or all steps done
+    
     setCurrentStepToUpdate(stepIdx);
     
     // Initialize fields with current values
@@ -732,57 +862,68 @@ export default function O2DPage() {
   const handleStepUpdateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrderNo) return;
-    setActionStatus('loading');
-    setActionMessage(`Updating Step ${currentStepToUpdate}...`);
-    setIsStatusModalOpen(true);
+    
+    const timestamp = new Date().toISOString();
+    const currentO2Ds = o2ds;
+    
+    // Prepare optimistic update
+    const updatedO2Ds = o2ds.map(o2d => {
+      if (o2d.order_no !== selectedOrderNo) return o2d;
+      
+      const updated = { ...o2d };
+      const stepIdx = currentStepToUpdate;
+      
+      (updated as any)[`status_${stepIdx}`] = stepUpdateFields.status;
+      (updated as any)[`actual_${stepIdx}`] = timestamp;
+      
+      if (stepIdx === 1) {
+        updated.final_amount_1 = stepUpdateFields.final_amount_1;
+        updated.so_number_1 = stepUpdateFields.so_number_1;
+        updated.merge_order_with_1 = stepUpdateFields.merge_order_with_1;
+      } else if (stepIdx === 6) {
+        updated.num_of_parcel_6 = stepUpdateFields.num_of_parcel_6;
+        updated.actual_date_of_order_packed_6 = stepUpdateFields.actual_date_of_order_packed_6;
+      } else if (stepIdx === 7) {
+        updated.voucher_num_7 = stepUpdateFields.voucher_num_7;
+      } else if (stepIdx === 8) {
+        updated.order_details_checked_8 = stepUpdateFields.order_details_checked_8;
+        updated.voucher_num_51_8 = stepUpdateFields.voucher_num_51_8;
+        updated.t_amt_8 = stepUpdateFields.t_amt_8;
+      } else if (stepIdx === 9) {
+        updated.num_of_parcel_9 = stepUpdateFields.num_of_parcel_9;
+      }
+
+      if ((stepUpdateFields.status === "Yes" || (stepIdx === 4 && stepUpdateFields.status === "No")) && stepIdx < 11) {
+        let nextStepIdx = stepIdx + 1;
+        
+        // Skip logic: if Step 4 is Yes, skip Step 5 and go straight to Step 6
+        if (stepIdx === 4 && stepUpdateFields.status === "Yes") {
+           (updated as any)[`planned_5`] = "";
+           nextStepIdx = 6;
+        }
+
+        // Termination logic: if Step 5 is No, end the process (do not plan Step 6)
+        if (stepIdx === 5 && stepUpdateFields.status === "No") {
+           return updated;
+        }
+
+        const nextTat = globalConfigs[nextStepIdx - 1]?.tat || "24 Hrs";
+        let baseForNext = timestamp;
+        if (stepIdx === 6 && stepUpdateFields.actual_date_of_order_packed_6) {
+          baseForNext = stepUpdateFields.actual_date_of_order_packed_6;
+        }
+        (updated as any)[`planned_${nextStepIdx}`] = calculatePlannedDate(baseForNext, nextTat);
+      }
+      updated.updated_at = timestamp;
+      return updated;
+    });
+
+    mutate("O2D", updatedO2Ds, false);
+    setIsStepUpdateModalOpen(false);
 
     try {
-      const timestamp = new Date().toISOString();
-      const updatedO2Ds = groupedOrders[selectedOrderNo].map(o2d => {
-        const updated = { ...o2d };
-        const stepIdx = currentStepToUpdate;
-        
-        // Update basic step fields
-        (updated as any)[`status_${stepIdx}`] = stepUpdateFields.status;
-        (updated as any)[`actual_${stepIdx}`] = timestamp;
-        
-        // Update step-specific fields
-        if (stepIdx === 1) {
-          updated.final_amount_1 = stepUpdateFields.final_amount_1;
-          updated.so_number_1 = stepUpdateFields.so_number_1;
-          updated.merge_order_with_1 = stepUpdateFields.merge_order_with_1;
-        } else if (stepIdx === 6) {
-          updated.num_of_parcel_6 = stepUpdateFields.num_of_parcel_6;
-          updated.actual_date_of_order_packed_6 = stepUpdateFields.actual_date_of_order_packed_6;
-        } else if (stepIdx === 7) {
-          updated.voucher_num_7 = stepUpdateFields.voucher_num_7;
-        } else if (stepIdx === 8) {
-          updated.order_details_checked_8 = stepUpdateFields.order_details_checked_8;
-          updated.voucher_num_51_8 = stepUpdateFields.voucher_num_51_8;
-          updated.t_amt_8 = stepUpdateFields.t_amt_8;
-        } else if (stepIdx === 9) {
-          updated.num_of_parcel_9 = stepUpdateFields.num_of_parcel_9;
-        }
-
-        // Automated Cascading Logic: Generate NEXT step's planned time
-        if (stepUpdateFields.status === "Yes" && stepIdx < 11) {
-          const nextStepIdx = stepIdx + 1;
-          const nextTat = globalConfigs[nextStepIdx - 1]?.tat || "24 Hrs";
-          
-          // If it's Step 6 and we have a manual packing date, use that as the base for the next step (Dispatch)
-          let baseForNext = timestamp;
-          if (stepIdx === 6 && stepUpdateFields.actual_date_of_order_packed_6) {
-            baseForNext = stepUpdateFields.actual_date_of_order_packed_6;
-          }
-          
-          (updated as any)[`planned_${nextStepIdx}`] = calculatePlannedDate(baseForNext, nextTat);
-        }
-
-        updated.updated_at = timestamp;
-        return updated;
-      });
-
       // Handle file attachment if present
+      let fileUploaded = false;
       if (stepAttachment) {
         const formData = new FormData();
         formData.append("file", stepAttachment);
@@ -792,10 +933,15 @@ export default function O2DPage() {
         const uploadRes = await fetch("/api/o2d/upload", { method: "POST", body: formData });
         if (uploadRes.ok) {
           const { fileId } = await uploadRes.json();
+          fileUploaded = true;
           const fieldMap: any = { 1: 'upload_so_1', 6: 'upload_pi_6', 9: 'attach_bilty_9' };
           const targetField = fieldMap[currentStepToUpdate];
           if (targetField) {
-            updatedO2Ds.forEach((o: O2D) => (o as any)[targetField] = fileId);
+            updatedO2Ds.forEach((o: any) => {
+              if (o.order_no === selectedOrderNo) o[targetField] = fileId;
+            });
+            // Update cache again with fileId
+            mutate("O2D", updatedO2Ds, false);
           }
         }
       }
@@ -803,17 +949,16 @@ export default function O2DPage() {
       const res = await fetch(`/api/o2d/order/${selectedOrderNo}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedO2Ds),
+        body: JSON.stringify(updatedO2Ds.filter(o => o.order_no === selectedOrderNo)),
       });
 
       if (!res.ok) throw new Error("Step update failed");
-
-      setIsStepUpdateModalOpen(false);
-      setIsStatusModalOpen(false);
       mutate("O2D");
     } catch (error: any) {
+      mutate("O2D", currentO2Ds, false);
       setActionStatus('error');
       setActionMessage(error.message);
+      setIsStatusModalOpen(true);
       setTimeout(() => setIsStatusModalOpen(false), 2000);
     }
   };
@@ -977,8 +1122,8 @@ export default function O2DPage() {
               sortedOrderNumbers.map((no) => {
                 const orderItems = groupedOrders[no];
                 const first = orderItems[0];
-                const totalQty = orderItems.reduce((sum: number, item) => sum + (parseFloat(item.item_qty) || 0), 0);
-                const totalAmt = orderItems.reduce((sum: number, item) => sum + (parseFloat(item.est_amount) || 0), 0);
+                const totalQty = orderItems.reduce((sum: number, item: O2D) => sum + (parseFloat(item.item_qty) || 0), 0);
+                const totalAmt = orderItems.reduce((sum: number, item: O2D) => sum + (parseFloat(item.est_amount) || 0), 0);
 
 
                 // Find current pending stage (first step not marked Done/Yes)
@@ -1244,7 +1389,7 @@ export default function O2DPage() {
                           <div className="w-1 h-3.5 bg-[#003875] rounded-full" /> Tactical Inventory
                         </h3>
                         <div className="text-[12px] font-black text-[#003875] dark:text-[#FFD500]">
-                          TOTAL: ₹{selectedOrder.reduce((sum, i) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}
+                          TOTAL: ₹{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}
                         </div>
                      </div>
                      <table className="w-full text-left">
@@ -1257,11 +1402,21 @@ export default function O2DPage() {
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-navy-800/20">
                            {selectedOrder.map((item, idx) => (
-                              <tr key={idx} className="text-[12px] font-bold text-gray-700 dark:text-gray-300 hover:bg-white/40 transition-colors">
-                                 <td className="px-6 py-3.5">{item.item_name}</td>
-                                 <td className="px-6 py-3.5 text-center"><span className="px-2.5 py-1 bg-white dark:bg-black rounded-md text-[11px] font-black shadow-sm border border-gray-100 dark:border-navy-700">{item.item_qty}</span></td>
-                                 <td className="px-6 py-3.5 text-right font-black text-[#003875] dark:text-[#FFD500]">₹{parseFloat(item.est_amount).toLocaleString()}</td>
-                              </tr>
+                             <React.Fragment key={idx}>
+                               <tr className="text-[12px] font-bold text-gray-700 dark:text-gray-300 hover:bg-white/40 transition-colors">
+                                  <td className="px-6 py-3.5">{item.item_name}</td>
+                                  <td className="px-6 py-3.5 text-center"><span className="px-2.5 py-1 bg-white dark:bg-black rounded-md text-[11px] font-black shadow-sm border border-gray-100 dark:border-navy-700">{item.item_qty}</span></td>
+                                  <td className="px-6 py-3.5 text-right font-black text-[#003875] dark:text-[#FFD500]">₹{parseFloat(item.est_amount).toLocaleString()}</td>
+                               </tr>
+                               {item.item_specification && (
+                                 <tr className="bg-gray-50/30 dark:bg-navy-900/40">
+                                   <td colSpan={3} className="px-6 py-2 text-[10px] text-gray-500 italic border-l-2 border-[#CE2029]/20 ml-6">
+                                     <span className="font-black uppercase tracking-tighter mr-2 text-[8px] opacity-60">Spec:</span>
+                                     {item.item_specification}
+                                   </td>
+                                 </tr>
+                               )}
+                             </React.Fragment>
                            ))}
                         </tbody>
                      </table>
@@ -1346,10 +1501,11 @@ export default function O2DPage() {
                    <div className="bg-white dark:bg-navy-900 rounded-xl border-2 border-gray-100 dark:border-navy-700 shadow-xl w-max min-w-full overflow-hidden">
                       <table className="w-full text-left border-collapse whitespace-nowrap">
                         <thead>
-                           <tr className="bg-[#CE2029] text-[11px] font-black text-white uppercase tracking-widest">
-                              <th className="px-6 py-4 border-r border-white/10 sticky left-0 z-10 bg-[#CE2029]">Item Specification</th>
-                              <th className="px-6 py-4 text-center border-r border-white/10">Quantity</th>
-                              <th className="px-6 py-4 text-right border-r border-white/10">Estimated Amount</th>
+                            <tr className="bg-[#CE2029] text-[11px] font-black text-white uppercase tracking-widest">
+                               <th className="px-6 py-4 border-r border-white/10 sticky left-0 z-10 bg-[#CE2029]">Nomenclature</th>
+                               <th className="px-6 py-4 border-r border-white/10">Item Specification</th>
+                               <th className="px-6 py-4 text-center border-r border-white/10">Quantity</th>
+                               <th className="px-6 py-4 text-right border-r border-white/10">Estimated Amount</th>
                               {O2D_STEPS.map((step, idx) => (
                                 <th key={idx} className="px-4 py-3 text-center border-r border-white/10 last:border-r-0 align-top" title={step}>
                                   <div className="flex flex-col items-center justify-center gap-0.5 min-w-[120px]">
@@ -1364,6 +1520,7 @@ export default function O2DPage() {
                            {selectedOrder.map((item, idx) => (
                               <tr key={idx} className="hover:bg-white/50 dark:hover:bg-white/5 transition-colors text-[13px] font-medium text-gray-700 dark:text-gray-200">
                                  <td className="px-6 py-3 border-r border-[#CE2029]/5 sticky left-0 z-10 bg-white dark:bg-navy-800">{item.item_name}</td>
+                                 <td className="px-6 py-3 border-r border-[#CE2029]/5 italic text-gray-500 text-[11px] max-w-[250px] truncate" title={item.item_specification}>{item.item_specification || "-"}</td>
                                  <td className="px-6 py-3 text-center border-r border-[#CE2029]/5 bg-[#FFD500]/5 dark:bg-navy-900 font-black">{item.item_qty}</td>
                                  <td className="px-6 py-3 text-right font-black text-[#003875] dark:text-[#FFD500] border-r border-[#CE2029]/5">₹{parseFloat(item.est_amount).toLocaleString()}</td>
                                  {O2D_STEPS.map((_, stepIdx) => {
@@ -1380,7 +1537,7 @@ export default function O2DPage() {
                                        <div className="flex flex-col gap-1.5 text-[10.5px]">
                                          <div className="flex justify-between items-center gap-2"><span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">Plan</span> <span className="font-bold text-gray-800 dark:text-gray-200">{planned}</span></div>
                                          <div className="flex justify-between items-center gap-2"><span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">Actual</span> <span className="font-black text-[#003875] dark:text-[#FFD500]">{actual}</span></div>
-                                         <div className="flex justify-between items-center gap-2"><span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">Status</span> <span className={`font-black uppercase ${(status === 'Done' || status === 'Yes') ? 'text-green-500' : 'text-[#CE2029]'}`}>{status || '-'}</span></div>
+                                         <div className="flex justify-between items-center gap-2"><span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">Status</span> <span className={`font-black uppercase ${((status || "").toString().trim().toLowerCase() === 'done' || (status || "").toString().trim().toLowerCase() === 'yes') ? 'text-green-500' : 'text-[#CE2029]'}`}>{status || '-'}</span></div>
                                          {delay && (
                                            <div className={`flex justify-between items-center gap-2 border-t pt-1.5 mt-0.5 ${delay.isDelayed ? 'border-red-100 dark:border-red-900/30' : 'border-green-100 dark:border-green-900/30'}`}>
                                              <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">Delay</span>
@@ -1397,12 +1554,13 @@ export default function O2DPage() {
                            ))}
                         </tbody>
                         <tfoot>
-                           <tr className="bg-white/80 dark:bg-navy-950 font-black text-gray-900 dark:text-white text-[13px] border-t-2 border-[#CE2029]/20 shadow-inner">
-                              <td className="px-6 py-4 border-r border-[#CE2029]/10 sticky left-0 z-10 bg-white/80 dark:bg-navy-950 backdrop-blur-md">AGGREGATE SUM</td>
-                              <td className="px-6 py-4 text-center border-r border-[#CE2029]/10">{selectedOrder.reduce((sum, i) => sum + (parseFloat(i.item_qty) || 0), 0)} Units</td>
-                              <td className="px-6 py-4 text-right text-[#CE2029] border-r border-[#CE2029]/10">₹{selectedOrder.reduce((sum, i) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}</td>
-                              <td colSpan={O2D_STEPS.length} className="px-6 py-4"></td>
-                           </tr>
+                            <tr className="bg-white/80 dark:bg-navy-950 font-black text-gray-900 dark:text-white text-[13px] border-t-2 border-[#CE2029]/20 shadow-inner">
+                               <td className="px-6 py-4 border-r border-[#CE2029]/10 sticky left-0 z-10 bg-white/80 dark:bg-navy-950 backdrop-blur-md">AGGREGATE SUM</td>
+                               <td className="px-6 py-4 border-r border-[#CE2029]/10"></td>
+                               <td className="px-6 py-4 text-center border-r border-[#CE2029]/10">{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.item_qty) || 0), 0)} Units</td>
+                               <td className="px-6 py-4 text-right text-[#CE2029] border-r border-[#CE2029]/10">₹{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}</td>
+                               <td colSpan={O2D_STEPS.length} className="px-6 py-4"></td>
+                            </tr>
                         </tfoot>
                       </table>
                    </div>
@@ -1476,21 +1634,32 @@ export default function O2DPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      {items.map((item, index) => (
-                        <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-2 p-1.5 px-3 bg-white dark:bg-navy-800/50 rounded-xl border border-gray-100 dark:border-navy-700 animate-in slide-in-from-right-2 duration-300 shadow-sm items-end relative group">
-                           <div className="md:col-span-6 min-w-0">
-                                <SearchableDropdown label="Nomenclature" icon={ArchiveBoxIcon} value={item.item_name} onChange={(val) => handleItemChange(index, 'item_name', val)} options={dropdownItems.map(i => i.name)} />
+                       {items.map((item, index) => (
+                        <div key={index} className="p-4 bg-white dark:bg-navy-800/50 rounded-2xl border border-gray-100 dark:border-navy-700 animate-in slide-in-from-right-2 duration-300 shadow-sm space-y-4 relative group">
+                           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                             <div className="md:col-span-6 min-w-0">
+                                  <SearchableDropdown label="Nomenclature" icon={ArchiveBoxIcon} value={item.item_name} onChange={(val) => handleItemChange(index, 'item_name', val)} options={dropdownItems.map(i => i.name)} />
+                             </div>
+                             <div className="md:col-span-2">
+                                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5"><HashtagIcon className="w-2.5 h-2.5" />Qty</label>
+                                   <input type="number" value={item.item_qty} onChange={(e) => handleItemChange(index, 'item_qty', e.target.value)} className="w-full h-[34px] bg-[#FFFBF0] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-gray-100 shadow-sm transition-all" required />
+                             </div>
+                             <div className="md:col-span-3">
+                                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5"><CurrencyRupeeIcon className="w-2.5 h-2.5" />Total</label>
+                                   <input type="text" value={item.est_amount} onChange={(e) => handleItemChange(index, 'est_amount', e.target.value)} className="w-full h-[34px] bg-[#FFFBF0] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-[#003875] dark:text-[#FFD500] shadow-sm transition-all" required />
+                             </div>
+                             <div className="md:col-span-1 flex items-end pb-1 pr-1">
+                                  <button type="button" onClick={() => removeItemRow(index)} className="w-full h-[30px] flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                             </div>
                            </div>
-                           <div className="md:col-span-2">
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5"><HashtagIcon className="w-2.5 h-2.5" />Qty</label>
-                                 <input type="number" value={item.item_qty} onChange={(e) => handleItemChange(index, 'item_qty', e.target.value)} className="w-full h-[34px] bg-[#FFFBF0] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-gray-100 shadow-sm transition-all" required />
-                           </div>
-                           <div className="md:col-span-3">
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5"><CurrencyRupeeIcon className="w-2.5 h-2.5" />Total</label>
-                                 <input type="text" value={item.est_amount} onChange={(e) => handleItemChange(index, 'est_amount', e.target.value)} className="w-full h-[34px] bg-[#FFFBF0] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-[#003875] dark:text-[#FFD500] shadow-sm transition-all" required />
-                           </div>
-                           <div className="md:col-span-1 flex items-end pb-1 pr-1">
-                                <button type="button" onClick={() => removeItemRow(index)} className="w-full h-[30px] flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all"><TrashIcon className="w-4 h-4" /></button>
+                           <div className="pt-2 border-t border-gray-50 dark:border-white/5">
+                                <input 
+                                  type="text"
+                                  value={item.item_specification} 
+                                  onChange={(e) => handleItemChange(index, 'item_specification', e.target.value)} 
+                                  className="w-full h-[34px] bg-[#FFFBF0] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-gray-100 shadow-sm transition-all" 
+                                  placeholder="Item Specification..." 
+                                />
                            </div>
                         </div>
                       ))}
