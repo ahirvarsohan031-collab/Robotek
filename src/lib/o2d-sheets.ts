@@ -1,4 +1,4 @@
-import { BaseSheetsService } from "./sheets/base-service";
+import { BaseSheetsService, getColumnLetter } from "./sheets/base-service";
 import { O2D, O2DStepConfig } from "@/types/o2d";
 import { google } from "googleapis";
 
@@ -15,7 +15,7 @@ class O2DService extends BaseSheetsService<O2D> {
 
   mapRowToItem(row: any[]): O2D {
     const get = (h: string) => row[this.hMap[h.toLowerCase()]] || "";
-    
+
     const item: any = {
       id: get("id"),
       order_no: get("order_no."),
@@ -35,29 +35,29 @@ class O2DService extends BaseSheetsService<O2D> {
 
     // Map steps 1-11
     for (let i = 1; i <= 11; i++) {
-        item[`planned_${i}`] = get(`planned_${i}`);
-        item[`actual_${i}`] = get(`acual_${i}`); // Note the typo "acual" from sheet
-        item[`status_${i}`] = get(`status_${i}`);
-        
-        if (i === 1) {
-            item.final_amount_1 = get("final_amount_1");
-            item.so_number_1 = get("so_number_1");
-            item.merge_order_with_1 = get("merge_order_with_1");
-            item.upload_so_1 = get("upload_so_(attachment)_1");
-        } else if (i === 6) {
-            item.num_of_parcel_6 = get("num_of_parcel_6");
-            item.upload_pi_6 = get("upoad_pi_(attachment)_6"); // Note typo "upoad"
-            item.actual_date_of_order_packed_6 = get("actual_date_of_order_packed_6");
-        } else if (i === 7) {
-            item.voucher_num_7 = get("voucher_num_7");
-        } else if (i === 8) {
-            item.order_details_checked_8 = get("order_details_checked_in_order_sheet_(yes,no)_8");
-            item.voucher_num_51_8 = get("voucher_num_(51)_8");
-            item.t_amt_8 = get("t._amt_8");
-        } else if (i === 9) {
-            item.attach_bilty_9 = get("attach_billty_(attachment)_9"); // Note typo "billty"
-            item.num_of_parcel_9 = get("num_of_parcel_9");
-        }
+      item[`planned_${i}`] = get(`planned_${i}`);
+      item[`actual_${i}`] = get(`acual_${i}`); // Note the typo "acual" from sheet
+      item[`status_${i}`] = get(`status_${i}`);
+
+      if (i === 1) {
+        item.final_amount_1 = get("final_amount_1");
+        item.so_number_1 = get("so_number_1");
+        item.merge_order_with_1 = get("merge_order_with_1");
+        item.upload_so_1 = get("upload_so_(attachment)_1");
+      } else if (i === 6) {
+        item.num_of_parcel_6 = get("num_of_parcel_6");
+        item.upload_pi_6 = get("upoad_pi_(attachment)_6"); // Note typo "upoad"
+        item.actual_date_of_order_packed_6 = get("actual_date_of_order_packed_6");
+      } else if (i === 7) {
+        item.voucher_num_7 = get("voucher_num_7");
+      } else if (i === 8) {
+        item.order_details_checked_8 = get("order_details_checked_in_order_sheet_(yes,no)_8");
+        item.voucher_num_51_8 = get("voucher_num_(51)_8");
+        item.t_amt_8 = get("t._amt_8");
+      } else if (i === 9) {
+        item.attach_bilty_9 = get("attach_billty_(attachment)_9"); // Note typo "billty"
+        item.num_of_parcel_9 = get("num_of_parcel_9");
+      }
     }
 
     return item as O2D;
@@ -66,8 +66,8 @@ class O2DService extends BaseSheetsService<O2D> {
   mapItemToRow(o2d: O2D): any[] {
     const row: any[] = [];
     const set = (h: string, val: any) => {
-        const idx = this.hMap[h.toLowerCase()];
-        if (idx !== undefined) row[idx] = val;
+      const idx = this.hMap[h.toLowerCase()];
+      if (idx !== undefined) row[idx] = val;
     };
 
     set("id", o2d.id);
@@ -86,35 +86,35 @@ class O2DService extends BaseSheetsService<O2D> {
     set("cancelled", o2d.cancelled || "");
 
     for (let i = 1; i <= 11; i++) {
-        set(`planned_${i}`, (o2d as any)[`planned_${i}`]);
-        set(`acual_${i}`, (o2d as any)[`actual_${i}`]);
-        set(`status_${i}`, (o2d as any)[`status_${i}`]);
-        
-        if (i === 1) {
-            set("final_amount_1", o2d.final_amount_1);
-            set("so_number_1", o2d.so_number_1);
-            set("merge_order_with_1", o2d.merge_order_with_1);
-            set("upload_so_(attachment)_1", o2d.upload_so_1);
-        } else if (i === 6) {
-            set("num_of_parcel_6", o2d.num_of_parcel_6);
-            set("upoad_pi_(attachment)_6", o2d.upload_pi_6);
-            set("actual_date_of_order_packed_6", o2d.actual_date_of_order_packed_6);
-        } else if (i === 7) {
-            set("voucher_num_7", o2d.voucher_num_7);
-        } else if (i === 8) {
-            set("order_details_checked_in_order_sheet_(yes,no)_8", o2d.order_details_checked_8);
-            set("voucher_num_(51)_8", o2d.voucher_num_51_8);
-            set("t._amt_8", o2d.t_amt_8);
-        } else if (i === 9) {
-            set("attach_billty_(attachment)_9", o2d.attach_bilty_9);
-            set("num_of_parcel_9", o2d.num_of_parcel_9);
-        }
+      set(`planned_${i}`, (o2d as any)[`planned_${i}`]);
+      set(`acual_${i}`, (o2d as any)[`actual_${i}`]);
+      set(`status_${i}`, (o2d as any)[`status_${i}`]);
+
+      if (i === 1) {
+        set("final_amount_1", o2d.final_amount_1);
+        set("so_number_1", o2d.so_number_1);
+        set("merge_order_with_1", o2d.merge_order_with_1);
+        set("upload_so_(attachment)_1", o2d.upload_so_1);
+      } else if (i === 6) {
+        set("num_of_parcel_6", o2d.num_of_parcel_6);
+        set("upoad_pi_(attachment)_6", o2d.upload_pi_6);
+        set("actual_date_of_order_packed_6", o2d.actual_date_of_order_packed_6);
+      } else if (i === 7) {
+        set("voucher_num_7", o2d.voucher_num_7);
+      } else if (i === 8) {
+        set("order_details_checked_in_order_sheet_(yes,no)_8", o2d.order_details_checked_8);
+        set("voucher_num_(51)_8", o2d.voucher_num_51_8);
+        set("t._amt_8", o2d.t_amt_8);
+      } else if (i === 9) {
+        set("attach_billty_(attachment)_9", o2d.attach_bilty_9);
+        set("num_of_parcel_9", o2d.num_of_parcel_9);
+      }
     }
 
     // Fill gaps with empty string
     const maxIdx = Math.max(...Object.values(this.hMap));
     for (let i = 0; i <= maxIdx; i++) {
-        if (row[i] === undefined) row[i] = "";
+      if (row[i] === undefined) row[i] = "";
     }
 
     return row;
@@ -125,10 +125,10 @@ class O2DService extends BaseSheetsService<O2D> {
     await this.ensureHeaders();
     try {
       const sheets = await this.getSheetsClient();
-      
+
       // 1. Find all existing rows for this order
       const orderNoColIdx = this.hMap["order_no."];
-      const colLetter = String.fromCharCode(65 + orderNoColIdx);
+      const colLetter = getColumnLetter(orderNoColIdx);
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: `${this.sheetName}!${colLetter}:${colLetter}`,
@@ -139,7 +139,7 @@ class O2DService extends BaseSheetsService<O2D> {
       const indices = rows
         .map((row, index) => (row[0] === orderNo ? index : -1))
         .filter(index => index !== -1);
-      
+
       if (indices.length === 0) return await this.addMany(o2ds);
 
       const startRowIdx = Math.min(...indices);
@@ -209,7 +209,7 @@ class O2DService extends BaseSheetsService<O2D> {
       this.invalidateCache();
       return true;
     } catch (error) {
-       return false;
+      return false;
     }
   }
 
@@ -218,7 +218,7 @@ class O2DService extends BaseSheetsService<O2D> {
     try {
       const sheets = await this.getSheetsClient();
       const idColIdx = this.hMap["id"];
-      const idColLetter = String.fromCharCode(65 + idColIdx);
+      const idColLetter = getColumnLetter(idColIdx);
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: `${this.sheetName}!${idColLetter}:${idColLetter}`,
@@ -256,55 +256,57 @@ class O2DService extends BaseSheetsService<O2D> {
 
   async updateOrderToggleStatus(orderNo: string, action: 'hold' | 'cancelled', value: string): Promise<boolean> {
     await this.ensureHeaders();
-    try {
-      const sheets = await this.getSheetsClient();
-      let indicesToUpdate: number[] = [];
-      const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
-      const cached = O2DService.cacheMap[cacheKey];
+    const sheets = await this.getSheetsClient();
 
-      if (cached && cached.data) {
-        indicesToUpdate = cached.data
-          .map((item: O2D, index: number) => (item.order_no === orderNo ? index + 1 : -1))
-          .filter((index: number) => index !== -1);
-      }
-
-      if (indicesToUpdate.length === 0) {
-        const orderNoColIdx = this.hMap["order_no."];
-        const colLetter = String.fromCharCode(65 + orderNoColIdx);
-        const response = await sheets.spreadsheets.values.get({
-          spreadsheetId: this.spreadsheetId,
-          range: `${this.sheetName}!${colLetter}:${colLetter}`,
-        });
-        const rows = response.data.values;
-        if (!rows) return false;
-        indicesToUpdate = rows
-          .map((row, index) => (row[0] === orderNo ? index : -1))
-          .filter(index => index !== -1);
-      }
-
-      if (indicesToUpdate.length === 0) return false;
-
-      const updatedColIdx = this.hMap[action];
-      const updatedLoc = String.fromCharCode(65 + updatedColIdx);
-      const updatedAtColIdx = this.hMap["updated_at"];
-      const updatedAtLoc = String.fromCharCode(65 + updatedAtColIdx);
-      const timestamp = new Date().toISOString();
-
-      const data = indicesToUpdate.flatMap(index => [
-        { range: `${this.sheetName}!${updatedLoc}${index + 1}`, values: [[value]] },
-        { range: `${this.sheetName}!${updatedAtLoc}${index + 1}`, values: [[timestamp]] }
-      ]);
-
-      await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: this.spreadsheetId,
-        requestBody: { valueInputOption: "USER_ENTERED", data }
-      });
-
-      this.invalidateCache();
-      return true;
-    } catch (error) {
-       return false;
+    // Guard: check column exists
+    const updatedColIdx = this.hMap[action];
+    if (updatedColIdx === undefined) {
+      console.error(`[toggleStatus] Column '${action}' not found in hMap. Keys:`, Object.keys(this.hMap));
+      return false;
     }
+
+    // Always read row positions directly from sheet (avoids cache double-offset bugs)
+    const orderNoColIdx = this.hMap["order_no."];
+    const colLetter = String.fromCharCode(65 + orderNoColIdx);
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: this.spreadsheetId,
+      range: `${this.sheetName}!${colLetter}:${colLetter}`,
+    });
+    const rows = response.data.values;
+    if (!rows) return false;
+
+    // rows[0] = header row; get 1-based sheet row numbers for matching data rows
+    const sheetRows: number[] = rows
+      .map((row, index) => (String(row[0]).trim() === String(orderNo).trim() ? index + 1 : -1))
+      .filter(n => n !== -1);
+
+    if (sheetRows.length === 0) {
+      console.error(`[toggleStatus] Order '${orderNo}' not found`);
+      return false;
+    }
+
+    const updatedLoc = getColumnLetter(updatedColIdx);
+    const updatedAtColIdx = this.hMap["updated_at"];
+    const timestamp = new Date().toISOString();
+
+    const data: any[] = sheetRows.flatMap(sheetRow => {
+      const updates: any[] = [
+        { range: `${this.sheetName}!${updatedLoc}${sheetRow}`, values: [[value]] },
+      ];
+      if (updatedAtColIdx !== undefined) {
+        const updatedAtLoc = getColumnLetter(updatedAtColIdx);
+        updates.push({ range: `${this.sheetName}!${updatedAtLoc}${sheetRow}`, values: [[timestamp]] });
+      }
+      return updates;
+    });
+
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: this.spreadsheetId,
+      requestBody: { valueInputOption: "USER_ENTERED", data }
+    });
+
+    this.invalidateCache();
+    return true;
   }
 
   async removeFollowUp(orderNo: string, startStep: number, onlyThisStep: boolean): Promise<boolean> {
@@ -323,7 +325,7 @@ class O2DService extends BaseSheetsService<O2D> {
 
       if (indicesToUpdate.length === 0) {
         const orderNoColIdx = this.hMap["order_no."];
-        const colLetter = String.fromCharCode(65 + orderNoColIdx);
+        const colLetter = getColumnLetter(orderNoColIdx);
         const response = await sheets.spreadsheets.values.get({
           spreadsheetId: this.spreadsheetId,
           range: `${this.sheetName}!${colLetter}:${colLetter}`,
@@ -351,17 +353,34 @@ class O2DService extends BaseSheetsService<O2D> {
         const row = [...rows[index]];
         const maxIdx = Math.max(...Object.values(this.hMap));
         while (row.length <= maxIdx) row.push("");
-        
+
         for (let s = startStep; s <= endStep; s++) {
           const pIdx = this.hMap[`planned_${s}`];
           const aIdx = this.hMap[`acual_${s}`];
           const stIdx = this.hMap[`status_${s}`];
-          
-          if (s > startStep && pIdx !== undefined) row[pIdx] = "";
+
+          if (pIdx !== undefined && s > startStep) row[pIdx] = "";
           if (aIdx !== undefined) row[aIdx] = "";
           if (stIdx !== undefined) row[stIdx] = "";
+
+          // Clear step-specific extra fields
+          if (s === 1) {
+            const fields = ["final_amount_1", "so_number_1", "merge_order_with_1", "upload_so_(attachment)_1"];
+            fields.forEach(f => { const idx = this.hMap[f]; if (idx !== undefined) row[idx] = ""; });
+          } else if (s === 6) {
+            const fields = ["num_of_parcel_6", "upoad_pi_(attachment)_6", "actual_date_of_order_packed_6"];
+            fields.forEach(f => { const idx = this.hMap[f]; if (idx !== undefined) row[idx] = ""; });
+          } else if (s === 7) {
+            const idx = this.hMap["voucher_num_7"]; if (idx !== undefined) row[idx] = "";
+          } else if (s === 8) {
+            const fields = ["order_details_checked_in_order_sheet_(yes,no)_8", "voucher_num_(51)_8", "t._amt_8"];
+            fields.forEach(f => { const idx = this.hMap[f]; if (idx !== undefined) row[idx] = ""; });
+          } else if (s === 9) {
+            const fields = ["attach_billty_(attachment)_9", "num_of_parcel_9"];
+            fields.forEach(f => { const idx = this.hMap[f]; if (idx !== undefined) row[idx] = ""; });
+          }
         }
-        
+
         if (updatedAtColIdx !== undefined) row[updatedAtColIdx] = timestamp;
         return { range: `${this.sheetName}!A${index + 1}:BH${index + 1}`, values: [row] };
       });
@@ -379,14 +398,14 @@ class O2DService extends BaseSheetsService<O2D> {
   }
 
   async getStepConfig(): Promise<O2DStepConfig[]> {
-     const sheets = await this.getSheetsClient();
-     const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: this.spreadsheetId,
-        range: `${CONFIG_SHEET_NAME}!A2:C`,
-     });
-     return response.data.values?.map(row => ({
-        step_name: row[0] || "", tat: row[1] || "", responsible_person: row[2] || ""
-     })) || [];
+    const sheets = await this.getSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: this.spreadsheetId,
+      range: `${CONFIG_SHEET_NAME}!A2:C`,
+    });
+    return response.data.values?.map(row => ({
+      step_name: row[0] || "", tat: row[1] || "", responsible_person: row[2] || ""
+    })) || [];
   }
 
   async getDetails(): Promise<{ parties: string[]; items: { name: string; amount: string }[] }> {
@@ -420,7 +439,7 @@ class O2DService extends BaseSheetsService<O2D> {
 
       if (indicesToDelete.length === 0) {
         const orderNoColIdx = this.hMap["order_no."];
-        const colLetter = String.fromCharCode(65 + orderNoColIdx);
+        const colLetter = getColumnLetter(orderNoColIdx);
         const response = await sheets.spreadsheets.values.get({
           spreadsheetId: this.spreadsheetId,
           range: `${this.sheetName}!${colLetter}:${colLetter}`,

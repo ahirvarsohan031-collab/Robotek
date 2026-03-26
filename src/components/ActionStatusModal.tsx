@@ -12,7 +12,7 @@ export default function ActionStatusModal({ isOpen, status, message }: ActionSta
   return (
     <div className="fixed inset-0 z-[12000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]" />
-      <div className="relative bg-white dark:bg-navy-900 rounded-3xl shadow-2xl p-8 w-full max-w-[280px] text-center animate-in fade-in zoom-in duration-300 border border-orange-100 dark:border-white/5">
+      <div className="relative bg-white dark:bg-navy-900 rounded-3xl shadow-2xl p-8 w-full max-w-[280px] text-center animate-in fade-in zoom-in duration-300 border border-orange-100 dark:border-navy-700">
         <div className="flex flex-col items-center gap-4">
           {/* Theme Loader Spinner */}
           <div className="relative w-16 h-16">

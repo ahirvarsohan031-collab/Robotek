@@ -5,6 +5,17 @@ export interface SheetItem {
   [key: string]: any;
 }
 
+export function getColumnLetter(colIndex: number): string {
+  let temp, letter = '';
+  let col = colIndex + 1;
+  while (col > 0) {
+    temp = (col - 1) % 26;
+    letter = String.fromCharCode(temp + 65) + letter;
+    col = Math.floor((col - temp - 1) / 26);
+  }
+  return letter;
+}
+
 export abstract class BaseSheetsService<T extends SheetItem> {
   protected abstract spreadsheetId: string;
   protected abstract sheetName: string;
@@ -127,7 +138,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       const sheets = await this.getSheetsClient();
       
       // Efficient read for column IDs only
-      const idColLetter = String.fromCharCode(65 + this.idColumnIndex);
+      const idColLetter = getColumnLetter(this.idColumnIndex);
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: `${this.sheetName}!${idColLetter}:${idColLetter}`,
@@ -165,7 +176,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
   async delete(id: string | number): Promise<boolean> {
     try {
       const sheets = await this.getSheetsClient();
-      const idColLetter = String.fromCharCode(65 + this.idColumnIndex);
+      const idColLetter = getColumnLetter(this.idColumnIndex);
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: `${this.sheetName}!${idColLetter}:${idColLetter}`,

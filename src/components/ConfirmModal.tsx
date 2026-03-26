@@ -31,7 +31,7 @@ export default function ConfirmModal({
   return (
     <div className="fixed inset-0 z-[12000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white dark:bg-navy-900 rounded-3xl shadow-2xl w-full max-w-[360px] overflow-hidden animate-in fade-in zoom-in duration-300 border border-orange-100 dark:border-white/5">
+      <div className="relative bg-white dark:bg-navy-900 rounded-3xl shadow-2xl w-full max-w-[360px] overflow-hidden animate-in fade-in zoom-in duration-300 border border-orange-100 dark:border-navy-700">
         <div className="p-6">
           <div className="flex flex-col items-center gap-4 text-center">
             <div className={`p-4 rounded-full ${type === 'danger' ? 'bg-red-50 dark:bg-red-500/10 text-red-500' : 'bg-orange-50 dark:bg-[#FFD500]/10 text-[#FFD500]'}`}>
