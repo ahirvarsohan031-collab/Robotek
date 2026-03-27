@@ -1455,7 +1455,7 @@ export default function O2DPage() {
 
                     <div className="w-px h-5 bg-white/20 mx-1 hidden sm:block" />
 
-                    <div className="flex items-center gap-1.5 p-1 bg-black/10 rounded-full border border-white/20 backdrop-blur-sm hidden sm:flex">
+                    <div className="flex items-center gap-1.5 p-1 bg-black/10 rounded-full border border-white/20 backdrop-blur-sm">
                       <button
                         onClick={() => setDetailViewMode('full')}
                         className={`p-1.5 rounded-full transition-all ${detailViewMode === 'full' ? 'bg-white text-[#CE2029] shadow-md scale-105' : 'text-white/60 hover:text-white'}`}

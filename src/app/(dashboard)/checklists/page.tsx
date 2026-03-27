@@ -807,7 +807,7 @@ export default function ChecklistsPage() {
   return (
     <div className="space-y-6">
       {/* Sticky Top Header & Filters */}
-      <div className="sticky top-0 z-30 bg-[var(--panel-bg)] -mx-2 -mt-2 p-2 pt-0.5 md:-mx-4 md:-mt-4 md:p-4 md:pt-1 border-b border-gray-100 dark:border-white/5 shadow-sm space-y-4">
+      <div className="sticky top-0 z-10 bg-[var(--panel-bg)] -mx-2 -mt-2 p-2 pt-0.5 md:-mx-4 md:-mt-4 md:p-4 md:pt-1 border-b border-gray-100 dark:border-white/5 shadow-sm space-y-4">
         {/* Responsive Title Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
         <div>
