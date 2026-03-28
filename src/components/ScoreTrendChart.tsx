@@ -14,6 +14,7 @@ interface ScoreTrendChartProps {
   data: TrendPoint[];
   granularity: Granularity;
   onGranularityChange: (g: Granularity) => void;
+  isNegative?: boolean;
 }
 
 const GRANULARITY_OPTIONS: { id: Granularity; label: string }[] = [
@@ -24,7 +25,7 @@ const GRANULARITY_OPTIONS: { id: Granularity; label: string }[] = [
   { id: 'yearly', label: 'Yearly' },
 ];
 
-export default function ScoreTrendChart({ data, granularity, onGranularityChange }: ScoreTrendChartProps) {
+export default function ScoreTrendChart({ data, granularity, onGranularityChange, isNegative = false }: ScoreTrendChartProps) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   if (!data || data.length === 0) {
@@ -40,10 +41,10 @@ export default function ScoreTrendChart({ data, granularity, onGranularityChange
 
   // Chart dimensions
   const chartW = 500;
-  const chartH = 160;
+  const chartH = 180; // Increased to fit labels
   const padL = 42;
   const padR = 16;
-  const padT = 16;
+  const padT = 30; // Increased for labels
   const padB = 44;
   const plotW = chartW - padL - padR;
   const plotH = chartH - padT - padB;
@@ -51,22 +52,37 @@ export default function ScoreTrendChart({ data, granularity, onGranularityChange
   const maxLabels = 16;
   const step = data.length > maxLabels ? Math.ceil(data.length / maxLabels) : 1;
 
+  // Helper to transform logical value (0-100) to plotted value (depends on mode)
+  // In standard: 100 -> top, 0 -> bottom
+  // In negative: 0 (logical 100) -> top, -100 (logical 0) -> bottom
+  const getDisplayVal = (v: number) => isNegative ? Math.round(v - 100) : Math.round(v);
   const toX = (i: number) => padL + (data.length === 1 ? plotW / 2 : (i / (data.length - 1)) * plotW);
-  const toY = (v: number) => padT + plotH - (v / 100) * plotH;
+  
+  // toY maps the "Display Value" (0..100 or -100..0) to SVG Y coordinate
+
+  const toY = (displayV: number) => {
+    const min = isNegative ? -100 : 0;
+    const max = isNegative ? 0 : 100;
+    const percent = (displayV - min) / (max - min);
+    return padT + plotH - (percent * plotH);
+  };
 
   const makePath = (key: 'score' | 'onTime') =>
     data
-      .map((d, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(d[key]).toFixed(1)}`)
+      .map((d, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(getDisplayVal(d[key])).toFixed(1)}`)
       .join(' ');
 
   const makeAreaPath = (key: 'score' | 'onTime') => {
     const line = data
-      .map((d, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(d[key]).toFixed(1)}`)
+      .map((d, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(getDisplayVal(d[key])).toFixed(1)}`)
       .join(' ');
-    return `${line} L${toX(data.length - 1).toFixed(1)},${(padT + plotH).toFixed(1)} L${toX(0).toFixed(1)},${(padT + plotH).toFixed(1)} Z`;
+    // Baseline is always the worst score
+    const baselineY = toY(isNegative ? -100 : 0);
+    return `${line} L${toX(data.length - 1).toFixed(1)},${baselineY.toFixed(1)} L${toX(0).toFixed(1)},${baselineY.toFixed(1)} Z`;
   };
 
-  const yTicks = [0, 25, 50, 75, 100];
+
+  const yTicks = isNegative ? [-100, -75, -50, -25, 0] : [0, 25, 50, 75, 100];
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -122,7 +138,7 @@ export default function ScoreTrendChart({ data, granularity, onGranularityChange
             strokeDasharray="5 3"
           />
 
-          {/* Data points & hover zones */}
+          {/* Data points & permanent labels */}
           {data.map((d, i) => (
             <g key={i}>
               <rect
@@ -137,18 +153,36 @@ export default function ScoreTrendChart({ data, granularity, onGranularityChange
 
               {/* Score dot */}
               <circle
-                cx={toX(i)} cy={toY(d.score)} r={hoveredIdx === i ? 3.5 : 2}
+                cx={toX(i)} cy={toY(getDisplayVal(d.score))} r={hoveredIdx === i ? 3.5 : 2}
                 className="fill-[#003875] dark:fill-[#FFD500] transition-all duration-200"
                 stroke="white" strokeWidth="1"
               />
+              {/* Permanent Label for Score */}
+              <text
+                x={toX(i)} y={toY(getDisplayVal(d.score)) - 8}
+                textAnchor="middle"
+                className="text-[7.5px] font-black fill-[#003875] dark:fill-[#FFD500]"
+              >
+                {getDisplayVal(d.score)}%
+              </text>
+
+              {/* Permanent Label for On-Time */}
+              <text
+                x={toX(i)} y={toY(getDisplayVal(d.onTime)) - 18}
+                textAnchor="middle"
+                className="text-[7.5px] font-black fill-[#10b981]"
+              >
+                {getDisplayVal(d.onTime)}%
+              </text>
 
               {/* On-Time dot */}
               <circle
-                cx={toX(i)} cy={toY(d.onTime)} r={hoveredIdx === i ? 3.5 : 2}
+                cx={toX(i)} cy={toY(getDisplayVal(d.onTime))} r={hoveredIdx === i ? 3.5 : 2}
                 fill="#10b981"
                 stroke="white" strokeWidth="1"
                 className="transition-all duration-200"
               />
+
 
               {/* Vertical hover indicator */}
               {hoveredIdx === i && (
@@ -163,15 +197,15 @@ export default function ScoreTrendChart({ data, granularity, onGranularityChange
               {hoveredIdx === i && (
                 <g>
                   <rect
-                    x={Math.max(2, Math.min(toX(i) - 46, chartW - 94))} y={padT - 18} width={92} height={16} rx={5}
+                    x={Math.max(2, Math.min(toX(i) - 46, chartW - 94))} y={padT - 24} width={92} height={16} rx={5}
                     fill="#1e293b" opacity="0.92"
                   />
                   <text
-                    x={Math.max(48, Math.min(toX(i), chartW - 48))} y={padT - 7}
+                    x={Math.max(48, Math.min(toX(i), chartW - 48))} y={padT - 13}
                     textAnchor="middle"
                     className="text-[7px] font-bold fill-white"
                   >
-                    Score: {d.score}% | OT: {d.onTime}%
+                    Score: {getDisplayVal(d.score)}% | OT: {getDisplayVal(d.onTime)}%
                   </text>
                 </g>
               )}

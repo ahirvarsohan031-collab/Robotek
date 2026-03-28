@@ -6,9 +6,10 @@ import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 interface SemiCircleGaugeProps {
   value: number; // 0 to 100
   label?: string;
+  isNegative?: boolean;
 }
 
-export default function SemiCircleGauge({ value, label = "Overall Avg" }: SemiCircleGaugeProps) {
+export default function SemiCircleGauge({ value, label = "Overall Avg", isNegative = false }: SemiCircleGaugeProps) {
   const segments = 24;
   const radius = 65;
   const strokeWidth = 14;
@@ -17,19 +18,23 @@ export default function SemiCircleGauge({ value, label = "Overall Avg" }: SemiCi
 
   // For the animated number counting up
   const countValue = useMotionValue(0);
+  const displayValue = isNegative ? value - 100 : value;
   const roundedValue = useTransform(countValue, Math.round);
 
   useEffect(() => {
-    const animation = animate(countValue, value, { 
+    const animation = animate(countValue, displayValue, { 
       duration: 1.5, 
       ease: "easeOut",
       delay: 0.2
     });
     return animation.stop;
-  }, [value, countValue]);
+  }, [displayValue, countValue]);
 
   const lines = useMemo(() => {
     const l = [];
+    // If negative mode, we show the "Failure Gap" (100 - value)
+    const fillPercent = isNegative ? (100 - value) : value;
+
     for (let i = 0; i < segments; i++) {
       const angleDeg = 180 - (i / (segments - 1)) * 180;
       const angleRad = angleDeg * (Math.PI / 180);
@@ -41,21 +46,24 @@ export default function SemiCircleGauge({ value, label = "Overall Avg" }: SemiCi
       const y2 = cy - (radius + strokeWidth / 2) * Math.sin(angleRad);
 
       const percent = (i / (segments - 1)) * 100;
-      const isActive = percent <= value;
+      const isActive = percent <= fillPercent;
       
-      const activeColor = 
-        percent < 40 ? "#EF4444" : // Rose
-        percent < 75 ? "#F59E0B" : // Amber
-        "#10B981"; // Emerald
+      const activeColor = isNegative ? (
+        // For Failure view: 0-25% (Good/Green Gap), 25-50% (Amber Gap), 50-100% (Red Gap)
+        percent < 20 ? "#10B981" : // Emerald
+        percent < 50 ? "#F59E0B" : // Amber
+        "#EF4444" // Rose/Red
+      ) : (
+        // For Success view: 0-40% (Red), 40-75% (Amber), 75-100% (Green)
+        percent < 40 ? "#EF4444" : 
+        percent < 75 ? "#F59E0B" : 
+        "#10B981"
+      );
 
-      l.push({
-        x1, y1, x2, y2,
-        isActive,
-        color: activeColor
-      });
+      l.push({ x1, y1, x2, y2, isActive, color: activeColor });
     }
     return l;
-  }, [value, segments]);
+  }, [value, segments, isNegative]);
 
   return (
     <div className="flex flex-col items-center justify-center relative w-full h-full p-2 pt-4">
@@ -91,3 +99,4 @@ export default function SemiCircleGauge({ value, label = "Overall Avg" }: SemiCi
     </div>
   );
 }
+
