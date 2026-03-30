@@ -13,8 +13,9 @@ type Granularity = 'day' | 'week' | 'month' | 'quarterly' | 'yearly';
 interface ScoreTrendChartProps {
   data: TrendPoint[];
   granularity: Granularity;
-  onGranularityChange: (g: Granularity) => void;
+  onGranularityChange?: (g: Granularity) => void;
   isNegative?: boolean;
+  isPrint?: boolean;
 }
 
 const GRANULARITY_OPTIONS: { id: Granularity; label: string }[] = [
@@ -25,13 +26,13 @@ const GRANULARITY_OPTIONS: { id: Granularity; label: string }[] = [
   { id: 'yearly', label: 'Yearly' },
 ];
 
-export default function ScoreTrendChart({ data, granularity, onGranularityChange, isNegative = false }: ScoreTrendChartProps) {
+export default function ScoreTrendChart({ data, granularity, onGranularityChange, isNegative = false, isPrint = false }: ScoreTrendChartProps) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   if (!data || data.length === 0) {
     return (
       <div className="flex flex-col h-full">
-        <ChartHeader granularity={granularity} onGranularityChange={onGranularityChange} />
+        {!isPrint && <ChartHeader granularity={granularity} onGranularityChange={onGranularityChange || (() => {})} />}
         <div className="flex items-center justify-center flex-1 text-[10px] font-black text-gray-300 uppercase tracking-widest">
           No Trend Data
         </div>
@@ -86,7 +87,7 @@ export default function ScoreTrendChart({ data, granularity, onGranularityChange
 
   return (
     <div className="w-full h-full flex flex-col">
-      <ChartHeader granularity={granularity} onGranularityChange={onGranularityChange} />
+      {!isPrint && <ChartHeader granularity={granularity} onGranularityChange={onGranularityChange || (() => {})} />}
 
       {/* SVG Chart */}
       <div className="flex-1 px-1 pb-1">

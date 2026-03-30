@@ -2184,9 +2184,20 @@ export default function O2DPage() {
                       <SearchableDropdown
                         label="Merge Order With"
                         icon={IdentificationIcon}
-                        value={stepUpdateFields.merge_order_with_1}
-                        onChange={(val) => setStepUpdateFields({ ...stepUpdateFields, merge_order_with_1: val })}
-                        options={Object.keys(groupedOrders).filter(no => no !== selectedOrderNo)}
+                        value={stepUpdateFields.merge_order_with_1 ? (
+                          (() => {
+                            const match = Object.keys(groupedOrders).find(no => no === stepUpdateFields.merge_order_with_1);
+                            return match ? `${match} | ${groupedOrders[match][0]?.party_name || ''}` : stepUpdateFields.merge_order_with_1;
+                          })()
+                        ) : ""}
+                        onChange={(val) => {
+                          const no = val.split(" | ")[0];
+                          setStepUpdateFields({ ...stepUpdateFields, merge_order_with_1: no });
+                        }}
+                        options={Object.keys(groupedOrders)
+                          .filter(no => no !== selectedOrderNo)
+                          .map(no => `${no} | ${groupedOrders[no][0]?.party_name || ''}`)
+                        }
                         placeholder="Select Order ID..."
                       />
                     </div>
@@ -2435,7 +2446,15 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
   const [selectedNos, setSelectedNos] = useState<string[]>([]);
   const [copyStatus, setCopyStatus] = useState("Copy All for Busy");
 
-  const orderOptions = useMemo(() => Object.keys(groupedOrders).sort(), [groupedOrders]);
+  const orderOptions = useMemo(() => {
+    return Object.keys(groupedOrders)
+      .map(no => ({
+        no,
+        party: groupedOrders[no][0]?.party_name || ""
+      }))
+      .sort((a, b) => b.no.localeCompare(a.no)) // Sort newest first
+      .map(item => `${item.no} | ${item.party}`);
+  }, [groupedOrders]);
 
   const results = useMemo(() => {
     return selectedNos.map(no => {
@@ -2490,7 +2509,8 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
     setTimeout(() => setCopyStatus("Copy All for Busy"), 2000);
   };
 
-  const addOrder = (no: string) => {
+  const addOrder = (val: string) => {
+    const no = val.split(" | ")[0];
     if (no && !selectedNos.includes(no)) {
       setSelectedNos(prev => [...prev, no]);
     }
@@ -2530,9 +2550,12 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
             {selectedNos.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {selectedNos.map(no => (
-                  <span key={no} className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#003875] text-[#FFD500] rounded-full text-[10px] font-black shadow-sm">
+                  <span key={no} className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#003875] text-[#FFD500] rounded-full text-[10px] font-black shadow-sm" title={groupedOrders[no]?.[0]?.party_name}>
                     {no}
-                    <button onClick={() => removeOrder(no)} className="hover:text-red-400 transition-colors"><XMarkIcon className="w-3 h-3" /></button>
+                    <span className="opacity-60 font-bold border-l border-[#FFD500]/30 pl-1.5 ml-0.5 truncate max-w-[80px]">
+                      {groupedOrders[no]?.[0]?.party_name}
+                    </span>
+                    <button onClick={() => removeOrder(no)} className="hover:text-red-400 transition-colors ml-1"><XMarkIcon className="w-3 h-3" /></button>
                   </span>
                 ))}
                 <button onClick={() => setSelectedNos([])} className="text-[9px] font-black text-red-500 uppercase tracking-widest hover:underline ml-auto">Clear All</button>
@@ -2548,9 +2571,11 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
                     <p className="text-[10px] font-black italic">Order {r.orderNo} not found</p>
                   ) : (
                     <div className="space-y-3">
-                      <div className="flex justify-between items-end border-b border-gray-50 dark:border-white/5 pb-2">
-                        <span className="text-[12px] font-black text-[#003875] dark:text-[#FFD500] italic">{r.orderNo}</span>
-                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest truncate max-w-[150px]">{r.partyName}</span>
+                      <div className="flex flex-col border-b border-gray-50 dark:border-white/5 pb-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[12px] font-black text-[#003875] dark:text-[#FFD500] italic">{r.orderNo}</span>
+                          <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest truncate max-w-[200px]">{r.partyName}</span>
+                        </div>
                       </div>
                       
                       <div className="grid grid-cols-12 gap-2">

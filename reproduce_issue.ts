@@ -1,49 +1,48 @@
-import { delegationService } from "./src/lib/delegation-sheets";
+const puppeteer = require('puppeteer');
+const fs = require('fs');
+const path = require('path');
 
 async function reproduce() {
-  console.log("Starting reproduction...");
-  
-  // Try to update a dummy ID
-  // This will trigger mapItemToRow with an empty hMap
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+  const page = await browser.newPage();
+
+  // Set viewport to see full page
+  await page.setViewport({ width: 1440, height: 900 });
+
+  page.on('console', msg => console.log('BROWSER LOG:', msg.text()));
+  page.on('pageerror', err => console.log('BROWSER EXCEPTION:', err.message));
+
+  // Construct a realistic URL (replace userId with a real one if known)
+  // I'll try with no userId first to see if it crashes when user is missing
+  const url = 'http://localhost:3000/score?print=true&userId=NONE&from=2026-03-01&to=2026-03-31&type=month';
+  console.log(`Navigating to ${url}...`);
+
   try {
-    const dummyId = "REPRO_ID_123";
-    const dummyData = {
-      id: dummyId,
-      title: "Repro Title",
-      description: "Repro Description",
-      assigned_by: "System",
-      assigned_to: "Tester",
-      department: "QA",
-      priority: "High",
-      due_date: new Date().toISOString(),
-      status: "Pending",
-      voice_note_url: "",
-      reference_docs: "",
-      evidence_required: "No",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    console.log("Checking hMap before ensureHeaders...");
-    console.log("hMap keys count:", Object.keys((delegationService as any).hMap).length);
-
-    console.log("Attempting to populate headers (ensureHeaders)...");
-    // This might fail if no API key/auth is set in the environment, 
-    // but we can at least test the logic if we provide a mock hMap
-    (delegationService as any).hMap = { "id": 0, "title": 1, "description": 2 }; 
+    const response = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+    console.log('Page loaded (load event). Status:', response.status());
     
-    console.log("Calling mapItemToRow...");
-    const row = (delegationService as any).mapItemToRow(dummyData);
-    console.log("Mapped Row:", JSON.stringify(row));
-    
-    if (row.length > 1 && row[0] === dummyId) {
-      console.log("SUCCESS: Fix verified! Row is correctly mapped using hMap.");
+    // Wait a bit for SWR and other stuff
+    await new Promise(r => setTimeout(r, 5000));
+
+    const content = await page.content();
+    if (content.includes('Application error') || content.includes('client-side exception')) {
+        console.log('DETECTED APPLICATION ERROR ON PAGE');
     } else {
-      console.log("FAILURE: Row is still empty or mismatched:", row);
+        console.log('No application error detected in HTML content');
     }
-  } catch (error) {
-    console.error("Error during reproduction:", error);
+
+    // Take screenshot to see what's happening
+    await page.screenshot({ path: path.join(__dirname, 'reproduce_screenshot.png'), fullPage: true });
+    console.log('Screenshot saved to reproduce_screenshot.png');
+
+  } catch (e) {
+    console.log('Navigation failed:', e.message);
   }
+
+  await browser.close();
 }
 
 reproduce();

@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { navigation } from "@/lib/navigation";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function AccessGuard({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -11,12 +12,10 @@ export default function AccessGuard({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
 
-  // @ts-ignore
-  const userPermissions = session?.user?.permissions || [];
-  const isAdmin = (session?.user as any)?.role === 'ADMIN';
+  const { permissions: userPermissions, isAdmin, isLoading: loadingPermissions } = usePermissions();
 
   useEffect(() => {
-    if (status === "loading") return;
+    if (status === "loading" || loadingPermissions) return;
 
     if (status === "unauthenticated") {
       router.push("/login");
@@ -53,7 +52,7 @@ export default function AccessGuard({ children }: { children: React.ReactNode })
     }
 
     setIsAuthorized(true);
-  }, [session, status, pathname, router, userPermissions, isAdmin]);
+  }, [session, status, loadingPermissions, pathname, router, userPermissions, isAdmin]);
 
   if (isAuthorized === false) {
     return (

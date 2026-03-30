@@ -7,6 +7,7 @@ import { navigation } from "@/lib/navigation";
 
 import { useSession, signOut } from "next-auth/react";
 import { XMarkIcon, ArrowRightOnRectangleIcon, UserCircleIcon } from "@heroicons/react/24/outline";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface SidebarProps {
   mobileOpen?: boolean;
@@ -145,9 +146,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
     return () => clearInterval(interval);
   }, [session]);
 
-  // @ts-ignore
-  const userPermissions = session?.user?.permissions || [];
-  const isAdmin = (session?.user as any)?.role === 'ADMIN';
+  const { permissions: userPermissions, isAdmin } = usePermissions();
 
   const filteredNavigation = navigation.filter(item => {
     // Dashboard is the system home, visible to all authenticated users

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { 
   ChartBarIcon,
@@ -18,7 +19,8 @@ import {
   ShoppingBagIcon,
   ArrowPathIcon,
   ChevronLeftIcon,
-  ArrowDownTrayIcon
+  ArrowDownTrayIcon,
+  ChevronDownIcon
 } from "@heroicons/react/24/outline";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import PremiumDateRangePicker from '@/components/PremiumDateRangePicker';
@@ -392,11 +394,200 @@ const renderCategoryStatusSections = (tasks: any[], title: string, Icon: any, co
       </div>
     </div>
   );
+};// --- PDF Specific Components (Optimized for html-to-image) ---
+
+const PDFReportHeader = ({ user, dateRange }: any) => {
+  const weekNum = getISOWeekNumber(new Date(dateRange.from));
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
+  };
+
+  return (
+    <div className="w-full bg-[#003875] p-5 flex items-center justify-between text-white mb-4 rounded-xl shadow-sm">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 bg-[#FFD500] rounded-lg flex items-center justify-center shrink-0 shadow-lg">
+           <img 
+            src="/logo_compact.png" 
+            alt="Logo" 
+            className="w-8 h-8 object-contain"
+           />
+        </div>
+        <div>
+          <h1 className="text-2xl font-black tracking-tight leading-none">ROBOTEK</h1>
+          <p className="text-[9px] font-bold tracking-[0.2em] mt-1 text-blue-100 uppercase">Weekly MIS Performance Report</p>
+        </div>
+      </div>
+      
+      <div className="text-right">
+        <p className="text-[9px] font-black uppercase tracking-widest text-blue-200">Week: {weekNum}</p>
+        <p className="text-[10px] font-black uppercase tracking-tight mt-0.5">Range: {formatDate(dateRange.from)} to {formatDate(dateRange.to)}</p>
+        <p className="text-[10px] font-black uppercase tracking-tight text-[#FFD500] mt-0.5">User: {user?.user?.username || 'N/A'}</p>
+      </div>
+    </div>
+  );
 };
 
-const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularityChange, calculateDelayHours, onBack, isNegativeMode }: any) => {
-  const reportRef = useRef<HTMLDivElement>(null);
+const PDFTaskGrid = ({ tasks, title, colorClass }: any) => {
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '—';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  };
 
+  const pendingTasks = tasks.filter((t: any) => !t.actualDate && !t.isLate);
+  const completedTasks = tasks.filter((t: any) => t.actualDate && !t.isLate);
+  const delayedTasks = tasks.filter((t: any) => t.isLate);
+
+  const renderTaskColumn = (taskList: any[], colTitle: string, colColor: string) => (
+    <div className="flex-1 min-w-0 bg-white rounded-xl border border-gray-100 flex flex-col h-full overflow-hidden">
+      <div className={`px-3 py-1.5 border-b border-gray-100 ${colColor.replace('text-', 'bg-').replace('600', '50').replace('400', '50')} flex items-center justify-between shrink-0`}>
+        <h4 className={`text-[9px] font-black uppercase tracking-widest ${colColor}`}>{colTitle}</h4>
+        <span className="text-[8px] font-black text-gray-400 opacity-70">{taskList.length}</span>
+      </div>
+      <div className="p-1 space-y-[2px] overflow-hidden flex-1">
+        {taskList.length === 0 ? (
+          <p className="text-[8px] italic text-gray-300 py-4 text-center border-2 border-dashed border-gray-50 rounded-lg m-1">No tasks</p>
+        ) : taskList.map((t, idx) => (
+          <div key={idx} className="px-1.5 py-1 border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+            <p className="text-[8px] font-black text-gray-900 leading-tight truncate uppercase mb-0.5">{t.title}</p>
+            <div className="flex items-center justify-between gap-1 overflow-hidden">
+               <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-[6px] font-bold text-gray-400 uppercase tracking-tighter">TG:</span>
+                  <span className="text-[7px] font-black text-gray-500 whitespace-nowrap">{formatDate(t.plannedDate)}</span>
+               </div>
+               {t.actualDate ? (
+                 <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[6px] font-bold text-emerald-400 uppercase tracking-tighter">DN:</span>
+                    <span className="text-[7px] font-black text-emerald-600 whitespace-nowrap">{formatDate(t.actualDate)}</span>
+                 </div>
+               ) : t.isLate && !t.actualDate ? (
+                 <div className="flex items-center gap-1 shrink-0">
+                   <span className="text-[6px] font-bold text-rose-400 uppercase tracking-tighter">DLY:</span>
+                   <span className="text-[7px] font-black text-rose-500 whitespace-nowrap">{formatDuration(getTaskDelayMs(t))}</span>
+                 </div>
+               ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="w-full flex-1 flex flex-col h-full overflow-hidden mb-2">
+      <div className={`px-4 py-2 border-b-2 border-gray-100 bg-gray-50/50 flex items-center gap-3 mb-3 rounded-xl shrink-0`}>
+         <div className={`w-1.5 h-4 rounded-full ${colorClass.replace('text-', 'bg-')}`} />
+         <h3 className={`font-black text-[11px] ${colorClass} uppercase tracking-widest`}>{title}</h3>
+         <span className="ml-auto text-[8px] font-black text-gray-400 uppercase tracking-widest">{tasks.length} Total</span>
+      </div>
+      
+      <div className="flex items-start gap-3 flex-1 h-[0] overflow-hidden">
+         {renderTaskColumn(pendingTasks, "Pending", "text-amber-600")}
+         {renderTaskColumn(completedTasks, "Completed", "text-emerald-600")}
+         {renderTaskColumn(delayedTasks, "Delayed", "text-rose-600")}
+      </div>
+    </div>
+  );
+};
+
+const PDFHiddenReport = ({ user, dateRange, userTrendData, isNegativeMode, calculateDelayHours, pageRefs }: any) => {
+  if (!user) return null;
+
+  return (
+    <div className="fixed left-[-9999px] top-0 pointer-events-none bg-[#FFFDF2]">
+      {/* Page 1: Dashboard Summary - Using "every corner" */}
+      <div ref={pageRefs.page1} ref-id="pdf-page-1" className="w-[794px] h-[1123px] p-4 flex flex-col bg-[#FFFDF2] overflow-hidden">
+        <PDFReportHeader user={user} dateRange={dateRange} />
+        
+        {/* Profile Card Overlay - Compact */}
+        <div className="bg-white rounded-xl border-2 border-[#003875]/10 shadow-lg p-4 flex flex-row items-center gap-4 relative shrink-0 mb-4">
+           <div className="absolute top-0 left-0 w-1.5 h-full bg-[#003875]" />
+           <div className="w-12 h-12 rounded-xl bg-[#003875] flex items-center justify-center text-white font-black text-xl shrink-0">
+              {user.user.username.charAt(0).toUpperCase()}
+           </div>
+           <div className="w-40 shrink-0">
+              <h2 className="text-lg font-black text-[#003875] uppercase truncate">{user.user.username}</h2>
+              <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{user.user.roleName}</p>
+           </div>
+           <div className="flex gap-4 px-4 border-l border-r border-gray-100 shrink-0">
+              <div className="text-center">
+                 <p className="text-[7px] font-black text-gray-400 uppercase mb-0.5">Total</p>
+                 <p className="text-xl font-black text-[#003875] tracking-tight">{user.total}</p>
+              </div>
+              <div className="text-center">
+                 <p className="text-[7px] font-black text-emerald-400 uppercase mb-0.5">Done</p>
+                 <p className="text-xl font-black text-emerald-500 tracking-tight">{user.completed}</p>
+              </div>
+           </div>
+           <div className="flex gap-4 px-2 items-center flex-1 justify-end">
+              <div className="w-24 flex flex-col items-center">
+                 <SemiCircleGauge value={user.score} isNegative={isNegativeMode} />
+                 <span className="text-[7px] font-black uppercase text-[#003875] -translate-y-2">Efficiency %</span>
+              </div>
+              <div className="w-24 flex flex-col items-center">
+                 <SemiCircleGauge value={user.onTimeRate} isNegative={isNegativeMode} />
+                 <span className="text-[7px] font-black uppercase text-[#003875] -translate-y-2">Accuracy %</span>
+              </div>
+           </div>
+        </div>
+
+        {/* Breakdown & Trend Chart Wrapper - High Density */}
+        <div className="flex flex-col gap-4 flex-1 overflow-hidden">
+           <div className="w-full bg-white rounded-xl border border-gray-100 shadow-sm p-4 shrink-0">
+              <h3 className="text-[9px] font-black text-gray-400 mb-2 uppercase tracking-widest border-b pb-2">Category Performance Breakdown</h3>
+              <div className="flex items-center justify-around w-full mt-3">
+                {[
+                  { label: 'Delegations', stats: user.delegationStats, color: 'text-orange-500', icon: DocumentTextIcon },
+                  { label: 'Checklists', stats: user.checklistStats, color: 'text-emerald-500', icon: ClipboardDocumentListIcon },
+                  { label: 'O2D FMS Jobs', stats: user.o2dStats, color: 'text-blue-500', icon: ShoppingBagIcon }
+                ].map((cat, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1">
+                     <div className="flex items-center gap-1.5">
+                        <cat.icon className={`w-4 h-4 ${cat.color}`} />
+                        <span className="text-[8px] font-black text-gray-700 uppercase">{cat.label}</span>
+                     </div>
+                     <span className={`text-lg font-black ${cat.stats.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {isNegativeMode ? cat.stats.score - 100 : cat.stats.score}%
+                     </span>
+                  </div>
+                ))}
+              </div>
+           </div>
+           
+           <div className="w-full h-full bg-white rounded-xl border border-gray-100 shadow-sm p-2 flex items-center justify-center min-h-[300px] flex-1">
+              <ScoreTrendChart 
+                data={userTrendData} 
+                granularity={'week'} 
+                isNegative={isNegativeMode}
+                isPrint={true}
+              />
+           </div>
+        </div>
+      </div>
+
+      {/* Page 2: Delegations - Using 3 Column Grid */}
+      <div ref={pageRefs.page2} ref-id="pdf-page-2" className="w-[794px] h-[1123px] p-4 flex flex-col bg-[#FFFDF2] overflow-hidden">
+        <PDFReportHeader user={user} dateRange={dateRange} />
+        <PDFTaskGrid tasks={user.delegationStats?.items || []} title="Delegations Snapshot" colorClass="text-orange-600" />
+      </div>
+
+      {/* Page 3: Checklists - Using 3 Column Grid */}
+      <div ref={pageRefs.page3} ref-id="pdf-page-3" className="w-[794px] h-[1123px] p-4 flex flex-col bg-[#FFFDF2] overflow-hidden">
+        <PDFReportHeader user={user} dateRange={dateRange} />
+        <PDFTaskGrid tasks={user.checklistStats?.items || []} title="Checklists Snapshot" colorClass="text-emerald-600" />
+      </div>
+
+      {/* Page 4: O2D Jobs - Using 3 Column Grid */}
+      <div ref={pageRefs.page4} ref-id="pdf-page-4" className="w-[794px] h-[1123px] p-4 flex flex-col bg-[#FFFDF2] overflow-hidden">
+        <PDFReportHeader user={user} dateRange={dateRange} />
+        <PDFTaskGrid tasks={user.o2dStats?.items || []} title="O2D FMS Jobs Snapshot" colorClass="text-blue-600" />
+      </div>
+    </div>
+  );
+};
+
+const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularityChange, calculateDelayHours, isNegativeMode, reportRef }: any) => {
   const userAllItems = useMemo(() => {
     if (!user) return [];
     return [
@@ -406,8 +597,13 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
     ];
   }, [user]);
 
-  if (!user) return null;
+  // Page Refs for PDF generation
+  const page1Ref = useRef<HTMLDivElement>(null);
+  const page2Ref = useRef<HTMLDivElement>(null);
+  const page3Ref = useRef<HTMLDivElement>(null);
+  const page4Ref = useRef<HTMLDivElement>(null);
 
+  if (!user) return null;
 
   const userTrendData = useMemo(() => {
     const to = new Date(dateRange.to);
@@ -426,148 +622,25 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
   const delayStats = useMemo(() => calculateDelayHours(userAllItems), [userAllItems, calculateDelayHours]);
   const pendingCount = user.total - user.completed;
 
-  const handleDownloadPDF = async () => {
-    if (!reportRef.current) return;
-    
-    // @ts-ignore
-    const toastId = (window as any).toast?.loading?.("Preparing Multi-page MIS Report...");
-    
-    try {
-      // 1. Capture the entire element at high quality
-      const canvas = await htmlToImage.toCanvas(reportRef.current, {
-        quality: 1.0,
-        pixelRatio: 2,
-        backgroundColor: '#FFFDF2',
-      });
-
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      
-      const headerHeight = 28; // mm
-      const footerHeight = 10; // mm
-      const margin = 10; // mm
-      const contentWidth = pageWidth - (margin * 2);
-      const contentHeightPerPage = pageHeight - headerHeight - footerHeight - (margin * 1);
-
-      // Convert canvas to mm scale to find total height
-      const imgProps = pdf.getImageProperties(canvas.toDataURL('image/png'));
-      const pxToMmRatio = contentWidth / imgProps.width;
-      const totalContentHeightMm = imgProps.height * pxToMmRatio;
-      
-      const totalPages = Math.ceil(totalContentHeightMm / contentHeightPerPage);
-      const weekNo = getISOWeekNumber(new Date(dateRange.from));
-
-      for (let i = 0; i < totalPages; i++) {
-        if (i > 0) pdf.addPage('landscape');
-
-        // --- 2. Add Branded Header (Every Page) ---
-        pdf.setFillColor(0, 56, 117); // Navy #003875
-        pdf.rect(0, 0, pageWidth, headerHeight - 3, 'F');
-
-        // Logo Overlay
-        try {
-          const logo = new Image();
-          logo.src = '/logo_compact.png';
-          pdf.addImage(logo, 'PNG', 10, 5, 14, 14);
-        } catch (e) {}
-
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(16);
-        pdf.setFont("helvetica", "bold");
-        pdf.text("ROBOTEK", 28, 12);
-        
-        pdf.setFontSize(9);
-        pdf.setFont("helvetica", "normal");
-        pdf.text("WEEKLY MIS PERFORMANCE REPORT", 28, 17);
-
-        // Metadata (Right Side)
-        pdf.setFontSize(8);
-        pdf.text(`WEEK: ${weekNo}`, pageWidth - 10, 10, { align: 'right' });
-        pdf.text(`RANGE: ${dateRange.from} TO ${dateRange.to}`, pageWidth - 10, 14, { align: 'right' });
-        pdf.text(`USER: ${user.user.username.toUpperCase()}`, pageWidth - 10, 18, { align: 'right' });
-
-        // --- 3. Add Content Slice ---
-        // Slicing logic: We capture the whole thing and "window" it in jsPDF
-        // We use the canvas object directly for the best slicing fidelity
-        const sourceY = (i * contentHeightPerPage) / pxToMmRatio;
-        const sourceHeight = contentHeightPerPage / pxToMmRatio;
-        
-        // We use the sourceX, sourceY, etc. params of addImage
-        pdf.addImage(
-          canvas, 
-          'PNG', 
-          margin, 
-          headerHeight, 
-          contentWidth, 
-          contentHeightPerPage,
-          undefined, // alias
-          'FAST', // compression
-          0, // rotation
-        );
-
-        // Manual "Cover up" to simulate slicing if the above doesn't crop (it doesn't in some jsPDF versions)
-        // A better way is to use a temporary canvas for the slice
-        // Let's create a slice canvas for absolute precision
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = Math.min(sourceHeight, canvas.height - sourceY);
-        const ctx = sliceCanvas.getContext('2d');
-        if (ctx) {
-           ctx.drawImage(canvas, 0, sourceY, canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
-           const sliceData = sliceCanvas.toDataURL('image/png');
-           
-           // Clear the full image add we did above (actually we'll just not do it or draw over it)
-           // Actually, let's just do the slice and add it correctly.
-           pdf.setFillColor(255, 253, 242); // Cream bg #FFFDF2
-           pdf.rect(margin, headerHeight, contentWidth, contentHeightPerPage, 'F');
-           
-           const sliceMmHeight = (sliceCanvas.height * pxToMmRatio);
-           pdf.addImage(sliceData, 'PNG', margin, headerHeight, contentWidth, sliceMmHeight);
-        }
-
-        // --- 4. Footer & Page Numbers ---
-        pdf.setTextColor(150, 150, 150);
-        pdf.setFontSize(7);
-        pdf.text(`© ${new Date().getFullYear()} ROBOTEK INDUSTRIES - CONFIDENTIAL MIS REPORT`, margin, pageHeight - 5);
-        pdf.text(`Page ${i + 1} of ${totalPages}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
-      }
-
-      // Save PDF
-      pdf.save(`Robotek_MIS_Report_${user.user.username}_W${weekNo}.pdf`);
-      // @ts-ignore
-      (window as any).toast?.success?.("Report Downloaded!");
-    } catch (error) {
-       console.error("PDF Export Error:", error);
-       // @ts-ignore
-       (window as any).toast?.error?.("Failed to generate PDF");
-    } finally {
-       if (toastId) (window as any).toast?.dismiss?.(toastId);
-    }
-  };
-
   return (
     <div ref={reportRef} className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 bg-[#FFFDF2] p-4 rounded-[2rem]">
+      
+      {/* Hidden PDF Container for high-fidelity capture */}
+      <PDFHiddenReport 
+        user={user} 
+        dateRange={dateRange} 
+        userTrendData={userTrendData} 
+        isNegativeMode={isNegativeMode} 
+        calculateDelayHours={calculateDelayHours}
+        pageRefs={{ page1: page1Ref, page2: page2Ref, page3: page3Ref, page4: page4Ref }}
+      />
+
       {/* Profile Header Card */}
       <div className="bg-[#FFFDF2] dark:bg-navy-900 rounded-[2rem] border-2 border-[#003875]/20 dark:border-[#FFD500]/20 shadow-lg p-3 md:p-5 flex flex-col xl:flex-row items-center xl:items-stretch gap-4 relative overflow-visible">
          <div className="absolute top-0 left-0 w-2 h-full bg-[#003875] dark:bg-[#FFD500] rounded-l-[2rem]" />
          
-         {/* Back Button - Absolute Top Left */}
-         <button 
-            onClick={onBack}
-            className="absolute top-4 left-6 z-20 group flex items-center gap-1.5 text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest hover:translate-x-[-2px] transition-all bg-white/50 dark:bg-navy-950/50 backdrop-blur-sm px-2 py-1 rounded-lg border border-[#003875]/10"
-          >
-            <ChevronLeftIcon className="w-3 h-3 stroke-[3]" />
-            Back to Dashboard
-          </button>
-
          {/* Avatar & Name */}
-         <div className="flex items-center gap-4 xl:w-64 max-w-sm shrink-0 pl-2 xl:pr-6 xl:border-r border-[#F0E6D2] dark:border-navy-800 pt-6 xl:pt-2">
+         <div data-pdf-section="profile-header" className="flex items-center gap-4 xl:w-64 max-w-sm shrink-0 pl-2 xl:pr-6 xl:border-r border-[#F0E6D2] dark:border-navy-800 pt-2">
             <div className="w-16 h-16 rounded-[1.2rem] bg-gradient-to-br from-[#003875] to-blue-700 dark:from-[#FFD500] dark:to-yellow-500 shadow-md flex items-center justify-center text-white dark:text-black font-black text-2xl shrink-0">
                {user.user.username.charAt(0).toUpperCase()}
             </div>
@@ -577,21 +650,10 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
                   {user.user.roleName}
                </div>
             </div>
-            
-            {/* PDF Report Generation Button */}
-            <div className="ml-4 shrink-0">
-               <button 
-                onClick={handleDownloadPDF}
-                title="Download MIS Report (PDF)"
-                className="w-10 h-10 rounded-xl bg-white dark:bg-navy-950 border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm flex items-center justify-center text-[#003875] dark:text-[#FFD500] hover:bg-[#FFF9E6] dark:hover:bg-white/5 hover:scale-105 transition-all group active:scale-95"
-               >
-                 <ArrowDownTrayIcon className="w-5 h-5 stroke-[2.5] group-hover:animate-bounce" />
-               </button>
-            </div>
          </div>
 
          {/* Numerical Stats */}
-         <div className="flex-1 flex flex-wrap items-center justify-center xl:justify-around gap-4 xl:gap-6 w-full py-2">
+         <div data-pdf-section="numerical-stats" className="flex-1 flex flex-wrap items-center justify-center xl:justify-around gap-4 xl:gap-6 w-full py-2">
             <div className="flex flex-col items-center min-w-[70px]">
                <ClipboardDocumentListIcon className="w-6 h-6 mb-2 text-[#003875] dark:text-[#FFD500]" />
                <p className="text-[10px] font-black text-[#003875]/60 dark:text-[#FFD500]/70 uppercase tracking-widest mb-1.5">Total</p>
@@ -622,12 +684,10 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
                <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1.5">Avg Hrs</p>
                <p className="text-4xl font-black text-rose-500 dark:text-rose-300 leading-none">{delayStats.avg}</p>
             </div>
-
-
          </div>
 
           {/* Gauges */}
-          <div className="flex items-center justify-center gap-6 md:gap-12 shrink-0 xl:pl-8 xl:border-l border-[#F0E6D2] dark:border-navy-800 w-full xl:w-auto mt-4 xl:mt-0 pt-4 xl:pt-0">
+          <div data-pdf-section="gauges" className="flex items-center justify-center gap-6 md:gap-12 shrink-0 xl:pl-8 xl:border-l border-[#F0E6D2] dark:border-navy-800 w-full xl:w-auto mt-4 xl:mt-0 pt-4 xl:pt-0">
              <div className="w-36 md:w-44 flex flex-col items-center group">
                 <SemiCircleGauge value={user.score} isNegative={isNegativeMode} />
                 <div className="bg-white dark:bg-navy-950 px-4 py-2 rounded-xl border-2 border-[#F0E6D2] dark:border-navy-800 text-[11px] font-black text-[#003875] dark:text-[#FFD500] shadow-sm uppercase tracking-widest mt-0 relative z-10 -translate-y-2">
@@ -641,12 +701,12 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
                 </div>
              </div>
           </div>
-
       </div>
+
 
        {/* ROW 1: 30% Short Table | 70% Trend Chart */}
        <div className="flex flex-col lg:flex-row gap-6">
-          <div className="w-full lg:w-[30%] bg-white dark:bg-navy-900 rounded-[2rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm overflow-hidden flex flex-col">
+          <div data-pdf-section="breakdown" className="w-full lg:w-[30%] bg-white dark:bg-navy-900 rounded-[2rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm overflow-hidden flex flex-col">
              <div className="p-4 border-b border-[#F0E6D2] dark:border-navy-800 bg-[#FFF9E6]/50 dark:bg-navy-950/50">
                 <h3 className="font-black text-xs text-gray-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
                    <span className="w-2 h-2 rounded-full bg-[#FFD500]" /> Category Breakdown
@@ -682,7 +742,7 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
                 </table>
              </div>
           </div>
-         <div className="w-full lg:w-[70%] bg-[#FFFDF2] dark:bg-navy-900 rounded-[2rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm p-4 relative min-h-[350px] flex flex-col justify-center">
+         <div data-pdf-section="chart" className="w-full lg:w-[70%] bg-[#FFFDF2] dark:bg-navy-900 rounded-[2rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm p-4 relative min-h-[350px] flex flex-col justify-center">
             <ScoreTrendChart 
                data={userTrendData} 
                granularity={chartGranularity} 
@@ -693,28 +753,33 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
          </div>
        </div>
 
-       {/* ROW 2: 3-column Status Sections per Category */}
        <div className="space-y-12">
-          {renderCategoryStatusSections(
-            user.delegationStats?.items || [], 
-            "Delegations History", 
-            DocumentTextIcon, 
-            "text-orange-600"
-          )}
+          <div data-pdf-section="history-delegations">
+            {renderCategoryStatusSections(
+              user.delegationStats?.items || [], 
+              "Delegations History", 
+              DocumentTextIcon, 
+              "text-orange-600"
+            )}
+          </div>
           
-          {renderCategoryStatusSections(
-            user.checklistStats?.items || [], 
-            "Checklists History", 
-            ClipboardDocumentListIcon, 
-            "text-emerald-600"
-          )}
+          <div data-pdf-section="history-checklists">
+            {renderCategoryStatusSections(
+              user.checklistStats?.items || [], 
+              "Checklists History", 
+              ClipboardDocumentListIcon, 
+              "text-emerald-600"
+            )}
+          </div>
           
-          {renderCategoryStatusSections(
-            user.o2dStats?.items || [], 
-            "O2D FMS Jobs History", 
-            ShoppingBagIcon, 
-            "text-blue-600"
-          )}
+          <div data-pdf-section="history-o2d">
+            {renderCategoryStatusSections(
+              user.o2dStats?.items || [], 
+              "O2D FMS Jobs History", 
+              ShoppingBagIcon, 
+              "text-blue-600"
+            )}
+          </div>
        </div>
     </div>
   );
@@ -727,15 +792,7 @@ const CategoryDrilldownContent = ({ catData, label, onBack, isNegativeMode }: an
       <div className="bg-[#FFFDF2] dark:bg-navy-900 rounded-[2rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-lg p-6 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
          <div className="absolute top-0 left-0 w-2 h-full bg-[#FFD500] dark:bg-[#003875]" />
          
-         <button 
-            onClick={onBack}
-            className="absolute top-4 left-6 z-20 group flex items-center gap-1.5 text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest hover:translate-x-[-2px] transition-all bg-white/50 dark:bg-navy-950/50 backdrop-blur-sm px-2 py-1 rounded-lg border border-[#003875]/10"
-          >
-            <ChevronLeftIcon className="w-3 h-3 stroke-[3]" />
-            Back to Dashboard
-          </button>
-
-         <div className="min-w-0 flex-1 pt-6 md:pt-2">
+         <div className="min-w-0 flex-1">
             <h2 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{label}</h2>
             <div className="px-3 py-1 bg-[#F0E6D2]/50 dark:bg-navy-800 rounded-lg text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-2 inline-block">
                Company-Wide Breakdown
@@ -762,12 +819,99 @@ const CategoryDrilldownContent = ({ catData, label, onBack, isNegativeMode }: an
 // --- Main Page Component ---
 
 export default function ScorePage() {
+  return (
+    <Suspense fallback={<div>Loading Dashboard...</div>}>
+      <ScorePageContent />
+    </Suspense>
+  );
+}
+
+function ScorePageContent() {
+  const searchParams = useSearchParams();
+  const isPrintMode = searchParams.get('print') === 'true';
+
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [viewSetting, setViewSetting] = useState<'user' | 'category'>('user');
   const [filterType, setFilterType] = useState<'week' | 'month' | 'custom' | 'tillDate'>('month');
   const [searchTerm, setSearchTerm] = useState("");
   const [chartGranularity, setChartGranularity] = useState<'day' | 'week' | 'month' | 'quarterly' | 'yearly'>('week');
   const [isNegativeMode, setIsNegativeMode] = useState(true);
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadPDF = async () => {
+    if (!selectedUserId) return;
+    
+    // Find the current user data
+    const userToPrint = (data?.users || []).find((u: any) => u.user.id === selectedUserId);
+    if (!userToPrint) return;
+
+    setIsGeneratingPDF(true);
+    // @ts-ignore
+    const toastId = (window as any).toast?.loading?.("Generating High-Fidelity MIS Report...");
+    
+    try {
+      // Initialize Portrait A4 PDF
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const captureAndAddPage = async (ref: any, pageNum: number) => {
+        if (!ref.current) return;
+        
+        const canvas = await htmlToImage.toCanvas(ref.current, {
+           quality: 1,
+           pixelRatio: 2,
+           backgroundColor: '#FFFDF2'
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        if (pageNum > 1) pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
+      };
+
+      // Select refs from the DOM (they are hidden in PDFHiddenReport)
+      // Since they are inside UserDrilldownContent, they exist when user is selected
+      const p1 = document.querySelector('[ref-id="pdf-page-1"]') as any;
+      const p2 = document.querySelector('[ref-id="pdf-page-2"]') as any;
+      const p3 = document.querySelector('[ref-id="pdf-page-3"]') as any;
+      const p4 = document.querySelector('[ref-id="pdf-page-4"]') as any;
+
+      // We need a small delay to ensure everything is rendered in the hidden container
+      await new Promise(r => setTimeout(r, 800));
+
+      // Capture sequential pages
+      await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-1"]') }, 1);
+      await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-2"]') }, 2);
+      await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-3"]') }, 3);
+      await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-4"]') }, 4);
+
+      pdf.save(`Robotek_MIS_${userToPrint.user.username}.pdf`);
+      
+      // @ts-ignore
+      (window as any).toast?.success?.("Report generated successfully!");
+    } catch (error: any) {
+       console.error("PDF Generation Error:", error);
+       // @ts-ignore
+       (window as any).toast?.error?.(`Report generation failed: ${error?.message || 'Unknown error'}`);
+    } finally {
+       setIsGeneratingPDF(false);
+       if (toastId) (window as any).toast?.dismiss?.(toastId);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+        setIsFilterDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   
   const [dateRange, setDateRange] = useState<{from: string, to: string}>(() => {
@@ -1008,6 +1152,80 @@ export default function ScorePage() {
     </div>
   );
 
+  // Override selection if userId is in URL (for Puppeteer)
+  useEffect(() => {
+    const userId = searchParams.get('userId');
+    if (userId) setSelectedUserId(userId);
+    const catId = searchParams.get('catId');
+    if (catId) setSelectedCategoryId(catId);
+    
+    // Set custom date if provided
+    const from = searchParams.get('from');
+    const to = searchParams.get('to');
+    const type = searchParams.get('type');
+    if (from && to) {
+      setDateRange({ from, to });
+      if (type) setFilterType(type as any);
+      else setFilterType('custom');
+    }
+
+    if (isPrintMode) {
+      document.body.classList.add('print-mode');
+    }
+    return () => document.body.classList.remove('print-mode');
+  }, [searchParams, isPrintMode]);
+
+  if (isPrintMode) {
+    return (
+      <div className="bg-white min-h-screen p-8 print-mode overflow-visible">
+          {/* Branded Print Header */}
+          <div className="flex items-center justify-between mb-8 border-b-4 border-[#003875] pb-4">
+             <div>
+                <h1 className="text-3xl font-black text-[#003875] uppercase tracking-tight">Robotek Industries</h1>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-1">Weekly MIS Performance Analytics</p>
+             </div>
+             <div className="text-right">
+                <div className="px-3 py-1 bg-[#003875] text-[#FFD500] text-[9px] font-black uppercase tracking-widest rounded-md mb-2 inline-block">
+                   Official Scorecard
+                </div>
+                <p className="text-[10px] font-black uppercase text-gray-300">Reporting Period</p>
+                <p className="text-sm font-black text-[#003875]">{dateRange.from} to {dateRange.to}</p>
+             </div>
+          </div>
+
+         {selectedUserId && (
+            <UserDrilldownContent 
+              user={(data?.users || []).find((u: any) => u.user.id === selectedUserId)}
+              dateRange={dateRange}
+              chartGranularity={chartGranularity}
+              onGranularityChange={setChartGranularity}
+              calculateDelayHours={calculateDelayHours}
+              isNegativeMode={isNegativeMode}
+              reportRef={reportRef}
+            />
+          )}
+          {selectedCategoryId && companyStats && (
+            <CategoryDrilldownContent 
+              catData={(companyStats as any)[selectedCategoryId]}
+              label={selectedCategoryId === 'delegationStats' ? 'Delegations' : selectedCategoryId === 'checklistStats' ? 'Checklists' : 'O2D FMS Jobs'}
+              isNegativeMode={isNegativeMode}
+            />
+          )}
+
+          {/* Branded Print Footer */}
+          <div className="mt-16 pt-6 border-t border-gray-100 flex justify-between items-center">
+             <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest">© {new Date().getFullYear()} Robotek ERP - Confidential Analytics Report</p>
+             <div className="flex items-center gap-4">
+                <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest">System Verify: OK</p>
+                <div className="w-12 h-1 bg-gray-100 rounded-full overflow-hidden">
+                   <div className="w-full h-full bg-emerald-400" />
+                </div>
+             </div>
+          </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 pb-20">
       {/* Header & Main Controls */}
@@ -1029,29 +1247,47 @@ export default function ScorePage() {
               className="w-full pl-8 pr-4 py-1.5 bg-transparent outline-none font-bold text-[10px] transition-all uppercase"
             />
           </div>
+          <div className="relative" ref={filterDropdownRef}>
+            <button 
+              onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+              className="bg-[#FFFDF2] dark:bg-navy-900 px-4 py-2 rounded-xl border-2 border-[#F0E6D2] dark:border-navy-800 flex items-center justify-between gap-3 shadow-sm hover:border-[#003875]/30 transition-all min-w-[140px]"
+            >
+              <div className="flex items-center gap-2">
+                {filterType === 'tillDate' ? <ClockIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" /> : <CalendarDaysIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" />}
+                <span className="text-[11px] font-black uppercase tracking-widest text-gray-900 dark:text-white">
+                  {filterType === 'week' ? 'Week' : filterType === 'month' ? 'Month' : filterType === 'custom' ? 'Custom' : 'Till Date'}
+                </span>
+              </div>
+              <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
 
-          {/* Date Range Controls - Pill Style */}
-          <div className="bg-[#FFFDF2] dark:bg-navy-900 p-0.5 rounded-2xl border-2 border-[#F0E6D2] dark:border-navy-800 flex shadow-sm">
-             {[
-               { id: 'week', label: 'Week', icon: <CalendarDaysIcon className="w-3.5 h-3.5" /> },
-               { id: 'month', label: 'Month', icon: <CalendarDaysIcon className="w-3.5 h-3.5" /> },
-               { id: 'custom', label: 'Custom', icon: <CalendarDaysIcon className="w-3.5 h-3.5" /> },
-               { id: 'tillDate', label: 'Till Date', icon: <ClockIcon className="w-3.5 h-3.5" /> }
-             ].map(btn => {
-               const isActive = filterType === btn.id;
-               return (
-                 <button 
-                  key={btn.id}
-                  onClick={() => setFilterType(btn.id as any)}
-                  className={`px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-tight transition-all truncate min-w-16 flex items-center gap-1.5 ${
-                    isActive ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                 >
-                   {btn.icon}
-                   <span>{btn.label}</span>
-                 </button>
-               );
-             })}
+            {isFilterDropdownOpen && (
+              <div className="absolute top-full left-0 mt-2 w-full bg-[#FFFDF2] dark:bg-navy-900 border-2 border-[#F0E6D2] dark:border-navy-800 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                {[
+                  { id: 'week', label: 'Week', icon: <CalendarDaysIcon className="w-3.5 h-3.5" /> },
+                  { id: 'month', label: 'Month', icon: <CalendarDaysIcon className="w-3.5 h-3.5" /> },
+                  { id: 'custom', label: 'Custom', icon: <CalendarDaysIcon className="w-3.5 h-3.5" /> },
+                  { id: 'tillDate', label: 'Till Date', icon: <ClockIcon className="w-3.5 h-3.5" /> }
+                ].map(btn => {
+                  const isActive = filterType === btn.id;
+                  return (
+                    <button 
+                      key={btn.id}
+                      onClick={() => {
+                        setFilterType(btn.id as any);
+                        setIsFilterDropdownOpen(false);
+                      }}
+                      className={`w-full px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-[#FFF9E6] dark:hover:bg-white/5 transition-colors ${
+                        isActive ? 'text-[#003875] dark:text-[#FFD500] bg-[#FFF9E6]/50 dark:bg-white/5' : 'text-gray-400'
+                      }`}
+                    >
+                      {btn.icon}
+                      {btn.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Custom Date Range Picker - Dual Calendar */}
@@ -1079,39 +1315,69 @@ export default function ScorePage() {
                <ExclamationCircleIcon className="w-6 h-6 stroke-[2.5]" />
              </button>
           </div>
+           {/* View Selection Toggle (User / Category) */}
+           <div className="bg-[#FFFDF2] dark:bg-navy-900 p-0.5 rounded-xl border-2 border-[#F0E6D2] dark:border-navy-800 flex shadow-sm transition-all overflow-hidden mr-2">
+              <button 
+               onClick={() => setViewSetting('user')}
+               className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSetting === 'user' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                By User
+              </button>
+              <button 
+               onClick={() => setViewSetting('category')}
+               className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSetting === 'category' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                By Category
+              </button>
+           </div>
 
-          {/* View Mode Toggle - Pill Style */}
-          <div className="bg-[#FFFDF2] dark:bg-navy-900 p-0.5 rounded-xl border-2 border-[#F0E6D2] dark:border-navy-800 flex shadow-sm">
-             <button 
-              onClick={() => setViewSetting('user')}
-              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all ${viewSetting === 'user' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-             >
-               User View
-             </button>
-             <button 
-              onClick={() => setViewSetting('category')}
-              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all ${viewSetting === 'category' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-             >
-               Category View
-             </button>
-          </div>
-          {/* View Mode Toggle - Pill Style */}
-          <div className="bg-[#FFFDF2] dark:bg-navy-900 p-0 rounded-full border-2 border-[#F0E6D2] dark:border-navy-800 flex shadow-sm overflow-hidden">
-             <button 
-              onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-full transition-all ${viewMode === 'grid' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md scale-105' : 'text-gray-400 hover:text-gray-600'}`}
-             >
-               <Squares2X2Icon className="w-4 h-4" />
-             </button>
-             <button 
-              onClick={() => setViewMode('table')}
-              className={`p-2 rounded-full transition-all ${viewMode === 'table' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md scale-105' : 'text-gray-400 hover:text-gray-600'}`}
-             >
-               <ListBulletIcon className="w-4 h-4" />
-             </button>
-          </div>
+           {/* View Mode Toggle - Pill Style */}
+           <div className="bg-[#FFFDF2] dark:bg-navy-900 p-0 rounded-full border-2 border-[#F0E6D2] dark:border-navy-800 flex shadow-sm overflow-hidden">
+              <button 
+               onClick={() => setViewMode('grid')}
+               className={`p-2 rounded-full transition-all ${viewMode === 'grid' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md scale-105' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                <Squares2X2Icon className="w-4 h-4" />
+              </button>
+              <button 
+               onClick={() => setViewMode('table')}
+               className={`p-2 rounded-full transition-all ${viewMode === 'table' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md scale-105' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                <ListBulletIcon className="w-4 h-4" />
+              </button>
+           </div>
+
+            {selectedUserId && (
+             <div className="flex items-center">
+                <button 
+                  onClick={handleDownloadPDF}
+                  disabled={isGeneratingPDF}
+                  title={isGeneratingPDF ? "Generating Report..." : "Download MIS Report (PDF)"}
+                  className={`w-10 h-10 rounded-xl bg-[#FFFDF2] dark:bg-navy-900 border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm flex items-center justify-center text-[#003875] dark:text-[#FFD500] hover:bg-[#FFF9E6] dark:hover:bg-white/5 hover:scale-105 transition-all group active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {isGeneratingPDF ? (
+                    <ArrowPathIcon className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <ArrowDownTrayIcon className="w-5 h-5 stroke-[2.5] group-hover:animate-bounce" />
+                  )}
+                </button>
+             </div>
+            )}
         </div>
       </div>
+
+      {/* Back to Dashboard Button - Outside profile cards */}
+      {(selectedUserId || selectedCategoryId) && (
+        <div className="px-4">
+          <button 
+            onClick={() => { setSelectedUserId(null); setSelectedCategoryId(null); }}
+            className="group flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest hover:translate-x-[-4px] transition-all bg-white dark:bg-navy-900 px-4 py-2.5 rounded-[1.2rem] border-2 border-[#003875]/10 dark:border-navy-800 shadow-sm"
+          >
+            <ChevronLeftIcon className="w-4 h-4 stroke-[3]" />
+            Back to Dashboard
+          </button>
+        </div>
+      )}
 
 
       {/* Main Content Area */}
@@ -1137,15 +1403,14 @@ export default function ScorePage() {
                     chartGranularity={chartGranularity}
                     onGranularityChange={setChartGranularity}
                     calculateDelayHours={calculateDelayHours}
-                    onBack={() => { setSelectedUserId(null); setSelectedCategoryId(null); }}
                     isNegativeMode={isNegativeMode}
+                    reportRef={reportRef}
                   />
                 )}
                 {selectedCategoryId && companyStats && (
                   <CategoryDrilldownContent 
                     catData={(companyStats as any)[selectedCategoryId]}
                     label={selectedCategoryId === 'delegationStats' ? 'Delegations' : selectedCategoryId === 'checklistStats' ? 'Checklists' : 'O2D FMS Jobs'}
-                    onBack={() => { setSelectedUserId(null); setSelectedCategoryId(null); }}
                     isNegativeMode={isNegativeMode}
                   />
                 )}
