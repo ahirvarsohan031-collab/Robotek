@@ -22,8 +22,8 @@ export default function AccessGuard({ children }: { children: React.ReactNode })
       return;
     }
 
-    // Skip check for login or Dashboard (root)
-    if (pathname === "/login" || pathname === "/") {
+    // Skip check for login, Dashboard (root), or chat
+    if (pathname === "/login" || pathname === "/" || pathname.startsWith("/chat")) {
       setIsAuthorized(true);
       return;
     }

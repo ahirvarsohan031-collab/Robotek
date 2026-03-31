@@ -31,13 +31,13 @@ export async function getUsers(): Promise<User[]> {
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${SHEET_NAME}!A:I`,
+      range: `${SHEET_NAME}!A:J`,
     });
 
     const rows = response.data.values;
     if (!rows || rows.length <= 1) return [];
 
-    return rows.slice(1).map((row) => ({
+      return rows.slice(1).map((row) => ({
       id: row[0] || "",
       username: row[1] || "",
       email: row[2] || "",
@@ -47,6 +47,7 @@ export async function getUsers(): Promise<User[]> {
       late_long: row[6] || "",
       image_url: row[7] || "",
       dob: row[8] || "",
+      last_active: row[9] || "",
     }));
   } catch (error) {
     console.error("Error fetching users from Google Sheets:", error);
@@ -59,7 +60,7 @@ export async function addUser(user: User): Promise<boolean> {
     const sheets = await getSheetsClient();
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${SHEET_NAME}!A:I`,
+      range: `${SHEET_NAME}!A:J`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[
@@ -71,7 +72,8 @@ export async function addUser(user: User): Promise<boolean> {
           user.role_name,
           user.late_long,
           user.image_url,
-          user.dob
+          user.dob,
+          (user as any).last_active || ""
         ]],
       },
     });
@@ -98,7 +100,7 @@ export async function updateUser(id: string, user: User): Promise<boolean> {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${SHEET_NAME}!A${rowIndex + 1}:I${rowIndex + 1}`,
+      range: `${SHEET_NAME}!A${rowIndex + 1}:J${rowIndex + 1}`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[
@@ -110,7 +112,8 @@ export async function updateUser(id: string, user: User): Promise<boolean> {
           user.role_name,
           user.late_long,
           user.image_url,
-          user.dob
+          user.dob,
+          (user as any).last_active || ""
         ]],
       },
     });
@@ -336,7 +339,7 @@ export async function getUserByUsernameOrEmail(identifier: string): Promise<User
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${SHEET_NAME}!A:I`,
+      range: `${SHEET_NAME}!A:J`,
     });
 
     const rows = response.data.values;
@@ -360,7 +363,8 @@ export async function getUserByUsernameOrEmail(identifier: string): Promise<User
       late_long: userRow[6],
       image_url: userRow[7],
       dob: userRow[8],
-    };
+      last_active: userRow[9] || "",
+    } as any;
 
     // Fetch and attach permissions for this user
     try {

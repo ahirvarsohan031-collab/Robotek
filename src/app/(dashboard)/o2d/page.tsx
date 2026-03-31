@@ -1157,13 +1157,13 @@ export default function O2DPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] space-y-3">
       {/* Header Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1 shrink-0">
-        <div className="flex flex-col">
+      <div className="flex flex-col lg:flex-row items-center gap-2 px-1 shrink-0">
+        <div className="w-full lg:w-1/3 text-center lg:text-left min-w-0">
           <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight italic">O2D SYSTEM</h1>
           <p className="text-[#003875] dark:text-[#FFD500] font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] opacity-80 -mt-1">Syncing Intelligence</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-full border-2 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-lg p-0.5">
+        <div className="w-full lg:w-1/3 flex justify-center flex-shrink-0 min-w-0">
+          <div className="flex items-center gap-1 rounded-full border-2 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-lg p-0.5 overflow-x-auto no-scrollbar max-w-full">
             <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-4 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all">
               <PlusIcon className="w-4 h-4 stroke-[3]" /> 
               <span className="hidden sm:inline">New Order</span>
@@ -1187,6 +1187,7 @@ export default function O2DPage() {
             <button onClick={fetchO2Ds} className="p-1 text-[#003875] dark:text-[#FFD500] rounded-full hover:bg-gray-100 dark:hover:bg-navy-700 transition-all"><ArrowPathIcon className={`w-4.5 h-4.5 ${isLoading ? 'animate-spin' : ''}`} /></button>
           </div>
         </div>
+        <div className="hidden lg:block lg:w-1/3"></div>
       </div>
 
       {/* Main Master-Detail View Wrapper */}

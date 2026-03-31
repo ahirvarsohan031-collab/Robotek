@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { 
+import {
   PlusIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
@@ -83,7 +83,7 @@ export default function TicketsPage() {
     }
   }, [swrTickets]);
 
-  const [usersList, setUsersList] = useState<{username: string}[]>([]);
+  const [usersList, setUsersList] = useState<{ username: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeStatusFilters, setActiveStatusFilters] = useState<string[]>([]);
@@ -218,7 +218,7 @@ export default function TicketsPage() {
 
   const toggleAudio = (fileId: string, id: string) => {
     const url = `/api/audio/${fileId}`;
-    
+
     if (playingAudioId === id) {
       audioRef.current?.pause();
       setPlayingAudioId(null);
@@ -249,20 +249,20 @@ export default function TicketsPage() {
     e.preventDefault();
     setSubmitting(true);
     showStatus("Creating Ticket...");
-    
+
     try {
       const payload = new FormData();
       const ticketData = { ...newTicket, raised_by: currentUser, status: 'Open' };
       payload.append("ticketData", JSON.stringify(ticketData));
-      
+
       if (voiceNoteFile) payload.append("voice_note", voiceNoteFile);
       if (refDocFile) payload.append("reference_doc", refDocFile);
 
       const res = await fetch("/api/tickets", { method: "POST", body: payload });
-      
+
       if (res.ok) {
         setIsNewModalOpen(false);
-        setNewTicket({title: "", description: "", category: "Software", priority: "Medium", solver_person: "", planned_resolution: ""});
+        setNewTicket({ title: "", description: "", category: "Software", priority: "Medium", solver_person: "", planned_resolution: "" });
         setVoiceNoteFile(null);
         setRefDocFile(null);
         setIsStatusModalOpen(false);
@@ -279,11 +279,11 @@ export default function TicketsPage() {
     if (!editingTicket) return;
     setSubmitting(true);
     showStatus("Saving Changes...");
-    
+
     try {
       const payload = new FormData();
       payload.append("ticketData", JSON.stringify(editingTicket));
-      
+
       if (voiceNoteFile) payload.append("voice_note", voiceNoteFile);
       if (refDocFile) payload.append("reference_doc", refDocFile);
 
@@ -291,7 +291,7 @@ export default function TicketsPage() {
         method: "PUT",
         body: payload,
       });
-      
+
       if (res.ok) {
         setEditingTicket(null);
         setVoiceNoteFile(null);
@@ -309,17 +309,17 @@ export default function TicketsPage() {
     e.preventDefault();
     const hasStatusChange = pendingStatus && pendingStatus !== selectedTicket?.status;
     const hasCommentOrFile = newComment.trim() || voiceNoteFile || refDocFile;
-    
+
     if (!selectedTicket || (!hasStatusChange && !hasCommentOrFile)) return;
     setSubmitting(true);
-    
+
     try {
       let finalHistoryRecord = null;
 
       // 1. Update Ticket Status if changed
       if (hasStatusChange && pendingStatus) {
         const updatedTicket = { ...selectedTicket, status: pendingStatus, updated_at: new Date().toISOString() };
-        
+
         // API Update for Ticket
         await fetch(`/api/tickets/${selectedTicket.id}`, {
           method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updatedTicket)
@@ -345,7 +345,7 @@ export default function TicketsPage() {
       if (refDocFile) payload.append("reference_doc", refDocFile);
 
       const res = await fetch(`/api/tickets/${selectedTicket.id}/history`, { method: "POST", body: payload });
-      
+
       if (res.ok) {
         const result = await res.json();
         setTicketHistory(prev => [result.history, ...prev]);
@@ -361,10 +361,10 @@ export default function TicketsPage() {
 
   const handleStatusChange = async (newStatus: string) => {
     if (!selectedTicket || selectedTicket.status === newStatus) return;
-    
+
     const oldStatus = selectedTicket.status;
     const updatedTicket = { ...selectedTicket, status: newStatus, updated_at: new Date().toISOString() };
-    
+
     setTickets(tickets.map(t => t.id === selectedTicket.id ? updatedTicket : t));
     setSelectedTicket(updatedTicket);
 
@@ -377,7 +377,7 @@ export default function TicketsPage() {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updatedTicket)
       });
       const historyRes = await fetch(`/api/tickets/${selectedTicket.id}/history`, { method: "POST", body: payload });
-      
+
       if (historyRes.ok) {
         const hr = await historyRes.json();
         setTicketHistory([hr.history, ...ticketHistory]);
@@ -397,10 +397,10 @@ export default function TicketsPage() {
 
   const performDelete = async () => {
     if (!pendingDeleteId) return;
-    
+
     setSubmitting(true);
     showStatus("Removing Ticket...");
-    
+
     try {
       const res = await fetch(`/api/tickets/${pendingDeleteId}`, { method: "DELETE" });
       if (res.ok) {
@@ -425,21 +425,21 @@ export default function TicketsPage() {
     return s || 'Open';
   };
 
-  const baseTickets = userRole === 'USER' 
+  const baseTickets = userRole === 'USER'
     ? tickets.filter(t => t.raised_by === currentUser || t.solver_person === currentUser)
     : tickets;
 
   const filteredTickets = baseTickets.filter(t => {
     const matchesSearch = Object.values(t).some(val => val?.toString().toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = activeStatusFilters.length === 0 || activeStatusFilters.includes(getDisplayStatus(t));
-    
+
     let matchesAssignment = true;
     if (userRole !== 'USER' && assignmentFilters.length > 0) {
       matchesAssignment = false;
       if (assignmentFilters.includes('ToMe') && t.solver_person === currentUser) matchesAssignment = true;
       if (assignmentFilters.includes('ByMe') && t.raised_by === currentUser) matchesAssignment = true;
     }
-    
+
     return matchesSearch && matchesStatus && matchesAssignment;
   });
 
@@ -465,21 +465,24 @@ export default function TicketsPage() {
       {/* Sticky Top Header & Filters */}
       <div className="space-y-4 mb-2">
         {/* Header Section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="min-w-0">
+        <div className="flex flex-col lg:flex-row items-center gap-4 px-1">
+          <div className="w-full lg:w-1/3 text-center lg:text-left min-w-0">
             <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight truncate">Help Tickets</h1>
             <p className="text-gray-500 dark:text-slate-300 font-bold text-[8px] md:text-[10px] uppercase tracking-wider">Support Ticketing System</p>
           </div>
-          
-          <div className="flex items-center gap-1.5 rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all active:translate-y-[2px] active:border-b-2 p-1 w-fit">
-            <button 
-              onClick={() => setIsNewModalOpen(true)} 
-              className="flex items-center gap-2 px-3 md:px-5 py-1.5 font-black uppercase tracking-widest text-[9px] md:text-[10px] transition-all rounded-full whitespace-nowrap bg-[#003875] text-white hover:bg-[#002a5a] shadow-sm"
-            >
-              <PlusIcon className="w-4 h-4 ml-[-4px]" />
-              New Ticket
-            </button>
+
+          <div className="w-full lg:w-1/3 flex justify-center flex-shrink-0 min-w-0">
+            <div className="flex items-center gap-1.5 rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all active:translate-y-[2px] active:border-b-2 p-1 overflow-x-auto no-scrollbar max-w-full">
+              <button
+                onClick={() => setIsNewModalOpen(true)}
+                className="flex items-center gap-2 px-3 md:px-5 py-1.5 font-black uppercase tracking-widest text-[9px] md:text-[10px] transition-all rounded-full whitespace-nowrap bg-[#003875] text-white hover:bg-[#002a5a] shadow-sm"
+              >
+                <PlusIcon className="w-4 h-4 ml-[-4px]" />
+                New Ticket
+              </button>
+            </div>
           </div>
+          <div className="hidden lg:block lg:w-1/3"></div>
         </div>
 
         {/* Status Tiles Layout */}
@@ -496,14 +499,14 @@ export default function TicketsPage() {
             ].map(tile => {
               const count = tile.label === 'All' ? baseTickets.length : baseTickets.filter(t => getDisplayStatus(t) === tile.label).length;
               const isActive = tile.label === 'All' ? activeStatusFilters.length === 0 : activeStatusFilters.includes(tile.label);
-              
+
               const handleToggle = () => {
                 if (tile.label === 'All') {
                   setActiveStatusFilters([]);
                 } else {
-                  setActiveStatusFilters(prev => 
-                    prev.includes(tile.label) 
-                      ? prev.filter(s => s !== tile.label) 
+                  setActiveStatusFilters(prev =>
+                    prev.includes(tile.label)
+                      ? prev.filter(s => s !== tile.label)
                       : [...prev, tile.label]
                   );
                 }
@@ -511,9 +514,8 @@ export default function TicketsPage() {
 
               return (
                 <button key={tile.label} onClick={handleToggle}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all ${
-                    isActive ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black border-[#003875] dark:border-[#FFD500] shadow-md scale-105' : `${tile.color} hover:scale-[1.02] hover:shadow-sm`
-                  }`}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all ${isActive ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black border-[#003875] dark:border-[#FFD500] shadow-md scale-105' : `${tile.color} hover:scale-[1.02] hover:shadow-sm`
+                    }`}
                 >
                   {tile.icon} {tile.label}
                   <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] ${isActive ? 'bg-white/20 dark:bg-black/20' : 'bg-black/5 dark:bg-white/10'}`}>{count}</span>
@@ -521,185 +523,184 @@ export default function TicketsPage() {
               );
             })}
           </div>
-          <div 
-            style={{ backgroundColor: 'var(--panel-card)', borderTop: '1px solid var(--panel-border)' }} 
+          <div
+            style={{ backgroundColor: 'var(--panel-card)', borderTop: '1px solid var(--panel-border)' }}
             className="p-3"
           >
-          <div className="flex items-center gap-2 w-full">
-            <div className="relative group flex-1 min-w-0">
-              <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
-              <input type="text" placeholder="Search database..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-8 pr-2 py-1.5 bg-gray-50 dark:bg-navy-900 border-2 border-gray-100 dark:border-navy-700/50 rounded-xl focus:border-[#FFD500] outline-none font-bold text-[10px] text-gray-700 dark:text-white transition-all shadow-sm"
-              />
-            </div>
-            
-            <div className="flex items-center bg-gray-50 dark:bg-navy-900 p-0.5 rounded-xl border border-gray-100 dark:border-white/5 shadow-sm shrink-0">
-              {[
-                { label: 'To', full: 'To Me', value: 'ToMe', count: baseTickets.filter(t => t.solver_person === currentUser).length },
-                { label: 'By', full: 'By Me', value: 'ByMe', count: baseTickets.filter(t => t.raised_by === currentUser).length }
-              ].map(btn => {
-                const isActive = assignmentFilters.includes(btn.value);
-                return (
-                  <button key={btn.value}
-                    onClick={() => setAssignmentFilters(prev => 
-                      prev.includes(btn.value) ? prev.filter(v => v !== btn.value) : [...prev, btn.value]
-                    )}
-                    className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${
-                      isActive ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5'
-                    }`}
-                    title={btn.full}
-                  >
-                    <span className="hidden sm:inline">{btn.full}</span>
-                    <span className="sm:hidden">{btn.label}</span>
-                    <span className={`px-1 rounded-md text-[8px] ${isActive ? 'bg-white/20' : 'bg-black/5 dark:bg-white/10'}`}>
-                      {btn.count}
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="flex items-center gap-2 w-full">
+              <div className="relative group flex-1 min-w-0">
+                <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
+                <input type="text" placeholder="Search database..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-8 pr-2 py-1.5 bg-gray-50 dark:bg-navy-900 border-2 border-gray-100 dark:border-navy-700/50 rounded-xl focus:border-[#FFD500] outline-none font-bold text-[10px] text-gray-700 dark:text-white transition-all shadow-sm"
+                />
+              </div>
+
+              <div className="flex items-center bg-gray-50 dark:bg-navy-900 p-0.5 rounded-xl border border-gray-100 dark:border-white/5 shadow-sm shrink-0">
+                {[
+                  { label: 'To', full: 'To Me', value: 'ToMe', count: baseTickets.filter(t => t.solver_person === currentUser).length },
+                  { label: 'By', full: 'By Me', value: 'ByMe', count: baseTickets.filter(t => t.raised_by === currentUser).length }
+                ].map(btn => {
+                  const isActive = assignmentFilters.includes(btn.value);
+                  return (
+                    <button key={btn.value}
+                      onClick={() => setAssignmentFilters(prev =>
+                        prev.includes(btn.value) ? prev.filter(v => v !== btn.value) : [...prev, btn.value]
+                      )}
+                      className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${isActive ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5'
+                        }`}
+                      title={btn.full}
+                    >
+                      <span className="hidden sm:inline">{btn.full}</span>
+                      <span className="sm:hidden">{btn.label}</span>
+                      <span className={`px-1 rounded-md text-[8px] ${isActive ? 'bg-white/20' : 'bg-black/5 dark:bg-white/10'}`}>
+                        {btn.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-        {/* Data Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {loading ? (
-             <div className="col-span-full py-12 flex justify-center"><ArrowPathIcon className="w-8 h-8 text-[#003875] dark:text-[#FFD500] animate-spin" /></div>
-          ) : filteredTickets.length === 0 ? (
-             <div className="col-span-full py-20 text-center flex flex-col items-center">
-                <TicketIcon className="w-16 h-16 text-gray-300 dark:text-navy-700 mb-4" />
-                <h3 className="text-xl font-black text-gray-900 dark:text-white">No tickets found</h3>
-                <p className="text-sm font-bold text-gray-500 mt-2 tracking-widest uppercase">Try adjusting your filters</p>
-             </div>
-          ) : (
-             filteredTickets.map(ticket => {
-              const displayStatus = getDisplayStatus(ticket);
-              const statusColors: Record<string, string> = {
-                'Open': 'border-blue-300 dark:border-blue-500/30 hover:to-blue-50/20',
-                'In Progress': 'border-amber-300 dark:border-amber-500/30 hover:to-amber-50/20',
-                'Pending Info': 'border-purple-300 dark:border-purple-500/30 hover:to-purple-50/20',
-                'Resolved': 'border-emerald-300 dark:border-emerald-500/30 hover:to-emerald-50/20',
-                'Closed': 'border-slate-300 dark:border-slate-500/30 hover:to-slate-50/20',
-                'Overdue': 'border-rose-300 dark:border-rose-500/30 hover:to-rose-50/20'
-              };
-              const themeStyle = statusColors[displayStatus] || 'border-gray-300 dark:border-gray-500/30 hover:to-gray-50/20';
-              const borderColor = themeStyle.split(' ')[0];
-              const hoverGradient = themeStyle.split(' ').pop();
+      {/* Data Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {loading ? (
+          <div className="col-span-full py-12 flex justify-center"><ArrowPathIcon className="w-8 h-8 text-[#003875] dark:text-[#FFD500] animate-spin" /></div>
+        ) : filteredTickets.length === 0 ? (
+          <div className="col-span-full py-20 text-center flex flex-col items-center">
+            <TicketIcon className="w-16 h-16 text-gray-300 dark:text-navy-700 mb-4" />
+            <h3 className="text-xl font-black text-gray-900 dark:text-white">No tickets found</h3>
+            <p className="text-sm font-bold text-gray-500 mt-2 tracking-widest uppercase">Try adjusting your filters</p>
+          </div>
+        ) : (
+          filteredTickets.map(ticket => {
+            const displayStatus = getDisplayStatus(ticket);
+            const statusColors: Record<string, string> = {
+              'Open': 'border-blue-300 dark:border-blue-500/30 hover:to-blue-50/20',
+              'In Progress': 'border-amber-300 dark:border-amber-500/30 hover:to-amber-50/20',
+              'Pending Info': 'border-purple-300 dark:border-purple-500/30 hover:to-purple-50/20',
+              'Resolved': 'border-emerald-300 dark:border-emerald-500/30 hover:to-emerald-50/20',
+              'Closed': 'border-slate-300 dark:border-slate-500/30 hover:to-slate-50/20',
+              'Overdue': 'border-rose-300 dark:border-rose-500/30 hover:to-rose-50/20'
+            };
+            const themeStyle = statusColors[displayStatus] || 'border-gray-300 dark:border-gray-500/30 hover:to-gray-50/20';
+            const borderColor = themeStyle.split(' ')[0];
+            const hoverGradient = themeStyle.split(' ').pop();
 
-              return (
-                <div key={ticket.id} 
-                  className={`group bg-white dark:bg-navy-900 rounded-2xl border-[4px] ${borderColor} shadow-sm hover:shadow-xl hover:translate-y-[-2px] hover:bg-gradient-to-br from-white ${hoverGradient} dark:from-navy-900 dark:to-navy-800 transition-all duration-500 overflow-hidden flex flex-col`}
-                >
-                  {/* Card Header: Slim with Top Right Actions */}
-                  <div className="px-3 py-1.5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between gap-2 bg-gray-50/30 dark:bg-white/5">
-                    <div className="flex items-center gap-1.5 overflow-hidden">
-                      <span className="font-mono text-[9px] font-black text-white bg-[#003875] dark:bg-[#FFD500] dark:text-black px-1.5 py-0.5 rounded shrink-0 shadow-sm">
-                        TKT-{ticket.id.split('-').pop()}
+            return (
+              <div key={ticket.id}
+                className={`group bg-white dark:bg-navy-900 rounded-2xl border-[4px] ${borderColor} shadow-sm hover:shadow-xl hover:translate-y-[-2px] hover:bg-gradient-to-br from-white ${hoverGradient} dark:from-navy-900 dark:to-navy-800 transition-all duration-500 overflow-hidden flex flex-col`}
+              >
+                {/* Card Header: Slim with Top Right Actions */}
+                <div className="px-3 py-1.5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between gap-2 bg-gray-50/30 dark:bg-white/5">
+                  <div className="flex items-center gap-1.5 overflow-hidden">
+                    <span className="font-mono text-[9px] font-black text-white bg-[#003875] dark:bg-[#FFD500] dark:text-black px-1.5 py-0.5 rounded shrink-0 shadow-sm">
+                      TKT-{ticket.id.split('-').pop()}
+                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border-2 ${getPriorityColor(ticket.priority)}`}>
+                        {ticket.priority}
                       </span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border-2 ${getPriorityColor(ticket.priority)}`}>
-                          {ticket.priority}
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border-2 shadow-sm ${getStatusColor(displayStatus)}`}>
-                          {displayStatus}
-                        </span>
-                      </div>
-                    </div>
-                    
-                     {/* Top Right Actions */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={() => setSelectedTicket(ticket)}
-                        className="p-1.5 bg-emerald-100/50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white rounded-lg transition-all border border-emerald-200 dark:border-emerald-800/30"
-                        title="Follow Up"
-                      >
-                        <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
-                      </button>
-
-                      {(['ADMIN', 'EA'].includes(userRole?.toUpperCase()) || ticket.raised_by === currentUser) && (
-                        <>
-                          <button
-                            onClick={() => setEditingTicket(ticket)}
-                            className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all border border-[#003875]/20 dark:border-[#FFD500]/20"
-                            title="Edit"
-                          >
-                            <PencilSquareIcon className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(ticket.id)}
-                            className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all border border-[#CE2029]/20"
-                            title="Delete"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
+                      <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border-2 shadow-sm ${getStatusColor(displayStatus)}`}>
+                        {displayStatus}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Card Body: Split and Compact */}
-                  <div className="p-3.5 flex flex-col gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <h3 className="font-black text-[14px] text-gray-900 dark:text-white leading-tight line-clamp-1 uppercase tracking-tight group-hover:text-[#003875] dark:group-hover:text-[#FFD500] transition-colors">
-                        {ticket.title}
-                      </h3>
-                      {/* Description: Clamped 2 lines */}
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-snug italic border-l-2 border-gray-100 dark:border-navy-700 pl-2">
-                         {ticket.description}
-                      </p>
+                  {/* Top Right Actions */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => setSelectedTicket(ticket)}
+                      className="p-1.5 bg-emerald-100/50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white rounded-lg transition-all border border-emerald-200 dark:border-emerald-800/30"
+                      title="Follow Up"
+                    >
+                      <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
+                    </button>
+
+                    {(['ADMIN', 'EA'].includes(userRole?.toUpperCase()) || ticket.raised_by === currentUser) && (
+                      <>
+                        <button
+                          onClick={() => setEditingTicket(ticket)}
+                          className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all border border-[#003875]/20 dark:border-[#FFD500]/20"
+                          title="Edit"
+                        >
+                          <PencilSquareIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(ticket.id)}
+                          className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all border border-[#CE2029]/20"
+                          title="Delete"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Card Body: Split and Compact */}
+                <div className="p-3.5 flex flex-col gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <h3 className="font-black text-[14px] text-gray-900 dark:text-white leading-tight line-clamp-1 uppercase tracking-tight group-hover:text-[#003875] dark:group-hover:text-[#FFD500] transition-colors">
+                      {ticket.title}
+                    </h3>
+                    {/* Description: Clamped 2 lines */}
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-snug italic border-l-2 border-gray-100 dark:border-navy-700 pl-2">
+                      {ticket.description}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="p-1.5 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400 border border-blue-100/50 dark:border-blue-800/30 shrink-0">
+                        <UserCircleIcon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[8px] font-black text-blue-400 dark:text-blue-500 uppercase tracking-widest leading-none mb-0.5">Raised By</p>
+                        <p className="text-[11px] font-bold text-gray-900 dark:text-gray-100 truncate">{ticket.raised_by || "System"}</p>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="p-1.5 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400 border border-blue-100/50 dark:border-blue-800/30 shrink-0">
-                          <UserCircleIcon className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[8px] font-black text-blue-400 dark:text-blue-500 uppercase tracking-widest leading-none mb-0.5">Raised By</p>
-                          <p className="text-[11px] font-bold text-gray-900 dark:text-gray-100 truncate">{ticket.raised_by || "System"}</p>
-                        </div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="p-1.5 bg-emerald-50/50 dark:bg-emerald-900/20 rounded-lg text-emerald-600 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-800/30 shrink-0">
+                        <ShieldCheckIcon className="w-4 h-4" />
                       </div>
-                      
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="p-1.5 bg-emerald-50/50 dark:bg-emerald-900/20 rounded-lg text-emerald-600 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-800/30 shrink-0">
-                          <ShieldCheckIcon className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[8px] font-black text-emerald-400 dark:text-emerald-500 uppercase tracking-widest leading-none mb-0.5">Assignee</p>
-                          <p className="text-[11px] font-bold text-gray-900 dark:text-gray-100 truncate">{ticket.solver_person || "Unassigned"}</p>
-                        </div>
+                      <div className="min-w-0">
+                        <p className="text-[8px] font-black text-emerald-400 dark:text-emerald-500 uppercase tracking-widest leading-none mb-0.5">Assignee</p>
+                        <p className="text-[11px] font-bold text-gray-900 dark:text-gray-100 truncate">{ticket.solver_person || "Unassigned"}</p>
                       </div>
+                    </div>
 
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="p-1.5 bg-amber-50/50 dark:bg-amber-900/20 rounded-lg text-amber-600 dark:text-amber-400 border border-amber-100/50 dark:border-amber-800/30 shrink-0">
-                          <CalendarIcon className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[8px] font-black text-amber-400 dark:text-amber-500 uppercase tracking-widest leading-none mb-0.5">Due Date</p>
-                          <p className="text-[11px] font-bold text-gray-800 dark:text-slate-200 truncate">
-                            {ticket.planned_resolution ? new Date(ticket.planned_resolution).toLocaleDateString() : "—"}
-                          </p>
-                        </div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="p-1.5 bg-amber-50/50 dark:bg-amber-900/20 rounded-lg text-amber-600 dark:text-amber-400 border border-amber-100/50 dark:border-amber-800/30 shrink-0">
+                        <CalendarIcon className="w-4 h-4" />
                       </div>
+                      <div className="min-w-0">
+                        <p className="text-[8px] font-black text-amber-400 dark:text-amber-500 uppercase tracking-widest leading-none mb-0.5">Due Date</p>
+                        <p className="text-[11px] font-bold text-gray-800 dark:text-slate-200 truncate">
+                          {ticket.planned_resolution ? new Date(ticket.planned_resolution).toLocaleDateString() : "—"}
+                        </p>
+                      </div>
+                    </div>
 
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="p-1.5 bg-purple-50/50 dark:bg-purple-900/20 rounded-lg text-purple-600 dark:text-purple-400 border border-purple-100/50 dark:border-purple-800/30 shrink-0">
-                          <TagIcon className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[8px] font-black text-purple-400 dark:text-purple-500 uppercase tracking-widest leading-none mb-0.5">Category</p>
-                          <p className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] truncate">{ticket.category}</p>
-                        </div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="p-1.5 bg-purple-50/50 dark:bg-purple-900/20 rounded-lg text-purple-600 dark:text-purple-400 border border-purple-100/50 dark:border-purple-800/30 shrink-0">
+                        <TagIcon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[8px] font-black text-purple-400 dark:text-purple-500 uppercase tracking-widest leading-none mb-0.5">Category</p>
+                        <p className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] truncate">{ticket.category}</p>
                       </div>
                     </div>
                   </div>
                 </div>
-              )
-            })
-          )}
-        </div>
+              </div>
+            )
+          })
+        )}
+      </div>
 
       {/* New / Edit Ticket Modal */}
       {(isNewModalOpen || editingTicket) && (
@@ -730,11 +731,11 @@ export default function TicketsPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-black text-[#FFD500] uppercase tracking-widest mb-1.5 px-1">Title</label>
-                  <input required type="text" value={editingTicket ? editingTicket.title : newTicket.title} onChange={e => editingTicket ? setEditingTicket({...editingTicket, title: e.target.value}) : setNewTicket({...newTicket, title: e.target.value})} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm" placeholder="Issue summary" />
+                  <input required type="text" value={editingTicket ? editingTicket.title : newTicket.title} onChange={e => editingTicket ? setEditingTicket({ ...editingTicket, title: e.target.value }) : setNewTicket({ ...newTicket, title: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm" placeholder="Issue summary" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Description</label>
-                  <textarea required rows={3} value={editingTicket ? editingTicket.description : newTicket.description} onChange={e => editingTicket ? setEditingTicket({...editingTicket, description: e.target.value}) : setNewTicket({...newTicket, description: e.target.value})} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-none min-h-[80px]" placeholder="Provide details..." />
+                  <textarea required rows={3} value={editingTicket ? editingTicket.description : newTicket.description} onChange={e => editingTicket ? setEditingTicket({ ...editingTicket, description: e.target.value }) : setNewTicket({ ...newTicket, description: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-none min-h-[80px]" placeholder="Provide details..." />
                 </div>
               </div>
 
@@ -747,11 +748,10 @@ export default function TicketsPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Voice Note Upload / Record */}
-                  <div className={`p-4 rounded-xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-3 relative overflow-hidden ${
-                    isRecording 
-                      ? 'border-red-500 bg-red-50 dark:bg-red-900/10' 
+                  <div className={`p-4 rounded-xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-3 relative overflow-hidden ${isRecording
+                      ? 'border-red-500 bg-red-50 dark:bg-red-900/10'
                       : 'border-dashed border-gray-300 dark:border-navy-700 bg-gray-50 dark:bg-navy-900/50'
-                  }`}>
+                    }`}>
                     {/* Recording Waveform Animation */}
                     {isRecording && (
                       <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none gap-1">
@@ -778,12 +778,12 @@ export default function TicketsPage() {
                             </button>
                             {editingTicket?.voice_note && !voiceNoteFile && <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white dark:border-navy-950" title="Existing voice note" />}
                           </div>
-                          
+
                           <div className="flex-1 text-left border-l-2 border-gray-200 dark:border-navy-700 pl-3 h-full flex flex-col justify-center min-w-0">
                             <p className="text-sm font-black text-gray-800 dark:text-zinc-200 truncate">{voiceNoteFile ? "New Voice Note" : editingTicket?.voice_note ? "Keep Existing" : "Record Live"}</p>
                             <p className="text-[10px] font-bold text-gray-500 mt-0.5 truncate">{voiceNoteFile ? voiceNoteFile.name : editingTicket?.voice_note ? "Original file preserved" : "Click mic to start"}</p>
                           </div>
-                          
+
                           <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-navy-800 px-2.5 py-1.5 rounded border border-gray-200 dark:border-navy-700 shadow-sm hover:bg-gray-50 dark:hover:bg-navy-700 transition-colors flex-shrink-0">
                             <PaperClipIcon className="w-4 h-4 text-gray-500" />
                             <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Upload</span>
@@ -831,7 +831,7 @@ export default function TicketsPage() {
                       </div>
                       <div className="max-h-40 overflow-y-auto">
                         {categories.filter(c => c.toLowerCase().includes(categorySearch.toLowerCase())).map(c => (
-                          <div key={c} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 cursor-pointer" onClick={() => { editingTicket ? setEditingTicket({...editingTicket, category: c}) : setNewTicket({ ...newTicket, category: c }); setCategoryOpen(false); setCategorySearch(""); }}>{c}</div>
+                          <div key={c} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 cursor-pointer" onClick={() => { editingTicket ? setEditingTicket({ ...editingTicket, category: c }) : setNewTicket({ ...newTicket, category: c }); setCategoryOpen(false); setCategorySearch(""); }}>{c}</div>
                         ))}
                       </div>
                     </div>
@@ -843,14 +843,13 @@ export default function TicketsPage() {
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 px-1">Priority</label>
                   <div className="flex bg-gray-100 dark:bg-navy-900/50 p-1 rounded-xl gap-1">
                     {(['Low', 'Medium', 'High', 'Critical'] as const).map((pri) => (
-                      <button key={pri} type="button" onClick={() => editingTicket ? setEditingTicket({...editingTicket, priority: pri}) : setNewTicket({ ...newTicket, priority: pri })} className={`flex-1 py-2 text-[8px] sm:text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${
-                        (editingTicket ? editingTicket.priority : newTicket.priority) === pri 
+                      <button key={pri} type="button" onClick={() => editingTicket ? setEditingTicket({ ...editingTicket, priority: pri }) : setNewTicket({ ...newTicket, priority: pri })} className={`flex-1 py-2 text-[8px] sm:text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${(editingTicket ? editingTicket.priority : newTicket.priority) === pri
                           ? pri === 'Low' ? 'bg-green-500 text-white shadow-md'
-                          : pri === 'Medium' ? 'bg-yellow-500 text-white shadow-md'
-                          : pri === 'High' ? 'bg-orange-500 text-white shadow-md'
-                          : 'bg-red-600 text-white shadow-md'
+                            : pri === 'Medium' ? 'bg-yellow-500 text-white shadow-md'
+                              : pri === 'High' ? 'bg-orange-500 text-white shadow-md'
+                                : 'bg-red-600 text-white shadow-md'
                           : 'text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-navy-800 hover:text-gray-900 dark:hover:text-white'
-                      }`}>{pri}</button>
+                        }`}>{pri}</button>
                     ))}
                   </div>
                 </div>
@@ -874,7 +873,7 @@ export default function TicketsPage() {
                       </div>
                       <div className="max-h-40 overflow-y-auto">
                         {usersList.filter(u => u.username.toLowerCase().includes(assignedToSearch.toLowerCase())).map(u => (
-                          <div key={u.username} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 cursor-pointer" onClick={() => { editingTicket ? setEditingTicket({...editingTicket, solver_person: u.username}) : setNewTicket({ ...newTicket, solver_person: u.username }); setAssignedToOpen(false); setAssignedToSearch(""); }}>{u.username}</div>
+                          <div key={u.username} className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 cursor-pointer" onClick={() => { editingTicket ? setEditingTicket({ ...editingTicket, solver_person: u.username }) : setNewTicket({ ...newTicket, solver_person: u.username }); setAssignedToOpen(false); setAssignedToSearch(""); }}>{u.username}</div>
                         ))}
                       </div>
                     </div>
@@ -887,9 +886,9 @@ export default function TicketsPage() {
                     value={editingTicket ? (editingTicket.planned_resolution ? editingTicket.planned_resolution.split('T')[0] : '') : (newTicket.planned_resolution ? newTicket.planned_resolution.split('T')[0] : '')}
                     onChange={(val) => {
                       const isoVal = val ? new Date(val).toISOString() : "";
-                      editingTicket 
-                        ? setEditingTicket({...editingTicket, planned_resolution: isoVal}) 
-                        : setNewTicket({...newTicket, planned_resolution: isoVal});
+                      editingTicket
+                        ? setEditingTicket({ ...editingTicket, planned_resolution: isoVal })
+                        : setNewTicket({ ...newTicket, planned_resolution: isoVal });
                     }}
                   />
                 </div>
@@ -925,8 +924,8 @@ export default function TicketsPage() {
                   <h2 className="text-sm font-black tracking-tight leading-snug break-words">{selectedTicket.title}</h2>
                 </div>
               </div>
-              <button 
-                onClick={() => setSelectedTicket(null)} 
+              <button
+                onClick={() => setSelectedTicket(null)}
                 className="p-1.5 hover:bg-white/10 rounded-xl transition-all shrink-0 ml-2"
               >
                 <XMarkIcon className="w-5 h-5" />
@@ -974,7 +973,7 @@ export default function TicketsPage() {
                   <div className="flex items-center gap-1.5 bg-amber-50/50 dark:bg-amber-900/10 px-2 py-1 rounded-lg border border-amber-100/50 dark:border-amber-800/20">
                     <CalendarIcon className="w-3 h-3 text-amber-500" />
                     <span className="text-[10px] font-black text-amber-700 dark:text-amber-400 truncate">
-                      {selectedTicket.planned_resolution ? new Date(selectedTicket.planned_resolution).toLocaleDateString([], {day:'2-digit', month:'short'}) : 'No Date'}
+                      {selectedTicket.planned_resolution ? new Date(selectedTicket.planned_resolution).toLocaleDateString([], { day: '2-digit', month: 'short' }) : 'No Date'}
                     </span>
                   </div>
                 </div>
@@ -995,15 +994,14 @@ export default function TicketsPage() {
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
                   {['Open', 'In Progress', 'Pending Info', 'Resolved', 'Closed'].map(s => (
-                    <button 
-                      key={s} 
-                      disabled={submitting} 
-                      onClick={() => setPendingStatus(s)} 
-                      className={`px-2 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border-2 ${
-                        pendingStatus === s 
-                          ? `${getStatusColor(s)} scale-105 shadow-lg z-10` 
+                    <button
+                      key={s}
+                      disabled={submitting}
+                      onClick={() => setPendingStatus(s)}
+                      className={`px-2 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border-2 ${pendingStatus === s
+                          ? `${getStatusColor(s)} scale-105 shadow-lg z-10`
                           : 'bg-gray-50 dark:bg-navy-900 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-navy-700 hover:border-gray-400'
-                      }`}
+                        }`}
                     >
                       {s}
                     </button>
@@ -1016,7 +1014,7 @@ export default function TicketsPage() {
                 <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-1.5 pb-2 border-b border-gray-100 dark:border-navy-700">
                   <ClockIcon className="w-3.5 h-3.5" /> Action Log
                 </h3>
-                
+
                 {historyLoading ? (
                   <div className="flex justify-center p-6"><ArrowPathIcon className="w-5 h-5 text-[#003875] animate-spin" /></div>
                 ) : ticketHistory.length === 0 ? (
@@ -1031,16 +1029,16 @@ export default function TicketsPage() {
                         <div className="flex-1 p-2.5 rounded-xl bg-gray-50 dark:bg-navy-800 border border-gray-100 dark:border-navy-700 shadow-sm z-10">
                           <div className="flex justify-between items-start mb-1">
                             <span className="text-[9px] font-black text-[#003875] dark:text-[#FFD500] uppercase">{log.actor_username}</span>
-                            <span className="text-[8px] font-bold text-gray-400">{new Date(log.created_at).toLocaleString([], {hour: '2-digit', minute:'2-digit', day:'2-digit', month:'short'})}</span>
+                            <span className="text-[8px] font-bold text-gray-400">{new Date(log.created_at).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}</span>
                           </div>
                           {log.action_type === 'STATUS_CHANGE' && (
                             <p className="text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-1.5 flex items-center gap-2">
                               <span className="opacity-60">Status:</span>
-                              <span className="line-through opacity-40">{log.old_status}</span> 
+                              <span className="line-through opacity-40">{log.old_status}</span>
                               <span className="text-[#CE2029] dark:text-red-400">➡️ {log.new_status}</span>
                             </p>
                           )}
-                          
+
                           {(log.comment_text || log.voice_note || log.attachment_url) && (
                             <div className="space-y-2 pt-1 border-t border-gray-100/50 dark:border-navy-700/50">
                               {log.comment_text && <p className="text-[11px] font-bold text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{log.comment_text}</p>}
@@ -1066,33 +1064,33 @@ export default function TicketsPage() {
 
             {/* Comment Box Footer */}
             <div className="bg-white dark:bg-navy-800 border-t border-gray-200 dark:border-navy-700 p-3 sticky bottom-0 z-20 shrink-0">
-               {/* Reply Mini voice recorder */}
-               {!isRecording && !voiceNoteFile && !refDocFile && (
-                 <div className="flex gap-2 mb-2">
-                   <button type="button" onClick={startRecording} className="flex-1 flex justify-center items-center gap-1.5 bg-gray-50 dark:bg-navy-900 text-gray-600 dark:text-gray-300 hover:bg-gray-100 py-1.5 rounded-lg border border-gray-200 dark:border-navy-700 text-[9px] font-black uppercase tracking-widest transition-colors"><MicrophoneIcon className="w-3.5 h-3.5" /> Mic</button>
-                   <input type="file" id="commentDoc" className="hidden" onChange={e => setRefDocFile(e.target.files?.[0] || null)} />
-                   <label htmlFor="commentDoc" className="flex-1 flex justify-center items-center gap-1.5 bg-gray-50 dark:bg-navy-900 text-gray-600 dark:text-gray-300 hover:bg-gray-100 py-1.5 rounded-lg border border-gray-200 dark:border-navy-700 text-[9px] font-black uppercase tracking-widest transition-colors cursor-pointer"><PaperClipIcon className="w-3.5 h-3.5" /> Doc</label>
-                 </div>
-               )}
-               {isRecording && (
-                 <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/50 mb-2">
-                   <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /><span className="text-red-600 text-[10px] font-bold">{formatDuration(recordingDuration)}</span></div>
-                   <button onClick={stopRecording} className="text-red-600"><StopCircleIcon className="w-4 h-4" /></button>
-                 </div>
-               )}
-               {voiceNoteFile && !isRecording && (
+              {/* Reply Mini voice recorder */}
+              {!isRecording && !voiceNoteFile && !refDocFile && (
+                <div className="flex gap-2 mb-2">
+                  <button type="button" onClick={startRecording} className="flex-1 flex justify-center items-center gap-1.5 bg-gray-50 dark:bg-navy-900 text-gray-600 dark:text-gray-300 hover:bg-gray-100 py-1.5 rounded-lg border border-gray-200 dark:border-navy-700 text-[9px] font-black uppercase tracking-widest transition-colors"><MicrophoneIcon className="w-3.5 h-3.5" /> Mic</button>
+                  <input type="file" id="commentDoc" className="hidden" onChange={e => setRefDocFile(e.target.files?.[0] || null)} />
+                  <label htmlFor="commentDoc" className="flex-1 flex justify-center items-center gap-1.5 bg-gray-50 dark:bg-navy-900 text-gray-600 dark:text-gray-300 hover:bg-gray-100 py-1.5 rounded-lg border border-gray-200 dark:border-navy-700 text-[9px] font-black uppercase tracking-widest transition-colors cursor-pointer"><PaperClipIcon className="w-3.5 h-3.5" /> Doc</label>
+                </div>
+              )}
+              {isRecording && (
+                <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/50 mb-2">
+                  <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /><span className="text-red-600 text-[10px] font-bold">{formatDuration(recordingDuration)}</span></div>
+                  <button onClick={stopRecording} className="text-red-600"><StopCircleIcon className="w-4 h-4" /></button>
+                </div>
+              )}
+              {voiceNoteFile && !isRecording && (
                 <div className="flex items-center justify-between bg-green-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-lg border border-green-200 dark:border-emerald-900/50 mb-2">
                   <span className="text-green-700 dark:text-emerald-400 text-[10px] font-bold flex items-center gap-1"><CheckCircleIcon className="w-3 h-3" /> Audio attached</span>
                   <button onClick={() => setVoiceNoteFile(null)} className="text-green-700"><XMarkIcon className="w-3.5 h-3.5" /></button>
                 </div>
-               )}
-               {refDocFile && (
+              )}
+              {refDocFile && (
                 <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-900/50 mb-2">
                   <span className="text-blue-700 dark:text-blue-400 text-[10px] font-bold flex items-center gap-1 truncate max-w-[200px]"><PaperClipIcon className="w-3 h-3 shrink-0" /> {refDocFile.name}</span>
                   <button onClick={() => setRefDocFile(null)} className="text-blue-700"><XMarkIcon className="w-3.5 h-3.5" /></button>
                 </div>
-               )}
-               
+              )}
+
               <form onSubmit={handleAddComment} className="flex gap-2 relative">
                 <input required={!(voiceNoteFile || refDocFile || (pendingStatus && pendingStatus !== selectedTicket?.status))} type="text" placeholder="Type a remark..." value={newComment} onChange={e => setNewComment(e.target.value)} className="flex-1 bg-gray-50 dark:bg-navy-900 border border-gray-200 dark:border-navy-700 rounded-xl px-3 py-2 outline-none focus:border-[#003875] font-bold text-xs shadow-inner" />
                 <button type="submit" disabled={submitting || (!newComment.trim() && !voiceNoteFile && !refDocFile && pendingStatus === selectedTicket?.status)} className="bg-[#003875] hover:bg-[#002a5a] text-white px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest disabled:opacity-50 transition-all shadow-md">

@@ -6,7 +6,8 @@ import {
   TicketIcon,
   ShoppingBagIcon,
   UserGroupIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  ChatBubbleLeftRightIcon
 } from "@heroicons/react/24/outline";
 
 export const navigation = [
@@ -18,4 +19,5 @@ export const navigation = [
   { name: 'O2D', id: 'o2d', href: '/o2d', icon: ShoppingBagIcon },
   { name: 'Party Management', id: 'party-management', href: '/party-management', icon: UserGroupIcon },
   { name: 'Score', id: 'score', href: '/score', icon: ChartBarIcon },
+  { name: 'Chat', id: 'chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
 ];

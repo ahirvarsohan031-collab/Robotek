@@ -197,13 +197,13 @@ export default function PartyManagementPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="space-y-4 mb-2">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
-          <div>
+        <div className="flex flex-col lg:flex-row items-center gap-4 px-1">
+          <div className="w-full lg:w-1/3 text-center lg:text-left min-w-0">
             <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight">Party Management</h1>
             <p className="text-gray-500 dark:text-slate-300 font-bold text-[8px] md:text-[10px] uppercase tracking-wider">Customer &amp; Client Directory</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all active:translate-y-[2px] active:border-b-2 p-1 overflow-x-auto no-scrollbar">
+          <div className="w-full lg:w-1/3 flex justify-center flex-shrink-0 min-w-0">
+            <div className="flex items-center gap-1 rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all active:translate-y-[2px] active:border-b-2 p-1 overflow-x-auto no-scrollbar max-w-full">
               <button className="flex items-center gap-2 px-3 md:px-5 py-1.5 font-black uppercase tracking-widest text-[9px] md:text-[10px] transition-all rounded-full whitespace-nowrap bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md" title="Party List">
                 <UserGroupIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Party List</span>
@@ -218,6 +218,7 @@ export default function PartyManagementPage() {
               </button>
             </div>
           </div>
+          <div className="hidden lg:block lg:w-1/3"></div>
         </div>
       </div>
 

@@ -618,6 +618,34 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
     return generateTrendData(userAllItems, { from: from.toISOString().split('T')[0], to: dateRange.to }, chartGranularity);
   }, [userAllItems, dateRange.to, chartGranularity]);
 
+  // Category-wise trend data (last 10 periods, same granularity) - includes score + onTime per category
+  const categoryTrendData = useMemo(() => {
+    const to = new Date(dateRange.to);
+    const from = new Date(to);
+    if (chartGranularity === 'week') {
+      from.setDate(to.getDate() - 70);
+    } else if (chartGranularity === 'month') {
+      from.setMonth(to.getMonth() - 10);
+    } else if (chartGranularity === 'day') {
+      from.setDate(to.getDate() - 10);
+    } else if (chartGranularity === 'quarterly') {
+      from.setMonth(to.getMonth() - 30);
+    } else {
+      from.setFullYear(to.getFullYear() - 10);
+    }
+    const rangeObj = { from: from.toISOString().split('T')[0], to: dateRange.to };
+    const delData = generateTrendData(user.delegationStats?.items || [], rangeObj, chartGranularity);
+    const chkData = generateTrendData(user.checklistStats?.items || [], rangeObj, chartGranularity);
+    const o2dData = generateTrendData(user.o2dStats?.items || [], rangeObj, chartGranularity);
+    // All three share the same time buckets; zip them together with score + onTime per category
+    return delData.map((d, i) => ({
+      label: d.label,
+      delegation: { score: d.score, onTime: d.onTime },
+      checklist: { score: chkData[i]?.score ?? 0, onTime: chkData[i]?.onTime ?? 0 },
+      o2d: { score: o2dData[i]?.score ?? 0, onTime: o2dData[i]?.onTime ?? 0 },
+    }));
+  }, [user, dateRange.to, chartGranularity]);
+
   const delayedCount = useMemo(() => userAllItems.filter((i: any) => i.isLate).length, [userAllItems]);
   const delayStats = useMemo(() => calculateDelayHours(userAllItems), [userAllItems, calculateDelayHours]);
   const pendingCount = user.total - user.completed;
@@ -752,6 +780,104 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
 
          </div>
        </div>
+
+       {/* 3 Separate Category Score Tables */}
+       {([
+         { catKey: 'delegation' as const, label: 'Delegations', Icon: DocumentTextIcon, accentColor: 'text-orange-500', headerBg: 'bg-orange-50/60 dark:bg-orange-950/20', headerBorder: 'border-orange-100 dark:border-orange-900/30', rowEven: 'bg-orange-50/20 dark:bg-orange-950/10', dot: 'bg-orange-400' },
+         { catKey: 'checklist' as const, label: 'Checklists', Icon: ClipboardDocumentListIcon, accentColor: 'text-emerald-500', headerBg: 'bg-emerald-50/60 dark:bg-emerald-950/20', headerBorder: 'border-emerald-100 dark:border-emerald-900/30', rowEven: 'bg-emerald-50/20 dark:bg-emerald-950/10', dot: 'bg-emerald-400' },
+         { catKey: 'o2d' as const, label: 'O2D FMS Jobs', Icon: ShoppingBagIcon, accentColor: 'text-blue-500', headerBg: 'bg-blue-50/60 dark:bg-blue-950/20', headerBorder: 'border-blue-100 dark:border-blue-900/30', rowEven: 'bg-blue-50/20 dark:bg-blue-950/10', dot: 'bg-blue-400' },
+       ] as const).map((cat) => {
+         const periodLabel = chartGranularity === 'day' ? 'Days' : chartGranularity === 'week' ? 'Weeks' : chartGranularity === 'month' ? 'Months' : chartGranularity === 'quarterly' ? 'Quarters' : 'Years';
+         return (
+           <div key={cat.catKey} className="bg-white dark:bg-navy-900 rounded-[2rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm overflow-hidden">
+             {/* Table Header */}
+             <div className={`px-5 py-3 border-b border-[#F0E6D2] dark:border-navy-800 ${cat.headerBg} flex items-center gap-3`}>
+               <div className={`p-1.5 rounded-lg bg-white dark:bg-navy-900 border ${cat.headerBorder} shrink-0`}>
+                 <cat.Icon className={`w-4 h-4 ${cat.accentColor}`} />
+               </div>
+               <h3 className={`font-black text-xs uppercase tracking-widest ${cat.accentColor}`}>
+                 {cat.label}
+               </h3>
+               <span className="ml-auto text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+                 Last {categoryTrendData.length} {periodLabel}
+               </span>
+             </div>
+
+             <div className="overflow-x-auto">
+               <table className="w-full text-left border-collapse">
+                 <thead>
+                   <tr className="bg-[#FFF9E6]/50 dark:bg-navy-950/40">
+                     <th className="sticky left-0 z-10 bg-[#FFF9E6]/50 dark:bg-navy-950/40 px-4 py-2.5 text-[9px] font-black text-gray-400 uppercase tracking-widest min-w-[110px] border-b border-[#F0E6D2] dark:border-navy-800">
+                       Metric
+                     </th>
+                     {categoryTrendData.map((d, i) => (
+                       <th key={i} className="px-2 py-2.5 text-center text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap min-w-[64px] border-b border-[#F0E6D2] dark:border-navy-800">
+                         {d.label}
+                       </th>
+                     ))}
+                   </tr>
+                 </thead>
+                 <tbody>
+                   {/* Score % Row */}
+                   <tr className="border-b border-[#F0E6D2] dark:border-navy-800/50 group hover:bg-[#FFF9E6]/40 dark:hover:bg-white/5 transition-colors">
+                     <td className="sticky left-0 z-10 bg-white dark:bg-navy-900 group-hover:bg-[#FFF9E6]/40 px-4 py-3 transition-colors">
+                       <div className="flex items-center gap-1.5">
+                         <span className={`w-2 h-2 rounded-full ${cat.dot}`} />
+                         <span className="text-[10px] font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest">Score %</span>
+                       </div>
+                     </td>
+                     {categoryTrendData.map((d, i) => {
+                       const val = (d[cat.catKey] as { score: number; onTime: number }).score;
+                       const display = isNegativeMode ? val - 100 : val;
+                       const colorClass = val >= 80 ? 'text-emerald-500' : val >= 50 ? 'text-amber-500' : 'text-rose-500';
+                       const bgClass = val >= 80 ? 'bg-emerald-50 dark:bg-emerald-950/20' : val >= 50 ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-rose-50 dark:bg-rose-950/20';
+                       const barColor = val >= 80 ? 'bg-emerald-400' : val >= 50 ? 'bg-amber-400' : 'bg-rose-400';
+                       return (
+                         <td key={i} className="px-2 py-3 text-center">
+                           <div className={`inline-flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl ${bgClass}`}>
+                             <span className={`text-[11px] font-black leading-none ${colorClass}`}>{display}%</span>
+                             <div className="w-8 h-1 bg-gray-100 dark:bg-navy-800 rounded-full overflow-hidden mt-0.5">
+                               <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                 style={{ width: `${isNegativeMode ? Math.max(0, 100 - val) : val}%` }} />
+                             </div>
+                           </div>
+                         </td>
+                       );
+                     })}
+                   </tr>
+                   {/* On-Time % Row */}
+                   <tr className="group hover:bg-[#FFF9E6]/40 dark:hover:bg-white/5 transition-colors">
+                     <td className="sticky left-0 z-10 bg-white dark:bg-navy-900 group-hover:bg-[#FFF9E6]/40 px-4 py-3 transition-colors">
+                       <div className="flex items-center gap-1.5">
+                         <span className="w-2 h-2 rounded-full bg-violet-400" />
+                         <span className="text-[10px] font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest">On-Time %</span>
+                       </div>
+                     </td>
+                     {categoryTrendData.map((d, i) => {
+                       const val = (d[cat.catKey] as { score: number; onTime: number }).onTime;
+                       const display = isNegativeMode ? val - 100 : val;
+                       const colorClass = val >= 80 ? 'text-emerald-500' : val >= 50 ? 'text-amber-500' : 'text-rose-500';
+                       const bgClass = val >= 80 ? 'bg-emerald-50 dark:bg-emerald-950/20' : val >= 50 ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-rose-50 dark:bg-rose-950/20';
+                       const barColor = val >= 80 ? 'bg-emerald-400' : val >= 50 ? 'bg-amber-400' : 'bg-rose-400';
+                       return (
+                         <td key={i} className="px-2 py-3 text-center">
+                           <div className={`inline-flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl ${bgClass}`}>
+                             <span className={`text-[11px] font-black leading-none ${colorClass}`}>{display}%</span>
+                             <div className="w-8 h-1 bg-gray-100 dark:bg-navy-800 rounded-full overflow-hidden mt-0.5">
+                               <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                 style={{ width: `${isNegativeMode ? Math.max(0, 100 - val) : val}%` }} />
+                             </div>
+                           </div>
+                         </td>
+                       );
+                     })}
+                   </tr>
+                 </tbody>
+               </table>
+             </div>
+           </div>
+         );
+       })}
 
        <div className="space-y-12">
           <div data-pdf-section="history-delegations">

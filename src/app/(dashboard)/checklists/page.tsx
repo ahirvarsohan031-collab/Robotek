@@ -809,13 +809,14 @@ export default function ChecklistsPage() {
       {/* Sticky Top Header & Filters */}
       <div className="sticky top-0 z-10 bg-[var(--panel-bg)] -mx-2 -mt-2 p-2 pt-0.5 md:-mx-4 md:-mt-4 md:p-4 md:pt-1 border-b border-gray-100 dark:border-white/5 shadow-sm space-y-4">
         {/* Responsive Title Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
-        <div>
+      <div className="flex flex-col lg:flex-row items-center gap-4 px-1">
+        <div className="w-full lg:w-1/3 text-center lg:text-left min-w-0">
           <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight">Checklists</h1>
           <p className="text-gray-500 dark:text-slate-300 font-bold text-[8px] md:text-[10px] uppercase tracking-wider">Task Verification System</p>
         </div>
         
-        <div className="flex items-center gap-1.5 rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all active:translate-y-[2px] active:border-b-2 p-1 w-fit">
+        <div className="w-full lg:w-1/3 flex justify-center flex-shrink-0 min-w-0">
+          <div className="flex items-center gap-1.5 rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all active:translate-y-[2px] active:border-b-2 p-1 max-w-full">
           {/* View Toggle */}
           <div className="flex items-center bg-gray-50 dark:bg-navy-900 rounded-full p-0.5 border border-gray-100 dark:border-navy-700">
             <button
@@ -871,6 +872,8 @@ export default function ChecklistsPage() {
             <PlusIcon className="w-5 h-5" />
           </button>
         </div>
+        </div>
+        <div className="hidden lg:block lg:w-1/3"></div>
       </div>
 
       <div 

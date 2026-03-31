@@ -149,8 +149,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const { permissions: userPermissions, isAdmin } = usePermissions();
 
   const filteredNavigation = navigation.filter(item => {
-    // Dashboard is the system home, visible to all authenticated users
-    if (item.id === 'dashboard') return true;
+    // Dashboard is the system home, visible to all authenticated users, Chat is available to all
+    if (item.id === 'dashboard' || item.id === 'chat') return true;
 
     // If matrix permissions exist, use them strictly
     if (userPermissions.length > 0) {

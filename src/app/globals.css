@@ -10,21 +10,31 @@
 @variant dark (&:is(.dark *));
 
 :root {
-  --background: linear-gradient(0deg, #f2b60c 0%, #f7eccd 100%);
+  --background: linear-gradient(0deg, #f2b60c 0%, #FFF9E6 100%);
   --foreground: #171717;
   --panel-bg: #FFF9E6;
-  --panel-card: #ffffff;
-  --panel-border: rgba(0, 56, 117, 0.08);
+  --panel-card: #FFF9E6;
+  --panel-border: rgba(0, 56, 117, 0.04);
   --header-bg: transparent;
+  --chat-sidebar: #FFF9E6;
+  --chat-window: #FFF9E6;
+  --chat-bubble-own: #9A5BFF;
+  --chat-bubble-other: #f1f5f9;
+  --input-bg: #FFF9E6;
 }
 
 .dark {
-  --background: #0B1120;
+  --background: #070B14;
   --foreground: #f8fafc;
-  --panel-bg: #131C2E;
+  --panel-bg: #0B1120;
   --panel-card: #1E293B;
   --panel-border: rgba(255, 255, 255, 0.1);
-  --header-bg: #131C2E;
+  --header-bg: #0B1120;
+  --chat-sidebar: #0B1120;
+  --chat-window: #070B14;
+  --chat-bubble-own: #8233FF;
+  --chat-bubble-other: #1E293B;
+  --input-bg: #000000;
 }
 
 body {
@@ -79,8 +89,13 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 @keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .animate-spin-slow {
@@ -109,11 +124,15 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 @keyframes marquee {
-  0% { transform: translateX(100%); }
-  100% { transform: translateX(-100%); }
+  0% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
 .animate-marquee {
   animation: marquee 15s linear infinite;
 }
-

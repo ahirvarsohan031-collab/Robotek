@@ -8,5 +8,6 @@ export interface User {
   late_long?: string;
   image_url?: string;
   dob?: string;
+  last_active?: string;
   permissions?: string[];
 }
