@@ -14,7 +14,9 @@ import {
   ChevronDownIcon,
   ArrowDownTrayIcon,
   UsersIcon,
-  EyeIcon
+  EyeIcon,
+  MapPinIcon,
+  GlobeAmericasIcon
 } from "@heroicons/react/24/outline";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ActionStatusModal from "@/components/ActionStatusModal";
@@ -46,6 +48,7 @@ export default function UsersPage() {
     late_long: "",
     image_url: "",
     dob: "",
+    locations: [{ name: "Main", coords: "" }],
   });
 
   // Action Status States
@@ -85,8 +88,14 @@ export default function UsersPage() {
     const method = editingUser ? "PUT" : "POST";
     const url = editingUser ? `/api/users/${editingUser.id}` : "/api/users";
 
+    // Prepare payload by stringifying locations into late_long
+    const finalFormData = {
+      ...formData,
+      late_long: JSON.stringify(formData.locations || [])
+    };
+
     const payload = new FormData();
-    payload.append("userData", JSON.stringify(formData));
+    payload.append("userData", JSON.stringify(finalFormData));
     if (selectedImage) {
       payload.append("image", selectedImage);
     }
@@ -114,6 +123,7 @@ export default function UsersPage() {
           late_long: "",
           image_url: "",
           dob: "",
+          locations: [{ name: "Main", coords: "" }],
         });
         fetchUsers();
       } else {
@@ -125,10 +135,93 @@ export default function UsersPage() {
     }
   };
 
+  const handleFetchLocation = (index: number) => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+
+    // Show loading info
+    setActionStatus('loading');
+    setActionMessage("Fetching your current coordinates...");
+    setIsStatusModalOpen(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const newCoords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        
+        const newLocations = [...(formData.locations || [])];
+        newLocations[index] = { ...newLocations[index], coords: newCoords };
+        
+        setFormData(prev => ({
+          ...prev,
+          locations: newLocations
+        }));
+        setIsStatusModalOpen(false);
+      },
+      (error) => {
+        setIsStatusModalOpen(false);
+        console.error("Error fetching location:", error);
+        let errorMessage = "Failed to fetch location.";
+        if (error.code === error.PERMISSION_DENIED) {
+          errorMessage = "Location access denied. Please enable it in your browser settings.";
+        }
+        alert(errorMessage);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  const handleViewOnMap = (coords: string) => {
+    if (coords) {
+      window.open(`https://www.google.com/maps?q=${encodeURIComponent(coords)}`, "_blank");
+    } else {
+      alert("Please enter or fetch coordinates first.");
+    }
+  };
+
+  const addLocation = () => {
+    setFormData(prev => ({
+      ...prev,
+      locations: [...(prev.locations || []), { name: "", coords: "" }]
+    }));
+  };
+
+  const removeLocation = (index: number) => {
+    const locations = [...(formData.locations || [])];
+    if (locations.length <= 1) {
+      alert("At least one location is required.");
+      return;
+    }
+    locations.splice(index, 1);
+    setFormData({ ...formData, locations });
+  };
+
+  const updateLocation = (index: number, field: 'name' | 'coords', value: string) => {
+    const locations = [...(formData.locations || [])];
+    locations[index] = { ...locations[index], [field]: value };
+    setFormData({ ...formData, locations });
+  };
+
   const handleEdit = (user: User) => {
+    let parsedLocations = [{ name: "Main", coords: "" }];
+    try {
+      if (user.late_long && (user.late_long.startsWith('[') || user.late_long.startsWith('{'))) {
+        parsedLocations = JSON.parse(user.late_long);
+      } else if (user.late_long) {
+        // Legacy single string format
+        parsedLocations = [{ name: "Default", coords: user.late_long }];
+      }
+    } catch (e) {
+      console.error("Failed to parse locations:", e);
+      parsedLocations = [{ name: "Default", coords: user.late_long || "" }];
+    }
+
     setEditingUser(user);
     setFormData({
       ...user,
+      locations: parsedLocations,
       dob: formatDatePickerValue(user.dob || "")
     });
     setImagePreview(user.image_url || null);
@@ -360,9 +453,7 @@ export default function UsersPage() {
                   password: "",
                   phone: "",
                   role_name: "",
-                  late_long: "",
-                  image_url: "",
-                  dob: "",
+                  locations: [{ name: "Main", coords: "" }],
                 });
                 setIsModalOpen(true);
               }}
@@ -454,7 +545,7 @@ export default function UsersPage() {
                   <div className="flex items-center">DOB <SortIcon column="dob" /></div>
                 </th>
                 <th onClick={() => handleSort('late_long')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden xl:table-cell">
-                  <div className="flex items-center">Coordinates <SortIcon column="late_long" /></div>
+                  <div className="flex items-center">Locations <SortIcon column="late_long" /></div>
                 </th>
                 <th className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-right">Actions</th>
               </tr>
@@ -516,7 +607,24 @@ export default function UsersPage() {
                     <p className="text-[11px] md:text-xs font-bold text-gray-600 dark:text-slate-300">{user.dob || "—"}</p>
                   </td>
                   <td className="px-3 md:px-4 py-3 hidden xl:table-cell">
-                    <p className="text-[11px] md:text-xs font-bold text-gray-400 dark:text-slate-500 font-mono italic">{user.late_long || "—"}</p>
+                    <div className="flex flex-col gap-1">
+                      {(() => {
+                        try {
+                          if (user.late_long && (user.late_long.startsWith('[') || user.late_long.startsWith('{'))) {
+                            const locs = JSON.parse(user.late_long);
+                            return locs.map((l: any, i: number) => (
+                              <p key={i} className="text-[9px] font-bold text-gray-400 dark:text-slate-500 font-mono italic truncate max-w-[150px]">
+                                <span className="text-[#003875] dark:text-[#FFD500] not-italic mr-1">{l.name}:</span>
+                                {l.coords || "—"}
+                              </p>
+                            ));
+                          }
+                          return <p className="text-[11px] md:text-xs font-bold text-gray-400 dark:text-slate-500 font-mono italic">{user.late_long || "—"}</p>;
+                        } catch (e) {
+                          return <p className="text-[11px] md:text-xs font-bold text-gray-400 dark:text-slate-500 font-mono italic">{user.late_long || "—"}</p>;
+                        }
+                      })()}
+                    </div>
                   </td>
                   <td className="px-3 md:px-4 py-2 text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -740,20 +848,73 @@ export default function UsersPage() {
                   />
                 </div>
 
-                {/* Full Width Fields */}
+                {/* Full Width Fields: Multiple Locations */}
                 <div className="md:col-span-2 space-y-4">
-                  <p className="text-[10px] font-black text-[#FFD500] uppercase tracking-[0.2em]">System Parameters</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="md:col-span-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Coordinates (Late/Long)</label>
-                      <input
-                        type="text"
-                        value={formData.late_long}
-                        onChange={(e) => setFormData({ ...formData, late_long: e.target.value })}
-                        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                        placeholder="e.g., 28.6139, 77.2090"
-                      />
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black text-[#FFD500] uppercase tracking-[0.2em]">User Site Locations</p>
+                    <button
+                      type="button"
+                      onClick={addLocation}
+                      className="px-3 py-1 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black rounded-lg font-black uppercase text-[8px] tracking-widest shadow-sm active:scale-95 transition-all"
+                    >
+                      + Add Site
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {(formData.locations || []).map((loc, index) => (
+                      <div key={index} className="p-3 bg-gray-50 dark:bg-navy-950/50 rounded-xl border border-gray-100 dark:border-navy-800/50 space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="md:col-span-1">
+                            <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest block mb-1">Site Name</label>
+                            <input
+                              type="text"
+                              value={loc.name}
+                              onChange={(e) => updateLocation(index, 'name', e.target.value)}
+                              placeholder="e.g. Work, Site A"
+                              className="w-full bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-zinc-100 transition-all"
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest block mb-1">Coordinates</label>
+                            <div className="flex gap-2">
+                              <div className="relative flex-1">
+                                <input
+                                  type="text"
+                                  value={loc.coords}
+                                  onChange={(e) => updateLocation(index, 'coords', e.target.value)}
+                                  className="w-full bg-white dark:bg-zinc-900 pl-3 pr-8 py-1.5 rounded-lg border border-gray-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-zinc-100 transition-all"
+                                  placeholder="e.g., 28.6139, 77.2090"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewOnMap(loc.coords)}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-[#003875] dark:hover:text-[#FFD500] transition-colors"
+                                >
+                                  <GlobeAmericasIcon className="w-4 h-4" />
+                                </button>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleFetchLocation(index)}
+                                className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all"
+                                title="Auto Fetch"
+                              >
+                                <MapPinIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeLocation(index)}
+                                className="p-1.5 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all"
+                                title="Remove Site"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

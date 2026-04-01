@@ -114,18 +114,18 @@ export default function ChatInput({ onSendMessage, isSending }: ChatInputProps) 
   };
 
   return (
-    <div className="relative p-3 bg-[#003875] flex items-end gap-2 shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+    <div className="relative p-3 bg-[#001F3F] flex items-end gap-2 shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] transition-colors duration-500">
       
       {/* Upload Progress Indicator */}
       {uploading && (
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-primary text-white px-4 py-1.5 rounded-full text-xs font-medium shadow-lg flex items-center gap-2 animate-bounce">
-          <svg className="animate-spin h-3 w-3 text-white" fill="none" viewBox="0 0 24 24">
+        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-gradient-to-br from-[#FEF5E7] to-[#FCE4EC] border border-[#003875]/20 dark:border-white/10 text-[#003875] px-4 py-1.5 rounded-full text-xs font-black shadow-xl flex items-center gap-2 animate-bounce z-50">
+          <svg className="animate-spin h-3 w-3 text-[#003875]" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
           Uploading media...
         </div>
-      )}
+       )}
 
       {/* Emoji Picker Popup */}
       {showEmoji && (
@@ -136,16 +136,34 @@ export default function ChatInput({ onSendMessage, isSending }: ChatInputProps) 
 
       {/* Media Recorder Overlay */}
       {status === "recording" && (
-        <div className="absolute inset-x-2 bottom-full mb-2 bg-red-500/20 border border-red-500/50 backdrop-blur-md text-white p-3 rounded-xl flex items-center justify-between shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-          <div className="flex items-center gap-3">
-            <span className="relative flex h-3 w-3 animate-ping">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-            </span>
-            <span className="font-semibold text-sm">Recording audio...</span>
+        <div className="absolute inset-x-2 bottom-full mb-2 bg-red-500 border border-red-400 text-white p-4 rounded-2xl flex items-center justify-between shadow-xl overflow-hidden group">
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="relative">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+              </span>
+            </div>
+            <span className="font-black text-xs uppercase tracking-widest">Recording Live...</span>
           </div>
-          <button onClick={stopRecording} className="text-white hover:text-red-300">
-             <StopCircleIcon className="w-8 h-8" />
+          
+          {/* Waveform Animation for Recording */}
+          <div className="absolute inset-0 flex items-center justify-center gap-[2px] opacity-20 pointer-events-none px-12">
+            {[...Array(40)].map((_, i) => (
+              <div 
+                key={i} 
+                className="w-[2px] bg-white rounded-full animate-pulse"
+                style={{ 
+                  height: `${Math.random() * 60 + 20}%`,
+                  animationDelay: `${i * 0.05}s`,
+                  animationDuration: '0.5s'
+                }}
+              />
+            ))}
+          </div>
+
+          <button onClick={stopRecording} className="relative z-10 p-1 hover:bg-white/20 rounded-full transition-all active:scale-90">
+             <StopCircleIcon className="w-10 h-10" />
           </button>
         </div>
       )}
@@ -160,7 +178,7 @@ export default function ChatInput({ onSendMessage, isSending }: ChatInputProps) 
 
       {/* Audio Preview after recording */}
       {mediaBlobUrl ? (
-        <div className="flex-1 flex items-center gap-3 bg-input-bg rounded-full px-4 py-2 border border-primary/30 h-11">
+        <div className="flex-1 flex items-center gap-3 bg-white dark:bg-black rounded-full px-4 py-2 border border-primary/30 h-11 transition-colors">
           <audio src={mediaBlobUrl} controls className="h-8 flex-1 outline-none" />
           <button onClick={clearBlobUrl} className="text-foreground/60 hover:text-red-400">
             <XMarkIcon className="w-5 h-5" />
@@ -168,7 +186,7 @@ export default function ChatInput({ onSendMessage, isSending }: ChatInputProps) 
           <button 
             onClick={handleSendAudio}
             disabled={isSending || uploading}
-            className="w-8 h-8 rounded-full bg-primary flex items-center justify-center hover:bg-primary/80 cursor-pointer"
+            className="w-8 h-8 rounded-full bg-[#002855] text-white flex items-center justify-center hover:bg-[#001f40] cursor-pointer"
           >
             <PaperAirplaneIcon className="w-4 h-4 text-white" />
           </button>
@@ -190,9 +208,9 @@ export default function ChatInput({ onSendMessage, isSending }: ChatInputProps) 
              </button>
           </div>
 
-          <div className="flex-1 bg-white border-none rounded-3xl flex items-center transition-all shadow-inner">
+          <div className="flex-1 bg-black border-none rounded-3xl flex items-center transition-all shadow-inner">
             <textarea
-              className="flex-1 bg-transparent border-none focus:ring-0 text-foreground placeholder-foreground/40 p-3 max-h-32 min-h-[44px] resize-none text-sm custom-scrollbar"
+              className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder-gray-400 p-3 max-h-32 min-h-[44px] resize-none text-sm custom-scrollbar font-bold"
               placeholder="Type a message..."
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -206,14 +224,14 @@ export default function ChatInput({ onSendMessage, isSending }: ChatInputProps) 
                <button 
                  onClick={handleSendText}
                  disabled={isSending || uploading}
-                 className="p-3 bg-primary hover:brightness-110 text-white rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
+                 className="p-3 bg-white text-[#003875] hover:brightness-110 rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
                >
                  <PaperAirplaneIcon className="w-5 h-5" />
                </button>
              ) : (
                <button 
                  onClick={startRecording}
-                 className="p-3 bg-[#002855] hover:bg-[#001f40] text-white/80 rounded-full transition-colors cursor-pointer"
+                 className="p-3 bg-[#002855] dark:bg-navy-900 hover:bg-[#001f40] text-white/80 rounded-full transition-colors cursor-pointer"
                >
                  <MicrophoneIcon className="w-5 h-5" />
                </button>

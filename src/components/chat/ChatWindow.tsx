@@ -13,6 +13,7 @@ interface ChatMessage {
   text: string;
   type: "text" | "image" | "file" | "audio";
   media_url: string;
+  read_by?: string;
   created_at: string;
 }
 
@@ -22,6 +23,24 @@ interface ChatWindowProps {
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+// Helper for gradient background color based on username
+function getAvatarGradient(username: string) {
+  const colors = [
+    "from-blue-500 to-indigo-600",
+    "from-emerald-500 to-teal-600",
+    "from-orange-500 to-red-600",
+    "from-pink-500 to-rose-600",
+    "from-purple-500 to-fuchsia-600",
+    "from-cyan-500 to-blue-600"
+  ];
+  let hash = 0;
+  for (let i = 0; i < username.length; i++) {
+    hash = username.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+}
 
 export default function ChatWindow({ chatId, currentUsername }: ChatWindowProps) {
   const [isSending, setIsSending] = useState(false);
@@ -38,7 +57,24 @@ export default function ChatWindow({ chatId, currentUsername }: ChatWindowProps)
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+
+    // Mark messages as read if there are any unread messages from partner
+    if (messages && messages.length > 0) {
+      const hasUnread = messages.some(
+        (m) => m.sender_id === chatId && m.receiver_id === currentUsername && !(m.read_by || "").includes(currentUsername)
+      );
+
+      if (hasUnread) {
+        fetch("/api/chat/messages/read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ partnerId: chatId })
+        }).then(res => {
+          if (res.ok) mutate();
+        }).catch(err => console.error("Failed to mark read:", err));
+      }
+    }
+  }, [messages, chatId, currentUsername, mutate]);
 
   const handleSendMessage = async (text: string, type: "text"|"image"|"file"|"audio", mediaUrl?: string) => {
     if (!text.trim() && type === "text") return;
@@ -84,20 +120,19 @@ export default function ChatWindow({ chatId, currentUsername }: ChatWindowProps)
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-chat-window md:rounded-br-[24px]">
+    <div className="flex-1 flex flex-col h-full bg-gradient-to-br from-[#FEF5E7] via-[#fdfaf5] to-[#FCE4EC] md:rounded-br-[24px] transition-colors duration-500">
       
       {/* Header */}
-      <div className="p-4 flex justify-between items-center bg-[#003875] shadow-sm sticky top-0 z-10 transition-colors">
+      <div className="p-4 flex justify-between items-center bg-[#001F3F] shadow-sm sticky top-0 z-10 transition-colors">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[#002855] border border-[#001f40] flex items-center justify-center shadow-inner">
-            <UserCircleIcon className="w-6 h-6 text-white/80" />
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm border border-white/20 shadow-sm bg-gradient-to-br ${getAvatarGradient(chatId)}`}>
+            {chatId.charAt(0).toUpperCase()}
           </div>
           <div>
             <h3 className="font-bold text-white tracking-wide">{chatId}</h3>
-            {/* Online status removed as requested */}
           </div>
         </div>
-        <button className="p-2 text-white/60 hover:text-white rounded-full hover:bg-[#002855] transition-colors">
+        <button className="p-2 text-white/60 hover:text-white rounded-full hover:bg-white/10 transition-colors">
           <InformationCircleIcon className="w-6 h-6" />
         </button>
       </div>
@@ -106,15 +141,6 @@ export default function ChatWindow({ chatId, currentUsername }: ChatWindowProps)
       <div 
         className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar flex flex-col gap-2 relative z-0"
       >
-        {/* Pattern Background Layer */}
-        <div 
-          className="absolute inset-0 z-[-1] opacity-50 pointer-events-none" 
-          style={{ 
-            backgroundImage: "url('/assets/chat/chat_bg_pattern.png')",
-            backgroundRepeat: 'repeat',
-            backgroundSize: '300px'
-          }}
-        />
 
         {!messages ? (
           <div className="flex-1 flex items-center justify-center">

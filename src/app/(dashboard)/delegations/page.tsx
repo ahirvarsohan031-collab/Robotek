@@ -1400,17 +1400,17 @@ export default function DelegationsPage() {
 
         {/* Follow Up Right Sidebar Drawer */}
         {selectedTask && (
-          <div className="fixed inset-0 z-[9999] overflow-hidden">
+          <div className="fixed inset-0 z-[9999] flex justify-end overflow-hidden">
             {/* Backdrop */}
             <div 
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" 
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" 
               onClick={() => setSelectedTask(null)}
             />
             
             {/* Sidebar Content */}
-            <div className="absolute top-0 right-0 h-full w-full max-w-md bg-white dark:bg-navy-900 shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 ease-out border-l border-gray-100 dark:border-white/5">
+            <div className="relative h-full w-full max-w-md bg-white dark:bg-navy-900 shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 border-l border-gray-100 dark:border-white/5">
               {/* Header */}
-              <div className="py-3 px-6 flex items-start justify-between bg-[#CE2029] sticky top-0 z-20 shadow-lg shadow-red-900/10">
+              <div className="py-3 px-4 md:px-6 flex items-start justify-between bg-[#CE2029] sticky top-0 z-[100] shadow-xl shadow-red-900/20">
                 <div className="flex items-start gap-4 flex-1 min-w-0">
                   <div className="p-2.5 bg-white/10 rounded-xl text-white backdrop-blur-md border border-white/20 shrink-0 mt-1">
                     <ArrowPathIcon className="w-6 h-6 animate-spin-slow" />
@@ -1434,7 +1434,7 @@ export default function DelegationsPage() {
               </div>
 
               {/* Body Content */}
-              <div className="flex-1 overflow-y-auto px-6 pt-1 pb-6 space-y-3 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto px-4 md:px-6 pt-1 pb-6 space-y-3 custom-scrollbar">
                 {/* Description and Badges */}
                 <section className="space-y-4">
                   <div className="p-4 bg-red-50/30 dark:bg-red-900/10 rounded-2xl border border-red-100/50 dark:border-red-900/30">

@@ -21,6 +21,13 @@ export function parseSheetDate(val: any): string | null {
   return d ? d.toISOString() : null;
 }
 
+export function getIstDateString(): string {
+  // Returns ISO date string adjusted for IST context (though natively handled by server, 
+  // sometimes needed for client-side comparison)
+  const now = new Date();
+  return now.toISOString().split('T')[0];
+}
+
 export function formatDate(dateStr: string | null): string {
     if (!dateStr) return "—";
     const d = new Date(dateStr);

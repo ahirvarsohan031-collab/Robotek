@@ -27,7 +27,7 @@ export default function ChatPage() {
       </div>
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col h-full bg-chat-window md:flex ${!activePartnerId ? "hidden md:flex" : "block"}`}>
+      <div className={`flex-1 flex flex-col h-full bg-gradient-to-br from-white to-[#FDF8EE] md:flex ${!activePartnerId ? "hidden md:flex" : "block"}`}>
         {activePartnerId ? (
           <ChatWindow 
             chatId={activePartnerId} 
