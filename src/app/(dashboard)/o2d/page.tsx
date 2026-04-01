@@ -165,6 +165,9 @@ export default function O2DPage() {
   const isSpecialRole = userRole.toUpperCase() === 'ADMIN' || userRole.toUpperCase() === 'EA';
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrderNo, setSelectedOrderNo] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
 
   // Data
   const [parties, setParties] = useState<string[]>([]);
@@ -201,6 +204,9 @@ export default function O2DPage() {
     }, 1000); // Update every second
     return () => clearInterval(timer);
   }, []);
+
+
+
 
   // Setup Config
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
@@ -288,6 +294,12 @@ export default function O2DPage() {
   const [selectedDateFilters, setSelectedDateFilters] = useState<string[]>([]);
   const [selectedStepFilters, setSelectedStepFilters] = useState<number[]>([]);
 
+  // Pagination Reset
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedDateFilters, selectedStepFilters]);
+
+
   const toggleDateFilter = (id: string) => {
     if (id === '') {
       setSelectedDateFilters([]);
@@ -343,14 +355,17 @@ export default function O2DPage() {
   const getPendingStepIdx = (orderItems: O2D[]): number => {
     const firstItem = orderItems[0] as any;
     for (let i = 1; i <= 11; i++) {
-      const status = (firstItem[`status_${i}`] || "").toString().trim().toLowerCase();
-      if (i === 5 && (firstItem[`status_4`] || "").toString().trim().toLowerCase() === 'yes') continue;
-      const isCompleted = status === 'done' || status === 'yes' || (i === 4 && status === 'no') || (i === 5 && status === 'no');
-      if (!isCompleted) return i;
-      if (i === 5 && status === 'no') return -1;
+      const pVal = (firstItem[`planned_${i}`] || "").toString().trim();
+      const aVal = (firstItem[`actual_${i}`] || "").toString().trim();
+
+      // Step is active if it's PLANNED but NOT yet ACTUALIZED
+      if (pVal && pVal !== "-" && (!aVal || aVal === "-")) {
+        return i;
+      }
     }
     return -1;
   };
+
 
   const orderMatchesAnyFilter = (no: string): boolean => {
     const items = groupedOrders[no];
@@ -442,6 +457,13 @@ export default function O2DPage() {
       })
       .sort((a, b) => b.localeCompare(a));
   }, [groupedOrders, searchTerm, selectedDateFilters, selectedStepFilters]);
+
+  const totalPages = Math.ceil(sortedOrderNumbers.length / itemsPerPage);
+  const paginatedOrderNumbers = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return sortedOrderNumbers.slice(startIndex, startIndex + itemsPerPage);
+  }, [sortedOrderNumbers, currentPage, itemsPerPage]);
+
 
   const addItemRow = () => setItems([...items, { item_name: "", item_qty: "", est_amount: "", item_specification: "" }]);
   const removeItemRow = (index: number) => items.length > 1 && setItems(items.filter((_, i) => i !== index));
@@ -911,25 +933,7 @@ export default function O2DPage() {
   };
 
   const getCurrentStep = (order: O2D[]) => {
-    const first = order[0];
-    if (!first) return 1;
-    for (let i = 1; i <= 11; i++) {
-      const status = ((first as any)[`status_${i}`] || "").toString().trim().toLowerCase();
-
-      // Skip Step 5 if Step 4 was "Yes"
-      if (i === 5) {
-        const status4 = ((first as any)[`status_4`] || "").toString().trim().toLowerCase();
-        if (status4 === 'yes') continue;
-      }
-
-      const isCompleted = status === 'yes' || status === 'done' || (i === 4 && status === 'no') || (i === 5 && status === 'no');
-
-      if (!isCompleted) return i;
-
-      // If Step 5 is "No", the process ends
-      if (i === 5 && status === 'no') return -1;
-    }
-    return 11; // All steps done
+    return getPendingStepIdx(order);
   };
 
   const isStep1Lockout = useMemo(() => {
@@ -1362,7 +1366,7 @@ export default function O2DPage() {
           {/* Master Pane: Order List */}
           <div className={`w-full lg:w-80 flex flex-col border-r border-[#003875]/5 dark:border-navy-800 ${selectedOrderNo ? 'hidden lg:flex' : 'flex'}`}>
             <div className="p-2 border-b border-gray-50 dark:border-navy-800 bg-gray-50/30 dark:bg-navy-900/40">
-              <div className="relative group">
+              <div className="relative group mb-2">
                 <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
                 <input
                   type="text"
@@ -1372,6 +1376,32 @@ export default function O2DPage() {
                   className="w-full pl-10 pr-4 h-[34px] bg-white dark:bg-black border border-gray-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] rounded-xl transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)] focus:shadow-md"
                 />
               </div>
+
+              {/* Sidebar Pagination - Top Position */}
+              {!isLoading && sortedOrderNumbers.length > itemsPerPage && (
+                <div className="flex items-center justify-between gap-2 px-1 py-1 bg-white/50 dark:bg-navy-800/50 rounded-xl border border-gray-100 dark:border-navy-700 shadow-sm">
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    className="p-1.5 rounded-lg bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 disabled:opacity-30 text-[#003875] dark:text-[#FFD500] hover:shadow-md transition-all active:scale-95"
+                  >
+                    <ChevronLeftIcon className="w-3.5 h-3.5" />
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Page</span>
+                    <span className="text-[11px] font-black text-[#003875] dark:text-white leading-none">
+                      {currentPage} <span className="text-gray-300 dark:text-gray-600 mx-0.5">/</span> {totalPages}
+                    </span>
+                  </div>
+                  <button
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    className="p-1.5 rounded-lg bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 disabled:opacity-30 text-[#003875] dark:text-[#FFD500] hover:shadow-md transition-all active:scale-95"
+                  >
+                    <ChevronRightIcon className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-1.5">
               {isLoading ? (
@@ -1385,23 +1415,21 @@ export default function O2DPage() {
                   <p className="text-[11px] font-black uppercase tracking-widest italic text-gray-400">No records</p>
                 </div>
               ) : (
-                sortedOrderNumbers.map((no) => {
+                paginatedOrderNumbers.map((no) => {
                   const orderItems = groupedOrders[no];
                   const first = orderItems[0];
                   const totalQty = orderItems.reduce((sum: number, item: O2D) => sum + (parseFloat(item.item_qty) || 0), 0);
                   const totalAmt = orderItems.reduce((sum: number, item: O2D) => sum + (parseFloat(item.est_amount) || 0), 0);
 
 
-                  // Find current pending stage (first step not marked Done/Yes)
-                  let currentStageIdx = -1;
-                  for (let i = 1; i <= 11; i++) {
-                    const status = (first as any)[`status_${i}`] as string;
-                    if (!status || (status !== 'Done' && status !== 'Yes')) { currentStageIdx = i - 1; break; }
-                  }
+                  // Find current pending stage using the unified helper
+                  const pIdx = getPendingStepIdx(orderItems);
+                  const currentStageIdx = pIdx !== -1 ? pIdx - 1 : -1;
                   const allDone = currentStageIdx === -1;
                   const isSelected = selectedOrderNo === no;
                   const isCancelled = !!first?.cancelled;
                   const isHold = !!first?.hold && !isCancelled;
+
 
                   return (
                     <div
@@ -1470,6 +1498,7 @@ export default function O2DPage() {
                 })
               )}
             </div>
+
           </div>
 
           {/* Thick Dark Blue Divider Line */}

@@ -10,7 +10,7 @@ const CONFIG_SHEET_NAME = "Step Configuration";
 class O2DService extends BaseSheetsService<O2D> {
   protected spreadsheetId = GOOGLE_SHEET_ID;
   protected sheetName = SHEET_NAME;
-  protected range = "A:BH";
+  protected range = "A:ZZ"; // Wide range for fetching to be safe
   protected idColumnIndex = 0;
 
 
@@ -178,10 +178,13 @@ class O2DService extends BaseSheetsService<O2D> {
         });
       }
 
+      const maxColIdx = Math.max(...Object.values(this.hMap));
+      const lastCol = getColumnLetter(maxColIdx);
+
       // 3. Overwrite the resulting range with the new data
       await sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!A${startRowIdx + 1}:BH${startRowIdx + newCount}`,
+        range: `${this.sheetName}!A${startRowIdx + 1}:${lastCol}${startRowIdx + newCount}`,
         valueInputOption: "USER_ENTERED",
         requestBody: {
           values: o2ds.map(o => this.mapItemToRow(o))
@@ -197,11 +200,13 @@ class O2DService extends BaseSheetsService<O2D> {
   }
 
   async addMany(o2ds: O2D[]): Promise<boolean> {
+    const maxColIdx = Math.max(...Object.values(this.hMap));
+    const lastCol = getColumnLetter(maxColIdx);
     try {
       const sheets = await this.getSheetsClient();
       await sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!A:BH`,
+        range: `${this.sheetName}!A:${lastCol}`,
         valueInputOption: "USER_ENTERED",
         requestBody: {
           values: o2ds.map(o => this.mapItemToRow(o)),
@@ -213,6 +218,7 @@ class O2DService extends BaseSheetsService<O2D> {
       return false;
     }
   }
+
 
   async delete(id: string | number): Promise<boolean> {
     await this.ensureHeaders();
@@ -339,9 +345,11 @@ class O2DService extends BaseSheetsService<O2D> {
       }
       if (indicesToUpdate.length === 0) return false;
 
+      const maxColIdx = Math.max(...Object.values(this.hMap));
+      const lastCol = getColumnLetter(maxColIdx);
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!A:BH`,
+        range: `${this.sheetName}!A:${lastCol}`,
       });
       const rows = response.data.values;
       if (!rows) return false;
@@ -383,7 +391,8 @@ class O2DService extends BaseSheetsService<O2D> {
         }
 
         if (updatedAtColIdx !== undefined) row[updatedAtColIdx] = timestamp;
-        return { range: `${this.sheetName}!A${index + 1}:BH${index + 1}`, values: [row] };
+        const rowRange = `${this.sheetName}!A${index + 1}:${lastCol}${index + 1}`;
+        return { range: rowRange, values: [row] };
       });
 
       await sheets.spreadsheets.values.batchUpdate({
