@@ -4,7 +4,7 @@ import { NextResponse, NextRequest } from "next/server";
 
 const { auth } = NextAuth(authConfig);
  
-export const runtime = "edge";
+export const runtime = "experimental-edge";
 
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
