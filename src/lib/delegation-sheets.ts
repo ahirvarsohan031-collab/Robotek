@@ -72,7 +72,69 @@ export async function addDelegation(data: Partial<Delegation>): Promise<boolean>
 }
 
 export async function updateDelegation(id: string, d: Delegation) { return delegationService.update(id, d); }
-export async function deleteDelegation(id: string) { return delegationService.delete(id); }
+
+async function deleteRelatedDelegationRows(id: string) {
+  try {
+    const sheets = await (delegationService as any).getSheetsClient();
+
+    const subSheets = [
+      { name: "delegation_revision_history", idCol: 1 },  // column B = delegation_id
+      { name: "delegation_remarks", idCol: 1 },            // column B = delegation_id
+    ];
+
+    for (const sub of subSheets) {
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId: GOOGLE_SHEET_ID,
+        range: `${sub.name}!A:A`,
+      });
+
+      // Get the full sheet to find matching rows
+      const fullRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: GOOGLE_SHEET_ID,
+        range: `${sub.name}!A:Z`,
+      });
+
+      const rows = fullRes.data.values || [];
+      // Collect 0-based row indices (skipping header) where col[idCol] === id, in reverse order
+      const toDelete: number[] = [];
+      rows.forEach((row: any[], i: number) => {
+        if (i === 0) return; // skip header
+        if (String(row[sub.idCol] || "").trim() === String(id).trim()) {
+          toDelete.push(i);
+        }
+      });
+
+      if (toDelete.length === 0) continue;
+
+      // Get sheetId
+      const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: GOOGLE_SHEET_ID });
+      const sheetId = spreadsheet.data.sheets?.find((s: any) => s.properties?.title === sub.name)?.properties?.sheetId;
+      if (sheetId === undefined) continue;
+
+      // Delete rows from bottom to top so indices don't shift
+      const requests = toDelete
+        .sort((a, b) => b - a)
+        .map((rowIdx) => ({
+          deleteDimension: {
+            range: { sheetId, dimension: "ROWS", startIndex: rowIdx, endIndex: rowIdx + 1 },
+          },
+        }));
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: GOOGLE_SHEET_ID,
+        requestBody: { requests },
+      });
+    }
+  } catch (err) {
+    console.error("Error cascade-deleting delegation sub-rows:", err);
+  }
+}
+
+export async function deleteDelegation(id: string) {
+  const result = await delegationService.delete(id);
+  if (result) await deleteRelatedDelegationRows(id);
+  return result;
+}
 
 export async function getDelegationHistory(id: string) {
   const sheets = await (delegationService as any).getSheetsClient();

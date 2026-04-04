@@ -152,8 +152,52 @@ export async function updateTicket(id: string, ticket: Ticket): Promise<boolean>
   return ticketService.update(id, ticket);
 }
 
+async function deleteRelatedTicketRows(id: string) {
+  try {
+    const sheets = await (ticketService as any).getSheetsClient();
+
+    const fullRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      range: `${HISTORY_SHEET}!A:Z`,
+    });
+
+    const rows = fullRes.data.values || [];
+    const toDelete: number[] = [];
+    rows.forEach((row: any[], i: number) => {
+      if (i === 0) return;
+      // column B (index 1) = ticket_id in tickets_history
+      if (String(row[1] || "").trim() === String(id).trim()) {
+        toDelete.push(i);
+      }
+    });
+
+    if (toDelete.length === 0) return;
+
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: GOOGLE_SHEET_ID });
+    const sheetId = spreadsheet.data.sheets?.find((s: any) => s.properties?.title === HISTORY_SHEET)?.properties?.sheetId;
+    if (sheetId === undefined) return;
+
+    const requests = toDelete
+      .sort((a, b) => b - a)
+      .map((rowIdx) => ({
+        deleteDimension: {
+          range: { sheetId, dimension: "ROWS", startIndex: rowIdx, endIndex: rowIdx + 1 },
+        },
+      }));
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      requestBody: { requests },
+    });
+  } catch (err) {
+    console.error("Error cascade-deleting ticket history rows:", err);
+  }
+}
+
 export async function deleteTicket(id: string): Promise<boolean> {
-  return ticketService.delete(id);
+  const result = await ticketService.delete(id);
+  if (result) await deleteRelatedTicketRows(id);
+  return result;
 }
 
 export async function getTicketHistory(ticketId: string): Promise<TicketHistory[]> {

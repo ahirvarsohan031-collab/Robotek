@@ -4,9 +4,10 @@ import { NextResponse, NextRequest } from "next/server";
 
 const { auth } = NextAuth(authConfig);
  
-export const runtime = "experimental-edge";
+ 
 
-export default async function middleware(req: NextRequest) {
+
+export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const session = await auth(); 
 
@@ -22,8 +23,6 @@ export default async function middleware(req: NextRequest) {
   if (!session?.user) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
-
-  return NextResponse.next();
 
   return NextResponse.next();
 }

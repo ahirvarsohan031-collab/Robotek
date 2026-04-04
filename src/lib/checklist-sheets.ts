@@ -74,7 +74,59 @@ export async function updateChecklist(id: string, data: Checklist): Promise<bool
   return checklistService.update(id, data);
 }
 
-export async function deleteChecklist(id: string) { return checklistService.delete(id); }
+async function deleteRelatedChecklistRows(id: string) {
+  try {
+    const sheets = await (checklistService as any).getSheetsClient();
+
+    const subSheets = [
+      { name: "checklists_revision_history", idCol: 1 }, // column B = checklists_id
+      { name: "checklists_remarks", idCol: 1 },           // column B = checklists_id
+    ];
+
+    for (const sub of subSheets) {
+      const fullRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: GOOGLE_SHEET_ID,
+        range: `${sub.name}!A:Z`,
+      });
+
+      const rows = fullRes.data.values || [];
+      const toDelete: number[] = [];
+      rows.forEach((row: any[], i: number) => {
+        if (i === 0) return;
+        if (String(row[sub.idCol] || "").trim() === String(id).trim()) {
+          toDelete.push(i);
+        }
+      });
+
+      if (toDelete.length === 0) continue;
+
+      const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: GOOGLE_SHEET_ID });
+      const sheetId = spreadsheet.data.sheets?.find((s: any) => s.properties?.title === sub.name)?.properties?.sheetId;
+      if (sheetId === undefined) continue;
+
+      const requests = toDelete
+        .sort((a, b) => b - a)
+        .map((rowIdx) => ({
+          deleteDimension: {
+            range: { sheetId, dimension: "ROWS", startIndex: rowIdx, endIndex: rowIdx + 1 },
+          },
+        }));
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: GOOGLE_SHEET_ID,
+        requestBody: { requests },
+      });
+    }
+  } catch (err) {
+    console.error("Error cascade-deleting checklist sub-rows:", err);
+  }
+}
+
+export async function deleteChecklist(id: string) {
+  const result = await checklistService.delete(id);
+  if (result) await deleteRelatedChecklistRows(id);
+  return result;
+}
 
 // Specialized functions
 export async function getChecklistHistory(id: string) {

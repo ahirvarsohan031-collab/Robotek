@@ -8,9 +8,9 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "main": ".worker-next/index.mjs",
+  "main": ".open-next/worker.js",
   "assets": {
-    "directory": ".worker-next/assets",
+    "directory": ".open-next/assets",
     "binding": "ASSETS"
   }
 }
