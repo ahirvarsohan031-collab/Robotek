@@ -191,10 +191,23 @@ function generateTrendData(items: any[], dateRange: { from: string, to: string }
       const total = inBucket.length;
       const completed = inBucket.filter((i: any) => i.isCompleted).length;
       const onTime = inBucket.filter((i: any) => i.isCompleted && !i.isLate).length;
+      
+      let totalDelayMs = 0;
+      let delayedCount = 0;
+      inBucket.forEach(i => {
+         const delay = getTaskDelayMs(i);
+         if (delay > 0) {
+            totalDelayMs += delay;
+            delayedCount++;
+         }
+      });
+      const avgDelayHours = delayedCount > 0 ? Math.round((totalDelayMs / delayedCount) / 3600000) : 0;
+
       return {
         label: b.label,
         score: total > 0 ? Math.round((completed / total) * 100) : 0,
-        onTime: completed > 0 ? Math.round((onTime / completed) * 100) : 0
+        onTime: completed > 0 ? Math.round((onTime / completed) * 100) : 0,
+        avgDelayHours: avgDelayHours
       };
     });
 }
@@ -1002,48 +1015,238 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
   );
 };
 
-const CategoryDrilldownContent = ({ catData, label, onBack, isNegativeMode }: any) => {
+const CategoryDrilldownContent = ({ catData, label, dateRange, chartGranularity, calculateDelayHours, isNegativeMode }: any) => {
+  const Icon = label === 'Delegations' ? DocumentTextIcon : label === 'Checklists' ? ClipboardDocumentListIcon : ShoppingBagIcon;
+  const accentColor = label === 'Delegations' ? 'text-orange-500' : label === 'Checklists' ? 'text-emerald-500' : 'text-blue-500';
+  const bgColor = label === 'Delegations' ? 'from-orange-600 to-orange-400' : label === 'Checklists' ? 'from-emerald-600 to-emerald-400' : 'from-blue-600 to-blue-400';
+
+  const pendingCount = catData.total - catData.completed;
+  const delayedCount = useMemo(() => (catData.items || []).filter((i: any) => i.isLate).length, [catData.items]);
+  const delayStats = useMemo(() => calculateDelayHours(catData.items || []), [catData.items, calculateDelayHours]);
+
+  const generateTrend = (items: any[]) => {
+    const to = new Date(dateRange.to);
+    const from = new Date(to);
+    if (chartGranularity === 'week') {
+      from.setDate(to.getDate() - 70);
+    } else if (chartGranularity === 'month') {
+      from.setMonth(to.getMonth() - 10);
+    } else if (chartGranularity === 'day') {
+      from.setDate(to.getDate() - 10);
+    } else if (chartGranularity === 'quarterly') {
+      from.setMonth(to.getMonth() - 30);
+    } else {
+      from.setFullYear(to.getFullYear() - 10);
+    }
+    return generateTrendData(items, { from: from.toISOString().split('T')[0], to: dateRange.to }, chartGranularity);
+  };
+
+  const categoryTrendData = useMemo(() => generateTrend(catData.items || []), [catData.items, dateRange.to, chartGranularity]);
+
+  const itemsByStep = useMemo(() => {
+    if (label !== 'O2D FMS Jobs') return {};
+    const groups: any = {};
+    (catData.items || []).forEach((item: any) => {
+      const parts = item.title.split(': ');
+      const stepName = parts.length > 1 ? parts[1] : item.title;
+      if (!groups[stepName]) groups[stepName] = [];
+      groups[stepName].push(item);
+    });
+    return Object.keys(groups).sort((a,b) => {
+      const aMatch = a.match(/Step (\d+)/);
+      const bMatch = b.match(/Step (\d+)/);
+      if (aMatch && bMatch) return parseInt(aMatch[1]) - parseInt(bMatch[1]);
+      return a.localeCompare(b);
+    }).reduce((acc: any, key) => {
+      acc[key] = groups[key];
+      return acc;
+    }, {});
+  }, [catData.items, label]);
+
+  const periodLabel = chartGranularity === 'day' ? 'Days' : chartGranularity === 'week' ? 'Weeks' : chartGranularity === 'month' ? 'Months' : chartGranularity === 'quarterly' ? 'Quarters' : 'Years';
+
+  const renderTrendTable = (trendData: any[], title: string, tableIcon: any, tableAccent: string, isStepTable = false) => {
+    const TableIcon = tableIcon;
+    return (
+      <div 
+        style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+        className={`rounded-[2rem] border-2 shadow-sm overflow-hidden ${isStepTable ? 'bg-opacity-50' : ''}`}
+      >
+        <div 
+          style={{ borderColor: 'var(--panel-border)' }}
+          className={`px-5 py-3 border-b ${isStepTable ? 'bg-gray-50/30' : 'bg-gray-50/60 dark:bg-navy-950/20'} flex items-center gap-3`}
+        >
+          <div className={`p-1.5 rounded-lg bg-white dark:bg-navy-900 border shrink-0`}>
+            {TableIcon && <TableIcon className={`w-4 h-4 ${tableAccent}`} />}
+          </div>
+          <h3 className={`font-black text-xs uppercase tracking-widest ${tableAccent}`}>
+            {title}
+          </h3>
+          <span className="ml-auto text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+            Last {trendData.length} {periodLabel}
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50/50 dark:bg-navy-950/40">
+                <th 
+                  style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                  className="sticky left-0 z-10 px-4 py-2.5 text-[9px] font-black text-gray-400 uppercase tracking-widest min-w-[110px] border-b"
+                >
+                  Metric
+                </th>
+                {trendData.map((d, i) => (
+                  <th key={i} style={{ borderColor: 'var(--panel-border)' }} className="px-2 py-2.5 text-center text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap min-w-[64px] border-b">
+                    {d.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-navy-800 text-xs md:text-sm font-bold text-gray-700 dark:text-gray-300">
+              <tr style={{ borderColor: 'var(--panel-border)' }} className="border-b group hover:bg-gray-50/40 dark:hover:bg-white/5 transition-colors">
+                <td style={{ backgroundColor: 'var(--panel-card)' }} className="sticky left-0 z-10 px-4 py-3 text-[10px] font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest border-r">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#FFD500]" />
+                    <span>Score %</span>
+                  </div>
+                </td>
+                {trendData.map((d, i) => {
+                  const display = isNegativeMode ? d.score - 100 : d.score;
+                  const colorClass = d.score >= 80 ? 'text-emerald-500' : d.score >= 50 ? 'text-amber-500' : 'text-rose-500';
+                  return (
+                    <td key={i} className="px-2 py-3 text-center">
+                      <span className={`text-[11px] font-black ${colorClass}`}>{display}%</span>
+                    </td>
+                  );
+                })}
+              </tr>
+              <tr style={{ borderColor: 'var(--panel-border)' }} className="border-b group hover:bg-gray-50/40 dark:hover:bg-white/5 transition-colors">
+                <td style={{ backgroundColor: 'var(--panel-card)' }} className="sticky left-0 z-10 px-4 py-3 text-[10px] font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest border-r">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-violet-400" />
+                    <span>On-Time %</span>
+                  </div>
+                </td>
+                {trendData.map((d, i) => {
+                  const display = isNegativeMode ? d.onTime - 100 : d.onTime;
+                  const colorClass = d.onTime >= 80 ? 'text-emerald-500' : d.onTime >= 50 ? 'text-amber-500' : 'text-rose-500';
+                  return (
+                    <td key={i} className="px-2 py-3 text-center">
+                      <span className={`text-[11px] font-black ${colorClass}`}>{display}%</span>
+                    </td>
+                  );
+                })}
+              </tr>
+              <tr className="group hover:bg-gray-50/40 dark:hover:bg-white/5 transition-colors">
+                <td style={{ backgroundColor: 'var(--panel-card)' }} className="sticky left-0 z-10 px-4 py-3 text-[10px] font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest border-r">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-rose-400" />
+                    <span>Avg Delay Hrs</span>
+                  </div>
+                </td>
+                {trendData.map((d, i) => {
+                  const colorClass = d.avgDelayHours === 0 ? 'text-emerald-500' : d.avgDelayHours < 5 ? 'text-amber-500' : 'text-rose-500';
+                  return (
+                    <td key={i} className="px-2 py-3 text-center">
+                      <span className={`text-[11px] font-black ${colorClass}`}>{d.avgDelayHours}h</span>
+                    </td>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-       {/* Category Header Card */}
        <div 
         style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
-        className="rounded-[2rem] border-2 shadow-lg p-6 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden"
+        className="rounded-[2rem] border-2 shadow-lg p-3 md:p-5 flex flex-col xl:flex-row items-center xl:items-stretch gap-4 relative overflow-visible"
        >
-          <div className="absolute top-0 left-0 w-2 h-full bg-[#FFD500] dark:bg-[#003875]" />
-          
-          <div className="min-w-0 flex-1">
-             <h2 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{label}</h2>
-             <div 
-              style={{ backgroundColor: 'white' }}
-              className="px-3 py-1 dark:bg-navy-800 rounded-lg text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-2 inline-block border border-gray-100 dark:border-navy-700"
-             >
-                Company-Wide Breakdown
+          <div className={`absolute top-0 left-0 w-2 h-full bg-[#003875] dark:bg-[#FFD500] rounded-l-[2rem]`} />
+          <div style={{ borderColor: 'var(--panel-border)' }} className="flex items-center gap-4 xl:w-64 max-w-sm shrink-0 pl-2 xl:pr-6 xl:border-r pt-2">
+             <div className={`w-16 h-16 rounded-[1.2rem] bg-gradient-to-br ${bgColor} shadow-md flex items-center justify-center text-white font-black text-2xl shrink-0`}>
+                <Icon className="w-8 h-8" />
+             </div>
+             <div className="min-w-0">
+                <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{label}</h2>
+                <div style={{ backgroundColor: 'white', borderColor: 'var(--panel-border)' }} className="px-2.5 py-1 dark:bg-navy-800 rounded-lg text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest mt-1.5 inline-block border shadow-sm">Company-Wide</div>
              </div>
           </div>
-         <div className="flex gap-4 w-full md:w-auto mt-4 md:mt-0">
-            <div 
-              style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
-              className="flex-1 p-4 rounded-2xl border text-center min-w-[120px] shadow-sm"
-            >
-               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Efficiency Score</p>
-               <p className={`text-3xl font-black ${catData.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{isNegativeMode ? catData.score - 100 : catData.score}%</p>
-            </div>
-            <div 
-              style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
-              className="flex-1 p-4 rounded-2xl border text-center min-w-[120px] shadow-sm"
-            >
-               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">On-Time Accuracy</p>
-               <p className={`text-3xl font-black ${catData.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{isNegativeMode ? catData.onTimeRate - 100 : catData.onTimeRate}%</p>
+          <div className="flex-1 flex flex-wrap items-center justify-center xl:justify-around gap-4 xl:gap-6 w-full py-2">
+             <div className="flex flex-col items-center min-w-[70px]">
+                <ClipboardDocumentListIcon className={`w-6 h-6 mb-2 ${accentColor}`} />
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Total</p>
+                <p className="text-4xl font-black text-gray-900 dark:text-white leading-none">{catData.total}</p>
+             </div>
+             <div className="flex flex-col items-center min-w-[70px]">
+                <CheckCircleIcon className="w-6 h-6 mb-2 text-emerald-500" />
+                <p className="text-[10px] font-black text-emerald-600/70 uppercase tracking-widest mb-1.5">Done</p>
+                <p className="text-4xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{catData.completed}</p>
+             </div>
+             <div className="flex flex-col items-center min-w-[70px]">
+                <ArrowPathIcon className="w-6 h-6 mb-2 text-amber-500" />
+                <p className="text-[10px] font-black text-amber-600/70 uppercase tracking-widest mb-1.5">Pending</p>
+                <p className="text-4xl font-black text-amber-600 dark:text-amber-400 leading-none">{pendingCount}</p>
+             </div>
+             <div className="flex flex-col items-center min-w-[70px]">
+                <ClockIcon className="w-6 h-6 mb-2 text-rose-500" />
+                <p className="text-[10px] font-black text-rose-500/80 uppercase tracking-widest mb-1.5">Delayed</p>
+                <p className="text-4xl font-black text-rose-600 dark:text-rose-400 leading-none">{delayedCount}</p>
+             </div>
+             <div className="flex flex-col items-center min-w-[70px]">
+                <ClockIcon className="w-6 h-6 mb-2 text-red-500" />
+                <p className="text-[10px] font-black text-red-500/80 uppercase tracking-widest mb-1.5">Total Hrs</p>
+                <p className="text-4xl font-black text-red-600 dark:text-red-400 leading-none">{delayStats.total}</p>
+             </div>
+             <div className="flex flex-col items-center min-w-[70px]">
+                <ClockIcon className="w-6 h-6 mb-2 text-rose-400" />
+                <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1.5">Avg Hrs</p>
+                <p className="text-4xl font-black text-rose-500 dark:text-rose-300 leading-none">{delayStats.avg}</p>
+             </div>
+          </div>
+          <div style={{ borderColor: 'var(--panel-border)' }} className="flex items-center justify-center gap-6 md:gap-12 shrink-0 xl:pl-8 xl:border-l w-full xl:w-auto mt-4 xl:mt-0 pt-4 xl:pt-0">
+             <div className="w-36 md:w-44 flex flex-col items-center group">
+                <SemiCircleGauge value={catData.score} isNegative={isNegativeMode} />
+                <div style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }} className="px-4 py-2 rounded-xl border-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] shadow-sm uppercase tracking-widest mt-0 relative z-10 -translate-y-2">Score %</div>
+             </div>
+             <div className="w-36 md:w-44 flex flex-col items-center group">
+                <SemiCircleGauge value={catData.onTimeRate} isNegative={isNegativeMode} />
+                <div style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }} className="px-4 py-2 rounded-xl border-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] shadow-sm uppercase tracking-widest mt-0 relative z-10 -translate-y-2">On-Time %</div>
+             </div>
+          </div>
+       </div>
+
+       {renderTrendTable(categoryTrendData, `Historical ${label} Performance`, Icon, accentColor)}
+
+       {label === 'O2D FMS Jobs' && Object.keys(itemsByStep).length > 0 && (
+         <div className="space-y-8 mt-12 pb-12 border-t-2 border-dashed border-blue-100 dark:border-blue-900/30 pt-8">
+            <h3 className="text-lg font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-[0.2em] px-4 flex items-center gap-3">
+               <ArrowDownTrayIcon className="w-6 h-6 animate-bounce" />
+               Detailed Step-wise History
+            </h3>
+            <div className="grid grid-cols-1 gap-6 px-2">
+               {Object.entries(itemsByStep).map(([stepName, items]: [string, any]) => (
+                  <div key={stepName} className="animate-in fade-in slide-in-from-left-4 duration-500">
+                     {renderTrendTable(generateTrend(items), stepName, null, 'text-blue-400', true)}
+                  </div>
+               ))}
             </div>
          </div>
+       )}
 
-      </div>
-      {/* Task List - Generic Section Grid */}
-      {renderCategoryStatusSections(catData.items, `${label} Breakdown`, ListBulletIcon, "text-[#003875]")}
+       {renderCategoryStatusSections(catData.items, `${label} Breakdown`, ListBulletIcon, accentColor)}
     </div>
   );
 };
+
+
+
 
 // --- Main Page Component ---
 
@@ -1682,9 +1885,13 @@ function ScorePageContent() {
                   <CategoryDrilldownContent 
                     catData={(companyStats as any)[selectedCategoryId]}
                     label={selectedCategoryId === 'delegationStats' ? 'Delegations' : selectedCategoryId === 'checklistStats' ? 'Checklists' : 'O2D FMS Jobs'}
+                    dateRange={dateRange}
+                    chartGranularity={chartGranularity}
+                    calculateDelayHours={calculateDelayHours}
                     isNegativeMode={isNegativeMode}
                   />
                 )}
+
 
             </div>
           ) : isPrivileged ? (

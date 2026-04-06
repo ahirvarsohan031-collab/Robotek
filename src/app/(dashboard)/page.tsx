@@ -1,207 +1,196 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { 
   UsersIcon, 
-  DocumentTextIcon, 
+  MapPinIcon, 
+  UserMinusIcon,
+  ChatBubbleLeftRightIcon,
+  CalendarIcon,
   ClockIcon,
-  ExclamationTriangleIcon,
-  ChartBarIcon,
-  SparklesIcon
+  PlusIcon
 } from "@heroicons/react/24/outline";
-import Link from "next/link";
+import { 
+  CompactWelcome,
+  CompactScore,
+  CompactBirthdayCard,
+  StatusTile,
+  QuickActionSquare,
+  HighightedCalendar,
+  CompactTable,
+  BirthdayCelebrationModal,
+  UpcomingMeetingsPanel
+} from "./DashboardComponents";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function Dashboard() {
   const { data: session } = useSession();
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    totalDelegations: 0,
-    pendingTasks: 0,
-    overdueTasks: 0
+  const userId = session?.user?.id;
+  
+  const { data, error, isLoading } = useSWR('/api/dashboard', fetcher, {
+    refreshInterval: 30000 
   });
-  const [loading, setLoading] = useState(true);
 
-  // @ts-ignore
-  const userPermissions = session?.user?.permissions || [];
-  const isAdmin = (session?.user as any)?.role === 'ADMIN';
-
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const [usersRes, delRes] = await Promise.all([
-          fetch('/api/users'),
-          fetch('/api/delegations')
-        ]);
-        const users = await usersRes.json();
-        const delegations = await delRes.json();
-
-        // Calculate dynamic status for delegations
-        const now = new Date();
-        now.setHours(0,0,0,0);
-
-        let pending = 0;
-        let overdue = 0;
-
-        delegations.forEach((del: any) => {
-            if (del.status?.toLowerCase() === 'completed') return;
-            
-            const due = new Date(del.due_date);
-            due.setHours(0,0,0,0);
-            
-            if (isNaN(due.getTime())) {
-                pending++;
-            } else if (due < now) {
-                overdue++;
-            } else {
-                pending++;
-            }
-        });
-
-        setStats({
-          totalUsers: users.length,
-          totalDelegations: delegations.length,
-          pendingTasks: pending,
-          overdueTasks: overdue
-        });
-      } catch (error) {
-        console.error("Error fetching dashboard stats:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchStats();
-  }, []);
+  const { data: attendanceData } = useSWR(userId ? `/api/attendance?userId=${userId}` : null, fetcher);
 
   const firstName = (session?.user as any)?.username || session?.user?.name?.split(' ')[0] || "Guest";
+  const userRole = (session?.user as any)?.role || 'User';
+  const isAdmin = (session?.user as any)?.role === 'ADMIN' || (session?.user as any)?.role === 'EA';
+
+  // Calculate Monthly Averages
+  let avgIn = "--:--";
+  let avgOut = "--:--";
+
+  if (attendanceData?.history) {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const monthRecords = attendanceData.history.filter((r: any) => {
+      const d = new Date(r.date);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    });
+
+    const calculateAvgTime = (records: any[], type: 'inTime' | 'outTime') => {
+      const times = records
+        .map(r => r[type] ? new Date(r[type]) : null)
+        .filter(t => t !== null) as Date[];
+      
+      if (times.length === 0) return null;
+
+      const totalMinutes = times.reduce((acc, t) => acc + (t.getHours() * 60 + t.getMinutes()), 0);
+      const avgMinutes = Math.round(totalMinutes / times.length);
+      const h = Math.floor(avgMinutes / 60);
+      const m = avgMinutes % 60;
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    };
+
+    avgIn = calculateAvgTime(monthRecords, 'inTime') || "--:--";
+    avgOut = calculateAvgTime(monthRecords, 'outTime') || "--:--";
+  }
+
+  if (error) return (
+    <div className="flex items-center justify-center min-h-[400px] text-rose-500 font-black uppercase tracking-widest bg-rose-50 dark:bg-rose-950/20 rounded-3xl border border-rose-100 italic">
+      Synchronizing System Core...
+    </div>
+  );
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Welcome Header */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#003875] to-[#002244] p-8 text-white shadow-2xl border-b-4 border-[#FFD500]/30 min-h-[200px] flex flex-col justify-center">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-[#FFD500]/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-48 h-48 bg-blue-500/10 rounded-full blur-2xl" />
-        
-        <div className="relative z-10 text-center md:text-left">
-          <div className="flex items-center justify-center md:justify-start gap-2 mb-3">
-            <span className="bg-[#FFD500] text-[#003875] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm">
-              <SparklesIcon className="w-3 h-3" /> System Live
-            </span>
-          </div>
-          <h1 className="text-4xl md:text-5xl font-black tracking-tighter mb-2 leading-tight">
-            WELCOME BACK,<br/>
-            <span className="text-[#FFD500] uppercase">{firstName}</span>
-          </h1>
-          <p className="text-blue-100/60 font-bold text-[10px] uppercase tracking-[0.3em] overflow-hidden whitespace-nowrap">Robotek Operational Command Center</p>
+    <div className="max-w-[1600px] mx-auto space-y-6 pb-10 px-4">
+      
+      {/* ROW 1: MISSION CONTROL HEADER */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-12 gap-4">
+        <div className="xl:col-span-4 self-center">
+          <CompactWelcome firstName={firstName} role={userRole} />
+        </div>
+        <div className="xl:col-span-2">
+            {!isLoading && data && <CompactScore score={data.score.score} label="FAILURE SCORE (GAP)" isNegative={true} />}
+        </div>
+        <div className="xl:col-span-2">
+            {!isLoading && data && <CompactScore score={data.score.onTimeRate} label="ACCURACY GAP" isNegative={true} />}
+        </div>
+        <div className="xl:col-span-4">
+            {!isLoading && data && <CompactBirthdayCard birthdays={data.birthdays} />}
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Personnel', value: stats.totalUsers, icon: UsersIcon, color: 'from-[#003875] to-blue-700', sub: 'Active Accounts' },
-          { label: 'Total Tasks', value: stats.totalDelegations, icon: DocumentTextIcon, color: 'from-amber-500 to-orange-600', sub: 'Delegations assigned' },
-          { label: 'Pending Now', value: stats.pendingTasks, icon: ClockIcon, color: 'from-emerald-500 to-teal-600', sub: 'Awaiting Action' },
-          { label: 'Overdue Urgent', value: stats.overdueTasks, icon: ExclamationTriangleIcon, color: 'from-[#CE2029] to-red-600', sub: 'Critical Attention' },
-        ].map((stat, i) => (
-          <div key={i} className="group relative bg-white dark:bg-navy-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-white/5 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-            <div className={`absolute top-0 right-0 w-1.5 h-full bg-gradient-to-b ${stat.color} rounded-r-2xl opacity-20 group-hover:opacity-100 transition-opacity`} />
-            <div className="flex items-start justify-between mb-4">
-              <div className={`p-3 rounded-xl bg-gray-50 dark:bg-white/5 transition-colors`}>
-                <stat.icon className="w-6 h-6 text-gray-400 group-hover:text-[#003875] dark:group-hover:text-[#FFD500] transition-colors" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{stat.label}</p>
-              <h2 className="text-3xl font-black text-gray-900 dark:text-white tabular-nums tracking-tighter">
-                {loading ? '...' : stat.value}
-              </h2>
-              <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400">{stat.sub}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Quick Access */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between px-2">
-            <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2 tracking-tight uppercase">
-                <ChartBarIcon className="w-5 h-5 text-[#003875] dark:text-[#FFD500]" />
-                Primary Channels
-            </h3>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {(userPermissions.includes('users') || (userPermissions.length === 0 && isAdmin)) && (
-              <Link href="/users" className="group p-6 bg-white dark:bg-navy-800 rounded-3xl border border-gray-100 dark:border-white/5 shadow-sm hover:border-[#003875] dark:hover:border-[#FFD500] transition-all overflow-hidden relative">
-                  <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <UsersIcon className="w-20 h-20 -mr-6 -mt-6" />
-                  </div>
-                  <div className="flex items-center gap-4 relative z-10">
-                      <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 group-hover:bg-[#003875] transition-all">
-                          <UsersIcon className="w-8 h-8 text-[#003875] group-hover:text-white transition-colors" />
-                      </div>
-                      <div>
-                          <h4 className="font-black text-gray-900 dark:text-white group-hover:text-[#003875] dark:group-hover:text-[#FFD500] transition-colors">Users</h4>
-                          <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Access Control</p>
-                      </div>
-                  </div>
-              </Link>
-            )}
-            
-            {(userPermissions.includes('delegations') || (userPermissions.length === 0 && isAdmin)) && (
-              <Link href="/delegations" className="group p-6 bg-white dark:bg-navy-800 rounded-3xl border border-gray-100 dark:border-white/5 shadow-sm hover:border-[#003875] dark:hover:border-[#FFD500] transition-all overflow-hidden relative">
-                  <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <DocumentTextIcon className="w-20 h-20 -mr-6 -mt-6" />
-                  </div>
-                  <div className="flex items-center gap-4 relative z-10">
-                      <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 group-hover:bg-amber-500 transition-all">
-                          <DocumentTextIcon className="w-8 h-8 text-amber-600 group-hover:text-white transition-colors" />
-                      </div>
-                      <div>
-                          <h4 className="font-black text-gray-900 dark:text-white group-hover:text-amber-600 transition-colors">Delegations</h4>
-                          <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Task Management</p>
-                      </div>
-                  </div>
-              </Link>
-            )}
-
-            {userPermissions.length > 0 && !userPermissions.includes('users') && !userPermissions.includes('delegations') && (
-                <div className="col-span-full py-12 text-center bg-gray-50 dark:bg-white/5 rounded-3xl border border-dashed border-gray-200 dark:border-white/10">
-                    <SparklesIcon className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm font-bold text-gray-400 uppercase tracking-wider">No active channels assigned</p>
-                </div>
-            )}
-          </div>
+      {/* Row 2: Status, Schedule, & Calendars */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
+        {/* Left Column: Metrics & Actions */}
+        <div className="lg:col-span-4 grid grid-cols-2 gap-4 auto-rows-max">
+           <StatusTile label="Present" value={data?.summary?.totalIn || 0} icon={UsersIcon} color="text-emerald-600 dark:text-emerald-400" bg="bg-emerald-50 dark:bg-emerald-900/30" />
+           <StatusTile label="Absent" value={data?.summary?.outOfOffice || 0} icon={MapPinIcon} color="text-rose-600 dark:text-rose-400" bg="bg-rose-50 dark:bg-rose-900/30" />
+           <StatusTile label="On Leave" value={data?.summary?.onLeave || 0} icon={UserMinusIcon} color="text-amber-600 dark:text-amber-400" bg="bg-amber-50 dark:bg-amber-900/30" />
+           
+           <QuickActionSquare label="New Ticket" href="/helpdesk/new" icon={PlusIcon} color="bg-[#003875] dark:bg-[#FFD500] dark:text-[#003875]" />
+           <QuickActionSquare label="Apply Leave" href="/attendance/leave-request" icon={CalendarIcon} color="bg-rose-500" />
+           <QuickActionSquare label="Attendance" href="/attendance" icon={ClockIcon} color="bg-emerald-500" />
         </div>
 
-        {/* System Info */}
-        <div className="bg-white dark:bg-navy-800 rounded-3xl p-6 border border-gray-100 dark:border-white/5 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[#003875]/5 dark:bg-[#FFD500]/5 rounded-full -mr-16 -mt-16 blur-2xl" />
-            <h3 className="text-lg font-black text-gray-900 dark:text-white mb-6 tracking-tight uppercase relative z-10">System Status</h3>
-            <div className="space-y-5 relative z-10">
-                {[
-                    { label: 'Cloud Database', status: 'Online', color: 'bg-emerald-500' },
-                    { label: 'Drive Sync', status: 'Active', color: 'bg-emerald-500' },
-                    { label: 'Auth Service', status: 'Secure', color: 'bg-blue-500' },
-                    { label: 'Backups', status: 'Optimized', color: 'bg-emerald-500' },
-                ].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between group/status">
-                        <div>
-                            <p className="font-black text-gray-800 dark:text-slate-200 text-sm whitespace-nowrap group-hover/status:translate-x-1 transition-transform">{item.label}</p>
-                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{item.status}</p>
-                        </div>
-                        <div className={`w-2 h-2 rounded-full ${item.color} shadow-[0_0_10px_rgba(16,185,129,0.4)] animate-pulse`} />
+        {/* Middle Column: Upcoming Meetings */}
+        <div className="lg:col-span-4">
+            <UpcomingMeetingsPanel meetings={data?.upcomingMeetings} teamMembers={data?.teamMembers} />
+        </div>
+
+        {/* Right Column: Personal Calendar */}
+        <div className="lg:col-span-4">
+            <HighightedCalendar 
+              history={attendanceData?.history || []} 
+              leaveDates={data?.leaveDates || []} 
+              avgIn={avgIn} 
+              avgOut={avgOut} 
+            />
+        </div>
+      </div>
+
+      {/* ROW 3: DETAILED LOGS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <CompactTable 
+            title="Today's Logins"
+            icon={UsersIcon}
+            data={data?.attendanceToday || []}
+            linkHref="/attendance"
+            columns={[
+                { label: 'User', key: 'userName', render: (row: any) => (
+                    <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-md bg-[#003875]/10 dark:bg-[#FFD500]/10 flex items-center justify-center text-[10px] font-black">{row.userName.charAt(0)}</div>
+                        <span className="truncate max-w-[80px]">{row.userName}</span>
                     </div>
-                ))}
-            </div>
+                )},
+                { label: 'In', key: 'inTime', className: 'text-center', render: (row: any) => (
+                    <span className="text-emerald-500">{row.inTime ? new Date(row.inTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—'}</span>
+                )},
+                { label: 'Out', key: 'outTime', className: 'text-center', render: (row: any) => (
+                    <span className="text-rose-500">{row.outTime ? new Date(row.outTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—'}</span>
+                )}
+            ]}
+        />
 
-            <div className="mt-8 pt-6 border-t border-gray-50 dark:border-white/5 text-center">
-                <p className="text-[9px] font-black text-gray-300 dark:text-slate-600 uppercase tracking-widest">Robotek ERP v2.4.0</p>
-            </div>
-        </div>
+        <CompactTable 
+            title="Open/Pending Tickets"
+            icon={ChatBubbleLeftRightIcon}
+            data={data?.openTickets || []}
+            linkHref="/tickets"
+            columns={[
+                { label: 'Topic/ID', key: 'id', render: (row: any) => (
+                    <div className="flex flex-col">
+                        <span className="truncate max-w-[120px] block font-black text-gray-900 dark:text-white uppercase leading-tight">{row.title}</span>
+                        <span className="text-[7px] text-gray-400 font-mono italic">{row.id}</span>
+                    </div>
+                )},
+                { label: 'Status', key: 'status', className: 'text-right', render: (row: any) => (
+                    <span className={`px-2 py-0.5 rounded-full text-[8px] uppercase font-black ${
+                        row.status === 'Open' ? 'bg-[#003875]/10 text-[#003875]' : 'bg-amber-500/10 text-amber-500'
+                    }`}>{row.status}</span>
+                )}
+            ]}
+        />
+
+        <CompactTable 
+            title="Team Absence Power"
+            icon={UserMinusIcon}
+            data={data?.recentLeaves || []}
+            linkHref="/leave"
+            columns={[
+                { label: 'User/Reason', key: 'userName', render: (row: any) => (
+                    <div className="flex flex-col">
+                        <span className="truncate max-w-[100px] text-gray-900 dark:text-white font-black uppercase text-[9px]">{isAdmin ? row.userName : row.reason}</span>
+                        <span className="text-[7px] text-gray-400 font-bold uppercase tracking-widest">{new Date(row.startDate).toLocaleDateString()}</span>
+                    </div>
+                )},
+                { label: 'Status', key: 'status', className: 'text-right', render: (row: any) => (
+                    <span className={`px-2 py-0.5 rounded-full text-[8px] uppercase ${
+                        row.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-500 font-black' : 
+                        row.status === 'Pending' ? 'bg-amber-500/10 text-amber-500 font-black' : 'bg-rose-500/10 text-rose-500 font-black'
+                    }`}>{row.status}</span>
+                )}
+            ]}
+        />
       </div>
+
+      <BirthdayCelebrationModal birthdays={data?.birthdays} currentUser={firstName} />
     </div>
   );
 }

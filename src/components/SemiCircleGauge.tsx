@@ -86,7 +86,7 @@ export default function SemiCircleGauge({ value, label = "Overall Avg", isNegati
             />
           ))}
         </svg>
-        <div className="absolute bottom-0 left-0 right-0 text-center translate-y-4">
+        <div className="absolute inset-0 flex flex-col items-center justify-end pb-2">
            <div className="text-3xl font-black text-gray-900 dark:text-white leading-none tracking-tighter flex items-center justify-center">
              <motion.span>{roundedValue}</motion.span>
              <span>%</span>

@@ -75,10 +75,26 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       globalCache.set(cacheKey, data, this.CACHE_TTL);
       return data;
     } catch (error) {
-      console.error(`Error fetching ${this.sheetName}:`, error);
-      return [];
-    }
-  }
+       console.error(`Error fetching ${this.sheetName}:`, error);
+       return [];
+     }
+   }
+ 
+   async getLatestIds(): Promise<(string | number)[]> {
+     await this.ensureHeaders();
+     try {
+       const sheets = await this.getSheetsClient();
+       const idColLetter = getColumnLetter(this.idColumnIndex);
+       const response = await sheets.spreadsheets.values.get({
+         spreadsheetId: this.spreadsheetId,
+         range: `${this.sheetName}!${idColLetter}:${idColLetter}`,
+       });
+       return response.data.values?.slice(1).map(row => row[0]) || [];
+     } catch (error) {
+       console.error(`Error fetching latest IDs for ${this.sheetName}:`, error);
+       return [];
+     }
+   }
 
   async getHeaders(): Promise<string[]> {
     const cacheKey = `${this.spreadsheetId}_${this.sheetName}_headers`;

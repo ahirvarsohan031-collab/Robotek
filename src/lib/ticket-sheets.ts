@@ -86,6 +86,15 @@ class TicketService extends BaseSheetsService<Ticket> {
     }
     return row;
   }
+
+  async getNextNumericalId(): Promise<number> {
+    const ids = await this.getLatestIds();
+    const numericIds = ids.map(id => {
+      const match = String(id).match(/(\d+)/);
+      return match ? parseInt(match[1]) : 0;
+    }).filter(n => !isNaN(n));
+    return numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
+  }
 }
 
 class TicketHistoryService extends BaseSheetsService<TicketHistory> {
@@ -140,13 +149,24 @@ class TicketHistoryService extends BaseSheetsService<TicketHistory> {
 export const ticketService = new TicketService();
 export const ticketHistoryService = new TicketHistoryService();
 
-export async function getTickets(): Promise<Ticket[]> {
-  return ticketService.getAll();
-}
-
-export async function addTicket(ticket: Ticket): Promise<boolean> {
-  return ticketService.add(ticket);
-}
+ export async function getTickets(): Promise<Ticket[]> {
+   return ticketService.getAll();
+ }
+ 
+ let ticketLock: Promise<any> = Promise.resolve();
+ 
+ export async function addTicket(ticket: Ticket): Promise<boolean> {
+   return ticketLock = ticketLock.then(async () => {
+     if (!ticket.id) {
+       const nextId = await ticketService.getNextNumericalId();
+       ticket.id = nextId.toString();
+     }
+     return ticketService.add(ticket);
+   }).catch(err => {
+     console.error("Error in addTicket lock:", err);
+     return false;
+   });
+ }
 
 export async function updateTicket(id: string, ticket: Ticket): Promise<boolean> {
   return ticketService.update(id, ticket);

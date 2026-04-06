@@ -58,17 +58,33 @@ class ChecklistService extends BaseSheetsService<Checklist> {
         if (row[i] === undefined) row[i] = "";
     }
     return row;
-  }
-}
-export const checklistService = new ChecklistService();
-
-export async function getChecklists(): Promise<Checklist[]> {
-  return checklistService.getAll();
-}
-
-export async function addChecklist(data: Partial<Checklist>): Promise<boolean> {
-  return checklistService.add(data as Checklist);
-}
+   }
+ 
+   async getNextNumericalId(): Promise<number> {
+     const ids = await this.getLatestIds();
+     const numericIds = ids.map(id => parseInt(String(id)) || 0);
+     return numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
+   }
+ }
+ export const checklistService = new ChecklistService();
+ 
+ export async function getChecklists(): Promise<Checklist[]> {
+   return checklistService.getAll();
+ }
+ 
+ let checklistLock: Promise<any> = Promise.resolve();
+ 
+ export async function addChecklist(data: Partial<Checklist>): Promise<boolean> {
+   return checklistLock = checklistLock.then(async () => {
+     if (!data.id) {
+       data.id = (await checklistService.getNextNumericalId()).toString();
+     }
+     return checklistService.add(data as Checklist);
+   }).catch(err => {
+     console.error("Error in addChecklist lock:", err);
+     return false;
+   });
+ }
 
 export async function updateChecklist(id: string, data: Checklist): Promise<boolean> {
   return checklistService.update(id, data);

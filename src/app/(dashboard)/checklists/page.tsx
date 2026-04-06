@@ -51,6 +51,7 @@ import {
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
+import Portal from "@/components/Portal";
 import useSWR from "swr";
 
 import { User } from "@/types/user";
@@ -58,9 +59,10 @@ import { User } from "@/types/user";
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function ChecklistsPage() {
-  const { data: session } = useSession();
-  const userRole = (session?.user as any)?.role || "USER";
-  const [checklists, setChecklists] = useState<Checklist[]>([]);
+   const { data: session } = useSession();
+   const userRole = (session?.user as any)?.role || "USER";
+   const currentUser = (session?.user as any)?.username || "";
+   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const { data: swrChecklists, mutate: mutateChecklists } = useSWR<Checklist[]>("/api/checklists", fetcher, {
     refreshInterval: 60000,
   });
@@ -158,9 +160,11 @@ export default function ChecklistsPage() {
   const [revisionReason, setRevisionReason] = useState("");
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [revisedDueDate, setRevisedDueDate] = useState("");
-  const [pendingDeleteGroupId, setPendingDeleteGroupId] = useState<string | null>(null);
-
-  useEffect(() => {
+   const [pendingDeleteGroupId, setPendingDeleteGroupId] = useState<string | null>(null);
+ 
+   const [submitting, setSubmitting] = useState(false);
+ 
+   useEffect(() => {
     fetchUsers();
   }, []);
 
@@ -284,13 +288,9 @@ export default function ChecklistsPage() {
   };
 
   const resetForm = () => {
-    const nextId = checklists.length > 0 
-      ? Math.max(...checklists.map(c => parseInt(c.id) || 0)) + 1 
-      : 1;
-      
     setEditingItem(null);
     setFormData({
-      id: nextId.toString(),
+      id: "",
       task: "",
       assigned_by: userRole?.toUpperCase() === 'USER' ? currentUser : "",
       assigned_to: "",
@@ -314,11 +314,12 @@ export default function ChecklistsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    setActionStatus('loading');
-    setActionMessage(editingItem ? "Updating checklist item..." : "Creating new checklist items...");
-    setIsStatusModalOpen(true);
-
-    const now = new Date();
+     setActionStatus('loading');
+     setActionMessage(editingItem ? "Updating checklist item..." : "Creating new checklist items...");
+     setIsStatusModalOpen(true);
+     setSubmitting(true);
+ 
+     const now = new Date();
     const nowIso = now.toISOString();
 
     try {
@@ -360,15 +361,8 @@ export default function ChecklistsPage() {
         const selectedDates = formData.due_date?.split(',').map(d => d.trim()).filter(Boolean) || [];
         const datesToSubmit = selectedDates.length > 0 ? selectedDates : [""];
         
-        // Calculate starting ID - fetch latest from state to be sure
-        let currentMaxId = checklists.length > 0 
-          ? Math.max(...checklists.map(c => parseInt(c.id) || 0)) 
-          : 0;
-
         for (let i = 0; i < datesToSubmit.length; i++) {
           const dateStr = datesToSubmit[i];
-          const nextId = ++currentMaxId;
-          // Generate a unique group_id for each row as requested ("Group id will be different only")
           const groupId = `GR-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
           let finalDueDate = dateStr;
@@ -380,10 +374,9 @@ export default function ChecklistsPage() {
 
           const payload = {
             ...formData,
-            id: nextId.toString(),
+            id: "", // Server-side generation
             group_id: groupId,
             due_date: finalDueDate,
-            // Submit "Weekly" only for weekly frequency
             frequency: formData.frequency?.startsWith('Weekly') ? 'Weekly' : formData.frequency,
             created_at: nowIso,
             updated_at: nowIso,
@@ -395,22 +388,24 @@ export default function ChecklistsPage() {
             body: JSON.stringify(payload),
           });
 
-          if (!res.ok) {
-            const errorData = await res.json().catch(() => ({}));
-            throw new Error(errorData.error || `Failed to create checklist item ${i + 1}`);
-          }
-        }
-      }
+           if (!res.ok) {
+             const errorData = await res.json().catch(() => ({}));
+             throw new Error(errorData.error || `Failed to create checklist item ${i + 1}`);
+           }
+         }
+       }
 
       setIsStatusModalOpen(false);
       setIsModalOpen(false);
       resetForm();
       mutateChecklists();
-    } catch (error: any) {
-      setIsStatusModalOpen(false);
-      alert(error.message || "Something went wrong while saving. Please try again.");
-    }
-  };
+     } catch (error: any) {
+       setIsStatusModalOpen(false);
+       alert(error.message || "Something went wrong while saving. Please try again.");
+     } finally {
+       setSubmitting(false);
+     }
+   };
 
   const handleEdit = (item: Checklist) => {
     setEditingItem(item);
@@ -598,7 +593,6 @@ export default function ChecklistsPage() {
   };
 
   // Filtering
-  const currentUser = (session?.user as any)?.username || "";
   const baseChecklists = userRole === 'USER' 
     ? checklists.filter(c => c.assigned_to === currentUser)
     : checklists;
@@ -1292,7 +1286,8 @@ export default function ChecklistsPage() {
 
       {/* Add/Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <Portal>
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
           <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-orange-100/50 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in duration-300">
             <div className="p-4 border-b border-orange-100/50 dark:border-zinc-800 flex items-center justify-between">
@@ -1666,19 +1661,29 @@ export default function ChecklistsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-[#CE2029] hover:bg-[#8E161D] text-white px-4 py-2 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px]"
+                  disabled={submitting}
+                  className="flex-1 bg-[#CE2029] hover:bg-[#8E161D] text-white px-4 py-2 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  {editingItem ? "Save" : "Create"}
+                  {submitting ? (
+                    <>
+                      <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                      <span>{editingItem ? "Saving..." : "Creating..."}</span>
+                    </>
+                  ) : (
+                    editingItem ? "Save" : "Create"
+                  )}
                 </button>
               </div>
             </form>
           </div>
         </div>
+        </Portal>
       )}
 
         {/* Follow Up Right Sidebar Drawer */}
         {selectedTask && (
-          <div className="fixed inset-0 z-[9999] overflow-hidden">
+          <Portal>
+          <div className="fixed inset-0 z-[99999] overflow-hidden">
             {/* Backdrop */}
             <div 
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" 
@@ -1688,7 +1693,7 @@ export default function ChecklistsPage() {
             {/* Sidebar Content */}
             <div className="absolute top-0 right-0 h-full w-full max-w-md bg-white dark:bg-navy-900 shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 ease-out border-l border-gray-100 dark:border-white/5">
               {/* Header */}
-              <div className="py-3 px-6 flex items-start justify-between bg-[#CE2029] sticky top-0 z-20 shadow-lg shadow-red-900/10">
+              <div className="py-3 px-6 flex items-start justify-between bg-[#CE2029] shadow-lg shadow-red-900/10">
                 <div className="flex items-start gap-4 flex-1 min-w-0">
                   <div className="p-2.5 bg-white/10 rounded-xl text-white backdrop-blur-md border border-white/20 shrink-0 mt-1">
                     <ArrowPathIcon className="w-6 h-6 animate-spin-slow" />
@@ -1978,16 +1983,20 @@ export default function ChecklistsPage() {
               </div>
             </div>
           </div>
+          </Portal>
         )}
 
       {/* Action Status Modal */}
+      <Portal>
       <ActionStatusModal
         isOpen={isStatusModalOpen}
         status={actionStatus}
         message={actionMessage}
       />
+      </Portal>
 
       {/* Confirm Delete Modal */}
+      <Portal>
       <ConfirmModal
         isOpen={isConfirmOpen}
         title="Delete Checklist Item"
@@ -2000,10 +2009,12 @@ export default function ChecklistsPage() {
           setPendingDeleteId(null);
         }}
       />
+      </Portal>
 
       {/* Filter Modal */}
       {isFilterModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <Portal>
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsFilterModalOpen(false)} />
           <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl border-4 border-[#003875] dark:border-[#FFD500] overflow-hidden animate-in fade-in zoom-in duration-300">
             {/* Header */}
@@ -2409,6 +2420,7 @@ export default function ChecklistsPage() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

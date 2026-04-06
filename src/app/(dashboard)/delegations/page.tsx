@@ -44,14 +44,17 @@ import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
 import { User } from "@/types/user";
+import Portal from "@/components/Portal";
+
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-export default function DelegationsPage() {
-  const { data: session } = useSession();
-  const userRole = (session?.user as any)?.role || 'USER';
-
-  const [delegations, setDelegations] = useState<Delegation[]>([]);
+ export default function DelegationsPage() {
+   const { data: session } = useSession();
+   const userRole = (session?.user as any)?.role || 'USER';
+   const currentUser = (session?.user as any)?.username || "";
+ 
+   const [delegations, setDelegations] = useState<Delegation[]>([]);
   const { data: swrDelegations, mutate: mutateDelegations } = useSWR<Delegation[]>("/api/delegations", fetcher, {
     refreshInterval: 60000, // Sync every 60 seconds
   });
@@ -93,8 +96,10 @@ export default function DelegationsPage() {
   const [modalStatusOpen, setModalStatusOpen] = useState(false);
   const [modalAssignedByOpen, setModalAssignedByOpen] = useState(false);
   const [modalAssignedToOpen, setModalAssignedToOpen] = useState(false);
-  const [modalDepartmentOpen, setModalDepartmentOpen] = useState(false);
-  const [modalPriorityOpen, setModalPriorityOpen] = useState(false);
+   const [modalDepartmentOpen, setModalDepartmentOpen] = useState(false);
+   const [modalPriorityOpen, setModalPriorityOpen] = useState(false);
+ 
+   const [submitting, setSubmitting] = useState(false);
 
   // File uploads
   const [voiceNoteFile, setVoiceNoteFile] = useState<File | null>(null);
@@ -341,9 +346,10 @@ export default function DelegationsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    setActionStatus('loading');
-    setActionMessage(editingDelegation ? "Updating delegation..." : "Creating new delegation...");
-    setIsStatusModalOpen(true);
+     setActionStatus('loading');
+     setActionMessage(editingDelegation ? "Updating delegation..." : "Creating new delegation...");
+     setIsStatusModalOpen(true);
+     setSubmitting(true);
 
     const method = editingDelegation ? "PUT" : "POST";
     const url = editingDelegation ? `/api/delegations/${editingDelegation.id}` : "/api/delegations";
@@ -391,11 +397,13 @@ export default function DelegationsPage() {
         const errData = await res.json();
         throw new Error(errData.error || "Failed to save delegation");
       }
-    } catch (error: any) {
-      setIsStatusModalOpen(false);
-      alert(`Error: ${error.message || "Something went wrong while saving. Please try again."}`);
-    }
-  };
+     } catch (error: any) {
+       setIsStatusModalOpen(false);
+       alert(`Error: ${error.message || "Something went wrong while saving. Please try again."}`);
+     } finally {
+       setSubmitting(false);
+     }
+   };
 
   const resetForm = () => {
     setEditingDelegation(null);
@@ -406,16 +414,10 @@ export default function DelegationsPage() {
       mediaRecorder.stop();
     }
     setRefDocFile(null);
-    setAssignedBySearch("");
-    setAssignedToSearch("");
+    setDepartmentOpen(false);
     
-    // Set sequential ID for new delegation
-    const nextId = delegations.length > 0 
-      ? Math.max(...delegations.map(d => parseInt(String(d.id)) || 0)) + 1 
-      : 1;
-
     setFormData({
-      id: nextId.toString(),
+      id: "",
       title: "",
       description: "",
       assigned_by: userRole?.toUpperCase() === 'USER' ? currentUser : "",
@@ -640,7 +642,6 @@ export default function DelegationsPage() {
     return 'Pending';
   };
 
-  const currentUser = (session?.user as any)?.username || "";
   const baseDelegations = userRole === 'USER' 
     ? delegations.filter(d => d.assigned_to === currentUser)
     : delegations;
@@ -1400,7 +1401,8 @@ export default function DelegationsPage() {
 
         {/* Follow Up Right Sidebar Drawer */}
         {selectedTask && (
-          <div className="fixed inset-0 z-[9999] flex justify-end overflow-hidden">
+          <Portal>
+          <div className="fixed inset-0 z-[99999] flex justify-end overflow-hidden">
             {/* Backdrop */}
             <div 
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" 
@@ -1410,7 +1412,7 @@ export default function DelegationsPage() {
             {/* Sidebar Content */}
             <div className="relative h-full w-full max-w-md bg-white dark:bg-navy-900 shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 border-l border-gray-100 dark:border-white/5">
               {/* Header */}
-              <div className="py-3 px-4 md:px-6 flex items-start justify-between bg-[#CE2029] sticky top-0 z-[100] shadow-xl shadow-red-900/20">
+              <div className="py-3 px-4 md:px-6 flex items-start justify-between bg-[#CE2029] shadow-xl shadow-red-900/20">
                 <div className="flex items-start gap-4 flex-1 min-w-0">
                   <div className="p-2.5 bg-white/10 rounded-xl text-white backdrop-blur-md border border-white/20 shrink-0 mt-1">
                     <ArrowPathIcon className="w-6 h-6 animate-spin-slow" />
@@ -1811,11 +1813,13 @@ export default function DelegationsPage() {
               </div>
             </div>
           </div>
+          </Portal>
         )}
 
       {/* Modal */}
         {isModalOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <Portal>
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
             <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-3xl rounded-2xl shadow-2xl border border-orange-100/50 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in duration-300">
               <div className="p-4 border-b border-orange-100/50 dark:border-zinc-800 flex items-center justify-between">
@@ -2170,21 +2174,31 @@ export default function DelegationsPage() {
                   >
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    className="flex-1 bg-[#CE2029] hover:bg-[#8E161D] text-white px-4 py-2 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px]"
-                  >
-                    {editingDelegation ? "Save Changes" : "Create Delegation"}
-                  </button>
+                   <button
+                     type="submit"
+                     disabled={submitting}
+                     className="flex-1 bg-[#CE2029] hover:bg-[#8E161D] text-white px-4 py-2 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 disabled:opacity-50"
+                   >
+                     {submitting ? (
+                       <>
+                         <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                         <span>{editingDelegation ? "Saving..." : "Creating..."}</span>
+                       </>
+                     ) : (
+                       editingDelegation ? "Save Changes" : "Create Delegation"
+                     )}
+                   </button>
                 </div>
               </form>
             </div>
           </div>
+          </Portal>
         )}
 
         {/* Advanced Filter Modal */}
         {isFilterModalOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <Portal>
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={setIsFilterModalOpen.bind(null, false)} />
             <div className="relative bg-white dark:bg-zinc-950 w-full max-w-2xl rounded-3xl shadow-2xl border border-orange-100 dark:border-zinc-800 overflow-hidden animate-in fade-in zoom-in duration-300">
               {/* Header */}
@@ -2508,16 +2522,20 @@ export default function DelegationsPage() {
               </div>
             </div>
           </div>
+          </Portal>
         )}
 
         {/* Action Status Modal */}
+        <Portal>
         <ActionStatusModal 
           isOpen={isStatusModalOpen}
           status={actionStatus}
           message={actionMessage}
         />
+        </Portal>
 
         {/* Confirmation Modal */}
+        <Portal>
         <ConfirmModal 
           isOpen={isConfirmOpen}
           title="Delete Delegation?"
@@ -2526,6 +2544,7 @@ export default function DelegationsPage() {
           onClose={() => setIsConfirmOpen(false)}
           onConfirm={performDelete}
         />
+        </Portal>
     </div>
   </div>
   );

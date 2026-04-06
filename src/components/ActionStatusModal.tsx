@@ -10,7 +10,7 @@ export default function ActionStatusModal({ isOpen, status, message }: ActionSta
   if (!isOpen || status !== 'loading') return null;
 
   return (
-    <div className="fixed inset-0 z-[12000] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[200000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]" />
       <div 
         style={{ borderColor: 'var(--panel-border)' }}

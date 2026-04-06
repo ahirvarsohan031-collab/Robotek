@@ -58,18 +58,34 @@ class DelegationService extends BaseSheetsService<Delegation> {
         if (row[i] === undefined) row[i] = "";
     }
     return row;
-  }
-}
-
-export const delegationService = new DelegationService();
-
-export async function getDelegations(): Promise<Delegation[]> {
-  return delegationService.getAll();
-}
-
-export async function addDelegation(data: Partial<Delegation>): Promise<boolean> {
-  return delegationService.add(data as Delegation);
-}
+   }
+ 
+   async getNextNumericalId(): Promise<number> {
+     const ids = await this.getLatestIds();
+     const numericIds = ids.map(id => parseInt(String(id)) || 0);
+     return numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
+   }
+ }
+ 
+ export const delegationService = new DelegationService();
+ 
+ export async function getDelegations(): Promise<Delegation[]> {
+   return delegationService.getAll();
+ }
+ 
+ let delegationLock: Promise<any> = Promise.resolve();
+ 
+ export async function addDelegation(data: Partial<Delegation>): Promise<boolean> {
+   return delegationLock = delegationLock.then(async () => {
+     if (!data.id) {
+       data.id = (await delegationService.getNextNumericalId()).toString();
+     }
+     return delegationService.add(data as Delegation);
+   }).catch(err => {
+     console.error("Error in addDelegation lock:", err);
+     return false;
+   });
+ }
 
 export async function updateDelegation(id: string, d: Delegation) { return delegationService.update(id, d); }
 

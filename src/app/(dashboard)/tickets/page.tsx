@@ -34,6 +34,7 @@ import {
 import { ShieldCheckIcon, LockClosedIcon, BoltIcon } from "@heroicons/react/24/solid";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ConfirmModal from "@/components/ConfirmModal";
+import Portal from "@/components/Portal";
 import useSWR from "swr";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -704,7 +705,8 @@ export default function TicketsPage() {
 
       {/* New / Edit Ticket Modal */}
       {(isNewModalOpen || editingTicket) && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <Portal>
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setIsNewModalOpen(false); setEditingTicket(null); }} />
           <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-300 border border-orange-100/50 dark:border-navy-700 overflow-hidden">
             {/* Header */}
@@ -903,15 +905,17 @@ export default function TicketsPage() {
             </form>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Ticket Details Right Sidebar */}
       {selectedTicket && (
-        <div className="fixed inset-0 z-[9999] flex justify-end overflow-hidden">
+        <Portal>
+        <div className="fixed inset-0 z-[99999] flex justify-end overflow-hidden">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setSelectedTicket(null)} />
           <div className="relative w-full max-w-md bg-white dark:bg-navy-900 shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 border-l border-gray-200 dark:border-navy-700">
             {/* Header */}
-            <div className="bg-[#CE2029] py-3 px-5 flex items-start justify-between text-white shrink-0 sticky top-0 z-20 shadow-md">
+            <div className="bg-[#CE2029] py-3 px-5 flex items-start justify-between text-white shrink-0 shadow-md">
               <div className="flex items-start gap-3 flex-1 min-w-0">
                 <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/20 shrink-0 mt-0.5">
                   <TicketIcon className="w-5 h-5" />
@@ -1100,11 +1104,13 @@ export default function TicketsPage() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Action Status Modal */}
       {isStatusModalOpen && (
-        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+        <Portal>
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
           <div className="bg-white dark:bg-navy-900 p-6 rounded-2xl shadow-2xl relative z-10 max-w-xs w-full flex flex-col items-center text-center animate-in zoom-in-95 border border-gray-100 dark:border-navy-700">
             <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center mb-3 border border-blue-100 dark:border-blue-800/50">
@@ -1114,9 +1120,11 @@ export default function TicketsPage() {
             <p className="text-xs text-gray-500 font-bold">{statusMessage}</p>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Confirmation Modal */}
+      <Portal>
       <ConfirmModal
         isOpen={isConfirmOpen}
         onClose={() => setIsConfirmOpen(false)}
@@ -1126,6 +1134,7 @@ export default function TicketsPage() {
         confirmLabel="Delete"
         type="danger"
       />
+      </Portal>
     </div>
   );
 }
