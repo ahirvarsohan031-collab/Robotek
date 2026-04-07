@@ -7,6 +7,7 @@ import { authConfig } from "./auth.config";
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
   trustHost: true,
+  // Add this specific line to fix the MissingSecret error:
   secret: process.env.AUTH_SECRET,
   providers: [
     Google({
