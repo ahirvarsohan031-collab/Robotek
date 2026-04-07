@@ -12,6 +12,10 @@ frontend:
         - echo "NEXTAUTH_URL=$NEXTAUTH_URL" >> .env
         - echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> .env
         - echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" >> .env
+        - echo "GOOGLE_OAUTH_TOKENS=$GOOGLE_OAUTH_TOKENS" >> .env
+        - echo "MAYTAPI_PRODUCT_ID=$MAYTAPI_PRODUCT_ID" >> .env
+        - echo "MAYTAPI_TOKEN=$MAYTAPI_TOKEN" >> .env
+        - echo "MAYTAPI_PHONE_ID=$MAYTAPI_PHONE_ID" >> .env
         - npm run build
   artifacts:
     baseDirectory: .next
