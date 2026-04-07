@@ -1,8 +1,9 @@
 import type { NextAuthConfig } from "next-auth";
 
 export const authConfig = {
-  trustHost: true,
+  // Explicitly passing secret and trustHost for Amplify middleware compatibility
   secret: process.env.AUTH_SECRET,
+  trustHost: true,
   pages: {
     signIn: "/login",
   },

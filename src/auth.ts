@@ -6,9 +6,9 @@ import { authConfig } from "./auth.config";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
-  trustHost: true,
-  // Add this specific line to fix the MissingSecret error:
+  // Bridging the Amplify Secret explicitly
   secret: process.env.AUTH_SECRET,
+  trustHost: true,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
