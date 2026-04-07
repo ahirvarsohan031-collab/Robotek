@@ -40,9 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# open-next / cloudflare
-.open-next/
-.worker-next/
-.dev.vars
-.wrangler/
-opennext_error.log
+
+# aws amplify
+.amplify/
+amplify-build-internal/
