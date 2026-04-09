@@ -48,8 +48,22 @@ export default function UsersPage() {
     late_long: "",
     image_url: "",
     dob: "",
+    office: "",
+    designation: "",
+    department: "",
     locations: [{ name: "Main", coords: "" }],
   });
+
+  const [dropdowns, setDropdowns] = useState<{ departments: string[], designations: string[] }>({
+    departments: [],
+    designations: []
+  });
+
+  const [isAddingOption, setIsAddingOption] = useState<{ type: 'department' | 'designation', isOpen: boolean }>({
+    type: 'department',
+    isOpen: false
+  });
+  const [newOptionValue, setNewOptionValue] = useState("");
 
   // Action Status States
   const [actionStatus, setActionStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -62,7 +76,50 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
+    fetchDropdowns();
   }, []);
+
+  const fetchDropdowns = async () => {
+    try {
+      const res = await fetch("/api/users/dropdowns");
+      const data = await res.json();
+      setDropdowns(data);
+    } catch (error) {
+      console.error("Failed to fetch dropdowns:", error);
+    }
+  };
+
+  const handleAddDropdownOption = async () => {
+    if (!newOptionValue.trim()) return;
+    
+    setActionStatus('loading');
+    setActionMessage(`Adding new ${isAddingOption.type}...`);
+    setIsStatusModalOpen(true);
+
+    try {
+      const res = await fetch("/api/users/dropdowns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: isAddingOption.type, value: newOptionValue.trim() }),
+      });
+
+      if (res.ok) {
+        await fetchDropdowns();
+        setFormData(prev => ({
+          ...prev,
+          [isAddingOption.type]: newOptionValue.trim()
+        }));
+        setIsAddingOption({ ...isAddingOption, isOpen: false });
+        setNewOptionValue("");
+        setIsStatusModalOpen(false);
+      } else {
+        throw new Error("Failed to add option");
+      }
+    } catch (error) {
+      setIsStatusModalOpen(false);
+      alert("Failed to add new option. Please try again.");
+    }
+  };
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -123,6 +180,9 @@ export default function UsersPage() {
           late_long: "",
           image_url: "",
           dob: "",
+          office: "",
+          designation: "",
+          department: "",
           locations: [{ name: "Main", coords: "" }],
         });
         fetchUsers();
@@ -255,7 +315,7 @@ export default function UsersPage() {
   };
 
   const handleExport = () => {
-    const headers = ["ID", "Username", "Email", "Phone", "Role", "DOB", "Coordinates"];
+    const headers = ["Employee Code", "Username", "Email", "Phone", "Role", "DOB", "Office", "Designation", "Department", "Coordinates"];
     const rows = sortedUsers.map(u => [
       u.id,
       u.username,
@@ -263,6 +323,9 @@ export default function UsersPage() {
       u.phone || "",
       u.role_name || "USER",
       u.dob || "",
+      u.office || "",
+      u.designation || "",
+      u.department || "",
       u.late_long || ""
     ]);
 
@@ -529,8 +592,8 @@ export default function UsersPage() {
               <tr 
                 className="bg-[#003875] dark:bg-navy-950 text-white dark:text-slate-200"
               >
-                <th onClick={() => handleSort('id')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden sm:table-cell">
-                  <div className="flex items-center">ID <SortIcon column="id" /></div>
+                <th onClick={() => handleSort('id')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                  <div className="flex items-center">Emp. Code <SortIcon column="id" /></div>
                 </th>
                 <th onClick={() => handleSort('username')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
                   <div className="flex items-center">Details <SortIcon column="username" /></div>
@@ -538,14 +601,11 @@ export default function UsersPage() {
                 <th onClick={() => handleSort('phone')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden md:table-cell">
                   <div className="flex items-center">Contact <SortIcon column="phone" /></div>
                 </th>
-                <th onClick={() => handleSort('role_name')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('role_name')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden lg:table-cell">
                   <div className="flex items-center">Role <SortIcon column="role_name" /></div>
                 </th>
-                <th onClick={() => handleSort('dob')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden lg:table-cell">
-                  <div className="flex items-center">DOB <SortIcon column="dob" /></div>
-                </th>
-                <th onClick={() => handleSort('late_long')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden xl:table-cell">
-                  <div className="flex items-center">Locations <SortIcon column="late_long" /></div>
+                <th onClick={() => handleSort('department')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden xl:table-cell">
+                  <div className="flex items-center">Dept/Desig <SortIcon column="department" /></div>
                 </th>
                 <th className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-right">Actions</th>
               </tr>
@@ -567,8 +627,8 @@ export default function UsersPage() {
             ) : (
               paginatedUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-orange-50/10 border-b-2 border-gray-200 dark:border-white/10 last:border-0 transition-colors group">
-                  <td className="px-3 md:px-4 py-3 hidden sm:table-cell">
-                    <span className="font-mono text-[10px] md:text-xs text-gray-400 font-bold">{user.id}</span>
+                  <td className="px-3 md:px-4 py-3">
+                    <span className="font-mono text-[10px] md:text-sm text-gray-900 dark:text-white font-black">{user.id}</span>
                   </td>
                   <td className="px-3 md:px-4 py-3">
                     <div className="flex items-center gap-2 md:gap-3">
@@ -598,10 +658,16 @@ export default function UsersPage() {
                   <td className="px-3 md:px-4 py-3 hidden md:table-cell">
                     <p className="text-[11px] md:text-xs font-bold text-gray-600 dark:text-slate-300">{user.phone || "—"}</p>
                   </td>
-                  <td className="px-3 md:px-4 py-3">
+                  <td className="px-3 md:px-4 py-3 hidden lg:table-cell">
                     <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 bg-orange-50 dark:bg-[#FFD500]/10 text-[#CE2029] dark:text-[#FFD500] text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-md border border-orange-100 dark:border-[#FFD500]/20">
                       {user.role_name || "MEMBER"}
                     </span>
+                  </td>
+                  <td className="px-3 md:px-4 py-3 hidden xl:table-cell">
+                    <div className="min-w-0">
+                      <p className="font-black text-[10px] md:text-[11px] text-gray-900 dark:text-white leading-tight truncate">{user.department || "—"}</p>
+                      <p className="text-[9px] text-[#003875] dark:text-[#FFD500] font-bold uppercase tracking-wider truncate">{user.designation || "—"}</p>
+                    </div>
                   </td>
                   <td className="px-3 md:px-4 py-3 hidden lg:table-cell">
                     <p className="text-[11px] md:text-xs font-bold text-gray-600 dark:text-slate-300">{user.dob || "—"}</p>
@@ -729,7 +795,7 @@ export default function UsersPage() {
                   <p className="text-gray-400 dark:text-slate-400 font-bold text-[8px] uppercase tracking-widest">Profile Configuration</p>
                   {editingUser && (
                     <span className="px-2 py-0.5 bg-orange-50 dark:bg-zinc-800 text-[8px] font-black text-gray-500 rounded border border-orange-100 dark:border-zinc-700">
-                      ID: {editingUser.id}
+                      User Profile
                     </span>
                   )}
                 </div>
@@ -784,7 +850,17 @@ export default function UsersPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Basic Info */}
                 <div className="space-y-4">
-                  <p className="text-[10px] font-black text-[#FFD500] uppercase tracking-[0.2em]">Basic Information</p>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Employee Code</label>
+                    <input
+                      type="text"
+                      value={formData.id}
+                      onChange={(e) => setFormData({ ...formData, id: e.target.value })}
+                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                      placeholder="Enter Unique Emp Code"
+                      required
+                    />
+                  </div>
                   <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Username</label>
                     <input
@@ -795,57 +871,108 @@ export default function UsersPage() {
                       required
                     />
                   </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Email</label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Password</label>
-                    <input
-                      type="text"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Password</label>
+                      <input
+                        type="text"
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Office</label>
+                      <select
+                        value={formData.office}
+                        onChange={(e) => setFormData({ ...formData, office: e.target.value })}
+                        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                      >
+                        <option value="">Select Office</option>
+                        <option value="GTK">GTK</option>
+                        <option value="Kundli">Kundli</option>
+                        <option value="KB">KB</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
                 {/* Additional Info */}
                 <div className="space-y-4">
-                  <p className="text-[10px] font-black text-[#FFD500] uppercase tracking-[0.2em]">Extended Details</p>
+                  <p className="text-[10px] font-black text-[#FFD500] uppercase tracking-[0.2em]">Professional Details</p>
                   <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Phone</label>
-                    <input
-                      type="text"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Role Name</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 flex items-center justify-between">
+                      Department
+                      <button type="button" onClick={() => setIsAddingOption({ type: 'department', isOpen: true })} className="p-1 hover:bg-[#003875]/10 rounded-full transition-colors"><PlusIcon className="w-3 h-3 text-[#003875] dark:text-[#FFD500]" /></button>
+                    </label>
                     <select
-                      value={formData.role_name}
-                      onChange={(e) => setFormData({ ...formData, role_name: e.target.value })}
+                      value={formData.department}
+                      onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                       className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
                     >
-                      <option value="">Select Role</option>
-                      <option value="ADMIN">Admin</option>
-                      <option value="USER">User</option>
-                      <option value="EA">EA</option>
+                      <option value="">Select Department</option>
+                      {dropdowns.departments.map((dept, i) => (
+                        <option key={i} value={dept}>{dept}</option>
+                      ))}
                     </select>
                   </div>
-                  <PremiumDatePicker 
-                    label="Date of Birth"
-                    value={formData.dob || ""}
-                    onChange={(val) => setFormData({ ...formData, dob: val })}
-                  />
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 flex items-center justify-between">
+                      Designation
+                      <button type="button" onClick={() => setIsAddingOption({ type: 'designation', isOpen: true })} className="p-1 hover:bg-[#003875]/10 rounded-full transition-colors"><PlusIcon className="w-3 h-3 text-[#003875] dark:text-[#FFD500]" /></button>
+                    </label>
+                    <select
+                      value={formData.designation}
+                      onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                    >
+                      <option value="">Select Designation</option>
+                      {dropdowns.designations.map((desig, i) => (
+                        <option key={i} value={desig}>{desig}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Email</label>
+                      <input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Phone</label>
+                      <input
+                        type="text"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Role Name</label>
+                      <select
+                        value={formData.role_name}
+                        onChange={(e) => setFormData({ ...formData, role_name: e.target.value })}
+                        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                      >
+                        <option value="">Select Role</option>
+                        <option value="ADMIN">Admin</option>
+                        <option value="USER">User</option>
+                        <option value="EA">EA</option>
+                      </select>
+                    </div>
+                    <PremiumDatePicker 
+                      label="Date of Birth"
+                      value={formData.dob || ""}
+                      onChange={(val) => setFormData({ ...formData, dob: val })}
+                    />
+                  </div>
                 </div>
 
                 {/* Full Width Fields: Multiple Locations */}
@@ -939,6 +1066,39 @@ export default function UsersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Add New Dropdown Option Modal */}
+      {isAddingOption.isOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsAddingOption({ ...isAddingOption, isOpen: false })} />
+          <div className="relative bg-white dark:bg-navy-900 w-full max-w-sm rounded-2xl shadow-2xl p-6 border border-gray-100 dark:border-white/10 animate-in fade-in zoom-in duration-200">
+            <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight mb-4">
+              Add New {isAddingOption.type}
+            </h3>
+            <input 
+              type="text" 
+              value={newOptionValue}
+              onChange={(e) => setNewOptionValue(e.target.value)}
+              placeholder={`Enter new ${isAddingOption.type} name`}
+              className="w-full bg-gray-50 dark:bg-zinc-950 px-4 py-2 rounded-xl border border-gray-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-bold text-sm mb-4"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setIsAddingOption({ ...isAddingOption, isOpen: false })}
+                className="flex-1 py-2 font-black text-[10px] uppercase tracking-widest text-gray-400 hover:text-gray-600"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAddDropdownOption}
+                className="flex-1 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg"
+              >
+                Add Option
+              </button>
+            </div>
           </div>
         </div>
       )}

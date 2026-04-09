@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
         const assignedUser = await getUserByUsernameOrEmail(delegationData.assigned_to || "");
         if (assignedUser && assignedUser.phone) {
           const formattedDueDate = formatDate(delegationData.due_date || "");
-          const message = `🔔 *Delegation - New Task Assigned*\n\n*Title:* ${delegationData.title}\n*Priority:* ${delegationData.priority}\n*Due Date:* ${formattedDueDate}\n*Assigned By:* ${delegationData.assigned_by}\n\n*Description:* ${delegationData.description}`;
+          const message = `🔔 *New Delegation Assigned*\n━━━━━━━━━━━━━━━━━\n📌 *Task:* ${delegationData.title}\n🎯 *Priority:* ${delegationData.priority}\n⏳ *Due Date:* ${formattedDueDate}\n👨‍💼 *Assigned By:* ${delegationData.assigned_by}\n📝 *Description:* ${delegationData.description}`;
           await sendWhatsAppMessage(assignedUser.phone, message);
         }
       } catch (err) {

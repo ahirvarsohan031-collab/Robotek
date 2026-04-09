@@ -316,6 +316,7 @@ export interface PartyFormModalProps {
   editingParty?: PartyManagement | null;
   salePersonName?: string; // current logged in user
   linkedOrderNo?: string; // order number to embed in customerType
+  skipSubmit?: boolean; // if true, don't submit to API, only return data
 }
 
 export default function PartyFormModal({
@@ -324,7 +325,8 @@ export default function PartyFormModal({
   onSuccess,
   editingParty,
   salePersonName,
-  linkedOrderNo
+  linkedOrderNo,
+  skipSubmit = false,
 }: PartyFormModalProps) {
   const [usernames, setUsernames] = useState<string[]>([]);
 
@@ -334,11 +336,11 @@ export default function PartyFormModal({
   const [customPartyType, setCustomPartyType] = useState<string>("");
   const [selectedFirstOrderItems, setSelectedFirstOrderItems] = useState<Record<string, string>>({});
   const [selectedDetailsInstructions, setSelectedDetailsInstructions] = useState<Set<string>>(new Set());
-
   const emptyForm: Partial<PartyManagement> = {
     id: "",
     customerType: "",
     partyName: "",
+    dateOfBirth: "",
     partyType: "",
     salesFunnelUniqueNum: "",
     salePersonName: "",
@@ -428,6 +430,12 @@ export default function PartyFormModal({
     const method = editingParty ? "PUT" : "POST";
     const url = editingParty ? `/api/party-management/${editingParty.id}` : "/api/party-management";
 
+    if (skipSubmit) {
+      setIsStatusModalOpen(false);
+      onSuccess(payload.partyName || "", payload);
+      return;
+    }
+
     try {
       const res = await fetch(url, {
         method,
@@ -498,11 +506,25 @@ export default function PartyFormModal({
             </label>
             <input 
               type="text" 
-              value={formData.partyName} 
+              value={formData.partyName || ""} 
               onChange={(e) => setFormData({ ...formData, partyName: e.target.value })}
               style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--panel-border)' }}
               className="w-full px-3 py-1.5 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm" 
               required 
+            />
+          </div>
+
+          <div>
+            <label className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+              <IdentificationIcon className="w-3.5 h-3.5 text-[#FFFBF0]" />
+              Date of Birth
+            </label>
+            <input 
+              type="date" 
+              value={formData.dateOfBirth || ""} 
+              onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+              style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--panel-border)' }}
+              className="w-full px-3 py-1.5 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm" 
             />
           </div>
 
@@ -550,7 +572,7 @@ export default function PartyFormModal({
                   </label>
                   <input 
                     type="text" 
-                    value={formData.salesFunnelUniqueNum} 
+                    value={formData.salesFunnelUniqueNum || ""} 
                     onChange={(e) => setFormData({ ...formData, salesFunnelUniqueNum: e.target.value })}
                     style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--panel-border)' }}
                     className="w-full px-3 py-1.5 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm" 
@@ -594,7 +616,7 @@ export default function PartyFormModal({
               Remarks
             </label>
             <textarea 
-              value={formData.remarks} 
+              value={formData.remarks || ""} 
               onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
               style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--panel-border)' }}
               className="w-full px-3 py-1.5 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-y min-h-[60px]" 
@@ -604,7 +626,7 @@ export default function PartyFormModal({
           <div className="pt-2 border-t border-orange-100/50 dark:border-zinc-800 flex gap-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-xl font-black text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all uppercase tracking-widest text-[10px]">Cancel</button>
             <button type="submit" className="flex-1 bg-[#CE2029] hover:bg-[#8E161D] text-white px-4 py-2 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px]">
-              {editingParty ? "Save changes" : "Create party"}
+              {editingParty ? "Save changes" : skipSubmit ? "Add to Order" : "Create party"}
             </button>
           </div>
         </form>

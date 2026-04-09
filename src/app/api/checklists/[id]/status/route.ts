@@ -64,7 +64,7 @@ export async function POST(
     // Send WhatsApp Notifications for Status Change
     try {
       const formattedNow = formatDate(new Date().toISOString());
-      const message = `🔄 *Checklist - Status Changed*\n\n*Task:* ${current.task}\n*From:* ${current.status}\n*To:* ${newStatus}\n*Reason:* ${reason || "N/A"}\n\n*Updated At:* ${formattedNow}`;
+      const message = `🔄 *Checklist Status Updated*\n━━━━━━━━━━━━━━━━━\n📌 *Task:* ${current.task}\n🎯 *Priority:* ${current.priority}\n🏢 *Department:* ${current.department}\n👤 *Assigned To:* ${current.assigned_to}\n👨‍💼 *Assigned By:* ${current.assigned_by}\n📉 *From:* ${current.status}\n📈 *To:* ${newStatus}\n📝 *Reason:* ${reason || "N/A"}\n⏱️ *Updated At:* ${formattedNow}`;
       
       // Notify both parties
       const parties = [current.assigned_to, current.assigned_by];

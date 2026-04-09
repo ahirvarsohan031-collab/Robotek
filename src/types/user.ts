@@ -4,7 +4,7 @@ export interface LocationEntry {
 }
 
 export interface User {
-  id: string;
+  id: string; // Used as Employee Code
   username: string;
   email: string;
   password?: string;
@@ -13,6 +13,9 @@ export interface User {
   late_long?: string; // Stringified JSON array of LocationEntry
   image_url?: string;
   dob?: string;
+  office?: string;
+  designation?: string;
+  department?: string;
   last_active?: string;
   permissions?: string[];
   locations?: LocationEntry[]; // Added for UI convenience

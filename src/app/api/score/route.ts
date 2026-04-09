@@ -184,7 +184,12 @@ export async function GET(request: Request) {
     }
 
     const userResult = users.map((u: any) => {
-      const userTasks = allTasks.filter(t => t.user === u.username);
+      const userTasks = allTasks.filter(t => {
+        if (t.category === 'o2d') {
+          return t.user.split(",").map((s: string) => s.trim()).includes(u.username);
+        }
+        return t.user === u.username;
+      });
       const metrics = calculateMetrics(userTasks, from, to);
       
       const delegation = calculateMetrics(userTasks.filter(t => t.category === 'delegation'), from, to);

@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
         const assignedUser = await getUserByUsernameOrEmail(checklistData.assigned_to || "");
         if (assignedUser && assignedUser.phone) {
           const formattedDueDate = formatDate(checklistData.due_date || "");
-          const message = `🔔 *Checklist - New Task Assigned*\n\n*Task:* ${checklistData.task}\n*Priority:* ${checklistData.priority}\n*Due Date:* ${formattedDueDate}\n*Assigned By:* ${checklistData.assigned_by}\n\n*Department:* ${checklistData.department}`;
+          const message = `🔔 *New Checklist Assigned*\n━━━━━━━━━━━━━━━━━\n📌 *Task:* ${checklistData.task}\n🎯 *Priority:* ${checklistData.priority}\n🏢 *Department:* ${checklistData.department}\n⏳ *Due Date:* ${formattedDueDate}\n👨‍💼 *Assigned By:* ${checklistData.assigned_by}`;
           await sendWhatsAppMessage(assignedUser.phone, message);
         }
       } catch (err) {

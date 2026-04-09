@@ -121,7 +121,10 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
             // Role Filter
             const stepConfig = configData.configs?.find((c: any) => c.step === pendingStepIdx);
             if (userRole.toUpperCase() === 'USER' && stepConfig) {
-              if (stepConfig.responsible_person !== currentUser) return;
+              const responsibleList = stepConfig.responsible_person
+                ? stepConfig.responsible_person.split(",").map((s: string) => s.trim())
+                : [];
+              if (stepConfig.responsible_person && !responsibleList.includes(currentUser)) return;
             }
 
             // Date Filter

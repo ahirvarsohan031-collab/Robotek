@@ -51,10 +51,14 @@ export async function PUT(
       try {
         if (current) {
           const isStatusChange = data.status && data.status !== current.status;
-          const branding = isStatusChange ? "🔄 Help Ticket - Status Changed" : "📝 Help Ticket - Details Updated";
+          const branding = isStatusChange ? "🔄 *Ticket Status Changed*" : "📝 *Ticket Details Updated*";
           const formattedUpdate = formatDate(new Date().toISOString());
-          
-          const message = `${branding}\n\n*ID:* ${current.id}\n*Title:* ${data.title || current.title}\n*Status:* ${data.status || current.status}\n*Priority:* ${data.priority || current.priority}\n*Updated:* ${formattedUpdate}`;
+          const oldStatus = current.status;
+          const newStatus = data.status || current.status;
+          const statusLine = isStatusChange ? `📉 *Status Changed:* ${oldStatus} ➡️ ${newStatus}\n` : `📊 *Status:* ${newStatus}\n`;
+          const commentLine = data.comment_text ? `🗣️ *Comment:* _${data.comment_text}_\n` : '';
+
+          const message = `${branding}\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${current.id}\n📌 *Title:* ${data.title || current.title}\n🏷️ *Category:* ${data.category || current.category}\n🎯 *Priority:* ${data.priority || current.priority}\n👤 *Raised By:* ${data.raised_by || current.raised_by}\n👨‍🔧 *Assigned To:* ${data.solver_person || current.solver_person || 'Unassigned'}\n${statusLine}${commentLine}⏱️ *Updated At:* ${formattedUpdate}`;
 
           const parties = [data.raised_by || current.raised_by, data.solver_person || current.solver_person];
           const uniqueParties = [...new Set(parties)];
@@ -97,7 +101,7 @@ export async function DELETE(
         if (current) {
           const solver = await getUserByUsernameOrEmail(current.solver_person || "");
           if (solver && solver.phone) {
-            const message = `🗑️ *Help Ticket - Deleted*\n\n*ID:* ${current.id}\n*Title:* ${current.title}\n\nThe ticket has been removed from the system.`;
+            const message = `🗑️ *Help Ticket Deleted*\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${current.id}\n📌 *Title:* ${current.title}\n\n_This ticket has been removed from the system._`;
             await sendWhatsAppMessage(solver.phone, message);
           }
         }

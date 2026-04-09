@@ -47,7 +47,7 @@ export function CompactWelcome({ firstName, role }: any) {
   );
 }
 
-export function CompactScore({ score, label, isNegative = false }: any) {
+export function CompactScore({ score, total, label, isNegative = false }: any) {
     // If negative, display = score - 100
     const displayValue = isNegative ? score - 100 : score;
     
@@ -55,7 +55,7 @@ export function CompactScore({ score, label, isNegative = false }: any) {
         <div className="bg-white dark:bg-navy-800 p-2 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-sm flex flex-col items-center justify-center min-h-[140px] overflow-hidden">
             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 text-center whitespace-nowrap">{label}</p>
             <div className="w-full h-24 mt-[-10px]">
-                <SemiCircleGauge value={score} isNegative={isNegative} label="" />
+                <SemiCircleGauge value={score} isNegative={isNegative} total={total} label="" />
             </div>
             {/* Override the display value if needed, but SemiCircleGauge handles it now */}
         </div>
@@ -134,6 +134,87 @@ export function CompactBirthdayCard({ birthdays }: any) {
                 </div>
                 <div className="p-4 bg-gray-50 dark:bg-navy-950/50 text-center border-t border-gray-100 dark:border-white/5">
                    <p className="text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest animate-pulse">Team Robotek Wishes You A Happy Birthday!</p>
+                </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+export function CompactPartyBirthdayCard({ partyBirthdays }: any) {
+  const [showAll, setShowAll] = useState(false);
+
+  return (
+    <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-4 rounded-[2rem] shadow-lg border border-white/10 relative overflow-hidden h-full flex flex-col justify-center text-white min-h-[140px]">
+      <div className="absolute top-0 right-0 p-2 opacity-10 transform -rotate-12 scale-125">
+        <SparklesIcon className="w-16 h-16" />
+      </div>
+      <div className="relative z-10">
+        <p className="text-[8px] font-black text-white/50 uppercase tracking-widest mb-3">Party Birthdays</p>
+        
+        {partyBirthdays && partyBirthdays.length > 0 ? (
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex -space-x-3 overflow-hidden cursor-pointer" onClick={() => setShowAll(true)}>
+              {partyBirthdays.slice(0, 3).map((b: any, i: number) => (
+                <div key={i} className="inline-block h-10 w-10 rounded-full ring-2 ring-white/20 bg-orange-400 flex items-center justify-center text-sm font-black overflow-hidden bg-cover bg-center text-white">
+                  {b.partyName.charAt(0)}
+                </div>
+              ))}
+              {partyBirthdays.length > 3 && (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white/20 bg-gray-800 text-[10px] font-black text-white">
+                  +{partyBirthdays.length - 3}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setShowAll(true)} className="text-[8px] font-black text-[#003875] uppercase tracking-widest hover:underline animate-pulse">Celebration List ({partyBirthdays.length})</button>
+          </div>
+        ) : (
+          <p className="text-[10px] font-bold text-white/70 uppercase">No occasions today</p>
+        )}
+      </div>
+
+      <AnimatePresence>
+        {showAll && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowAll(false)}
+          >
+            <motion.div 
+                className="bg-white dark:bg-navy-800 rounded-[2.5rem] w-full max-w-sm overflow-hidden shadow-2xl border border-gray-100 dark:border-white/5"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="bg-gradient-to-r from-amber-500 to-orange-600 p-6 flex justify-between items-center text-white">
+                    <div className="flex items-center gap-3">
+                        <SparklesIcon className="w-8 h-8 animate-bounce" />
+                        <h3 className="text-xl font-black uppercase tracking-tighter">Party Celebrants!</h3>
+                    </div>
+                    <button onClick={() => setShowAll(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                        <XMarkIcon className="w-6 h-6" />
+                    </button>
+                </div>
+                <div className="p-6 max-h-[400px] overflow-y-auto space-y-4">
+                    {partyBirthdays.map((b: any, i: number) => (
+                        <div key={i} className="flex items-center gap-4 p-3 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 shadow-sm">
+                            <div className="w-12 h-12 rounded-xl bg-orange-400 flex items-center justify-center text-white text-xl font-black overflow-hidden bg-cover bg-center ring-4 ring-[#003875]/20">
+                                {b.partyName.charAt(0)}
+                            </div>
+                            <div>
+                                <p className="font-black text-gray-900 dark:text-white uppercase leading-none">{b.partyName}</p>
+                                <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">{b.partyType}</p>
+                            </div>
+                            <div className="ml-auto">
+                                <span className="p-2 bg-amber-50 dark:bg-amber-950/30 text-amber-500 rounded-full flex items-center justify-center">🎉</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div className="p-4 bg-gray-50 dark:bg-navy-950/50 text-center border-t border-gray-100 dark:border-white/5">
+                   <p className="text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest animate-pulse">Team Robotek Wishes A Happy Birthday!</p>
                 </div>
             </motion.div>
           </motion.div>
@@ -410,20 +491,25 @@ export function CompactTable({ title, icon: Icon, data, columns, linkHref }: any
 
 // --- ROW 4 COMPONENTS (MODALS & OVERLAYS) ---
 
-export function BirthdayCelebrationModal({ birthdays, currentUser }: { birthdays: any[], currentUser: string }) {
+export function BirthdayCelebrationModal({ birthdays, partyBirthdays, currentUser }: { birthdays: any[], partyBirthdays?: any[], currentUser: string }) {
   const [show, setShow] = useState(false);
 
+  const allCelebrants = [
+    ...(birthdays || []).map((b: any) => ({ ...b, type: 'user' })),
+    ...(partyBirthdays || []).map((p: any) => ({ username: p.partyName, role: p.partyType, image: null, type: 'party' }))
+  ];
+
   useEffect(() => {
-    if (birthdays && birthdays.length > 0) {
+    if (allCelebrants.length > 0) {
       setShow(true);
     }
-  }, [birthdays]);
+  }, [birthdays, partyBirthdays]);
 
   const handleClose = () => {
     setShow(false);
   };
 
-  const isMyBirthday = birthdays?.some(b => b.username === currentUser);
+  const isMyBirthday = birthdays?.some((b: any) => b.username === currentUser);
 
   return (
     <AnimatePresence>
@@ -438,9 +524,9 @@ export function BirthdayCelebrationModal({ birthdays, currentUser }: { birthdays
            {/* Bottom Screen Firecrackers */}
            <div className="absolute inset-0 overflow-hidden pointer-events-none flex justify-center">
               {[...Array(35)].map((_, i) => {
-                  const startX = `${Math.random() * 120 - 60}vw`; // Spawn anywhere from far left to far right
-                  const peakY = `-${Math.random() * 30 + 10}vh`; // Shoot up to the top third
-                  const endX = `${Math.random() * 120 - 60}vw`; // Drift left or right
+                  const startX = `${Math.random() * 120 - 60}vw`;
+                  const peakY = `-${Math.random() * 30 + 10}vh`;
+                  const endX = `${Math.random() * 120 - 60}vw`;
                   return (
                     <motion.div 
                       key={i}
@@ -474,7 +560,7 @@ export function BirthdayCelebrationModal({ birthdays, currentUser }: { birthdays
              className="relative bg-transparent p-4 md:p-8 max-w-4xl w-full text-center flex flex-col items-center z-10 max-h-[95vh] overflow-y-auto invisible-scrollbar"
            >
               <div className="flex flex-wrap justify-center gap-6 md:gap-8 mb-6 mt-2">
-                 {birthdays.map((b, i) => (
+                 {allCelebrants.map((b, i) => (
                     <motion.div 
                       key={i} 
                       className="flex flex-col items-center group relative"
@@ -482,28 +568,38 @@ export function BirthdayCelebrationModal({ birthdays, currentUser }: { birthdays
                       transition={{ duration: 3, repeat: Infinity, delay: i * 0.2, ease: "easeInOut" }}
                     >
                        <div className="absolute inset-0 bg-[#FFD500] blur-3xl opacity-20 rounded-full"></div>
-                       <div className="w-24 h-24 md:w-36 md:h-36 rounded-full bg-indigo-500 border-[3px] border-[#FFD500] shadow-[0_0_40px_rgba(255,213,0,0.4)] flex items-center justify-center text-white text-4xl md:text-5xl font-black overflow-hidden bg-cover bg-center z-10" style={b.image ? {backgroundImage: `url(${b.image})`} : {}}>
+                       {/* Avatar: orange tint for party, indigo for users */}
+                       <div 
+                         className={`w-24 h-24 md:w-36 md:h-36 rounded-full border-[3px] border-[#FFD500] shadow-[0_0_40px_rgba(255,213,0,0.4)] flex items-center justify-center text-white text-4xl md:text-5xl font-black overflow-hidden bg-cover bg-center z-10 ${b.type === 'party' ? 'bg-orange-500' : 'bg-indigo-500'}`}
+                         style={b.image ? {backgroundImage: `url(${b.image})`} : {}}
+                       >
                             {!b.image && b.username.charAt(0)}
                        </div>
                        <div className="mt-3 text-xs md:text-sm font-black text-[#FFD500] uppercase tracking-widest px-4 py-1.5 bg-black/40 backdrop-blur-md rounded-full shadow-xl border border-[#FFD500]/30 z-10 w-full truncate max-w-[140px]">
                            {b.username}
                        </div>
+                       {/* Party badge */}
+                       {b.type === 'party' && (
+                         <div className="mt-1 text-[8px] font-black text-orange-300 uppercase tracking-widest px-2 py-0.5 bg-orange-500/20 rounded-full border border-orange-400/30">
+                           Party 🎉
+                         </div>
+                       )}
                     </motion.div>
                  ))}
               </div>
 
               <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter mb-3 drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)] whitespace-pre-line leading-tight">
                  {isMyBirthday 
-                    ? (birthdays.length > 1 ? `HAPPY BIRTHDAY,\n${currentUser} & TEAM!` : `HAPPY BIRTHDAY,\n${currentUser}!`)
+                    ? (allCelebrants.length > 1 ? `HAPPY BIRTHDAY,\n${currentUser} & TEAM!` : `HAPPY BIRTHDAY,\n${currentUser}!`)
                     : "LET'S CELEBRATE! 🎉"}
               </h2>
               
               <p className="text-[#FFD500] font-black text-sm md:text-xl uppercase tracking-widest mb-8 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed max-w-lg mx-auto px-4 whitespace-pre-line">
                  {isMyBirthday 
-                   ? (birthdays.length > 1 
-                      ? "Wishing you an amazing year ahead! 🎈💥\n\nAlso, don't forget to wish your fellow birthday colleagues a great day too! ✨🎊" 
+                   ? (allCelebrants.length > 1 
+                      ? "Wishing you an amazing year ahead! 🎈💥\n\nAlso, don't forget to wish the other celebrants a great day too! ✨🎊" 
                       : "Wishing you an amazing year ahead from the entire Robotek Team! 🎈💥")
-                   : `It's time to wish your colleague${birthdays.length > 1 ? 's' : ''} a very happy birthday today! ✨🎊`}
+                   : `It's time to wish ${allCelebrants.length} celebrant${allCelebrants.length > 1 ? 's' : ''} a very happy birthday today! ✨🎊`}
               </p>
 
               <button 
@@ -518,3 +614,5 @@ export function BirthdayCelebrationModal({ birthdays, currentUser }: { birthdays
     </AnimatePresence>
   );
 }
+
+

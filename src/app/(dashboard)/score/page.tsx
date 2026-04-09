@@ -45,19 +45,22 @@ function getISOWeekNumber(d: Date) {
 
 // Reduced size for compact mode
 // Dynamic color based on score
-const CircularProgress = ({ percentage, isNegative, size = 36, strokeWidth = 3 }: any) => {
+const CircularProgress = ({ percentage, isNegative, total, completed, isOnTime, size = 36, strokeWidth = 3 }: any) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
+  
+  const hasNoTasks = isOnTime ? (completed === 0) : (total === 0);
+  
   // If negative mode, we show the "Failure" fill (100 - percentage)
-  const displayPercentage = isNegative ? percentage - 100 : percentage;
-  const fillPercentage = isNegative ? (100 - percentage) : percentage;
+  const displayPercentage = hasNoTasks ? "—" : (isNegative ? percentage - 100 : percentage);
+  const fillPercentage = hasNoTasks ? 0 : (isNegative ? (100 - percentage) : percentage);
   const offset = circumference - (fillPercentage / 100) * circumference;
   
-  const color = isNegative ? (
+  const color = hasNoTasks ? 'text-gray-300' : (isNegative ? (
     fillPercentage < 20 ? 'text-emerald-500' : fillPercentage < 50 ? 'text-amber-500' : 'text-rose-500'
   ) : (
     percentage >= 80 ? 'text-emerald-500' : percentage >= 50 ? 'text-amber-500' : 'text-rose-500'
-  );
+  ));
 
   return (
     <div className="relative inline-flex items-center justify-center">
@@ -85,19 +88,20 @@ const CircularProgress = ({ percentage, isNegative, size = 36, strokeWidth = 3 }
         />
       </svg>
       <span className={`absolute text-[9px] font-black ${color.replace('text-', 'text-opacity-80 text-')}`}>
-        {displayPercentage}%
+        {displayPercentage}{!hasNoTasks && "%"}
       </span>
     </div>
   );
 };
 
-const ScoreRow = ({ label, completed, total, percentage, isNegative }: any) => {
-  const displayPercentage = isNegative ? percentage - 100 : percentage;
-  const color = isNegative ? (
+const ScoreRow = ({ label, completed, total, percentage, isNegative, isOnTime }: any) => {
+  const hasNoTasks = isOnTime ? (completed === 0) : (total === 0);
+  const displayPercentage = hasNoTasks ? "—" : (isNegative ? percentage - 100 : percentage);
+  const color = hasNoTasks ? 'text-gray-300' : (isNegative ? (
     (100 - percentage) < 20 ? 'text-emerald-500' : (100 - percentage) < 50 ? 'text-amber-500' : 'text-rose-500'
   ) : (
     percentage >= 80 ? 'text-emerald-500' : percentage >= 50 ? 'text-amber-500' : 'text-rose-500'
-  );
+  ));
 
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 border-b border-[#003875]/5 dark:border-navy-800/50 last:border-0 grow font-serif">
@@ -105,15 +109,19 @@ const ScoreRow = ({ label, completed, total, percentage, isNegative }: any) => {
         <p className="text-sm font-medium text-gray-500 uppercase tracking-widest mb-1">{label}</p>
         <div className="flex items-baseline gap-1">
           <span className="text-[12px] font-bold text-gray-900 dark:text-white">{completed}</span>
-          <span className="text-gray-400 text-[10px]">/</span>
-          <span className="text-sm font-medium text-gray-400">{total}</span>
+          {!isOnTime && (
+            <>
+              <span className="text-gray-400 text-[10px]">/</span>
+              <span className="text-sm font-medium text-gray-400">{total}</span>
+            </>
+          )}
           <span className="text-gray-400 text-[10px] mx-1"> = </span>
           <span className={`text-[12px] font-black ${color}`}>
-            {displayPercentage}%
+            {displayPercentage}{!hasNoTasks && "%"}
           </span>
         </div>
       </div>
-      <CircularProgress percentage={percentage} isNegative={isNegative} size={32} strokeWidth={3} />
+      <CircularProgress percentage={percentage} isNegative={isNegative} total={total} completed={completed} isOnTime={isOnTime} size={32} strokeWidth={3} />
     </div>
   );
 };
@@ -205,6 +213,8 @@ function generateTrendData(items: any[], dateRange: { from: string, to: string }
 
       return {
         label: b.label,
+        total: total,
+        completed: completed,
         score: total > 0 ? Math.round((completed / total) * 100) : 0,
         onTime: completed > 0 ? Math.round((onTime / completed) * 100) : 0,
         avgDelayHours: avgDelayHours
@@ -562,11 +572,11 @@ const PDFHiddenReport = ({ user, dateRange, userTrendData, isNegativeMode, calcu
            </div>
            <div className="flex gap-4 px-2 items-center flex-1 justify-end">
               <div className="w-24 flex flex-col items-center">
-                 <SemiCircleGauge value={user.score} isNegative={isNegativeMode} />
+                 <SemiCircleGauge value={user.score} isNegative={isNegativeMode} total={user.total} />
                  <span className="text-[7px] font-black uppercase text-[#003875] -translate-y-2">Efficiency %</span>
               </div>
               <div className="w-24 flex flex-col items-center">
-                 <SemiCircleGauge value={user.onTimeRate} isNegative={isNegativeMode} />
+                 <SemiCircleGauge value={user.onTimeRate} isNegative={isNegativeMode} total={user.completed} />
                  <span className="text-[7px] font-black uppercase text-[#003875] -translate-y-2">Accuracy %</span>
               </div>
            </div>
@@ -588,7 +598,7 @@ const PDFHiddenReport = ({ user, dateRange, userTrendData, isNegativeMode, calcu
                         <span className="text-[8px] font-black text-gray-700 uppercase">{cat.label}</span>
                      </div>
                      <span className={`text-lg font-black ${cat.stats.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
-                        {isNegativeMode ? cat.stats.score - 100 : cat.stats.score}%
+                        {cat.stats.total === 0 ? "—" : (isNegativeMode ? cat.stats.score - 100 : cat.stats.score) + "%"}
                      </span>
                   </div>
                 ))}
@@ -680,9 +690,9 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
     // All three share the same time buckets; zip them together with score + onTime per category
     return delData.map((d, i) => ({
       label: d.label,
-      delegation: { score: d.score, onTime: d.onTime },
-      checklist: { score: chkData[i]?.score ?? 0, onTime: chkData[i]?.onTime ?? 0 },
-      o2d: { score: o2dData[i]?.score ?? 0, onTime: o2dData[i]?.onTime ?? 0 },
+      delegation: { score: d.score, onTime: d.onTime, total: d.total, completed: d.completed },
+      checklist: { score: chkData[i]?.score ?? 0, onTime: chkData[i]?.onTime ?? 0, total: chkData[i]?.total ?? 0, completed: chkData[i]?.completed ?? 0 },
+      o2d: { score: o2dData[i]?.score ?? 0, onTime: o2dData[i]?.onTime ?? 0, total: o2dData[i]?.total ?? 0, completed: o2dData[i]?.completed ?? 0 },
     }));
   }, [user, dateRange.to, chartGranularity]);
 
@@ -775,7 +785,7 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
             className="flex items-center justify-center gap-6 md:gap-12 shrink-0 xl:pl-8 xl:border-l w-full xl:w-auto mt-4 xl:mt-0 pt-4 xl:pt-0"
           >
              <div className="w-36 md:w-44 flex flex-col items-center group">
-                <SemiCircleGauge value={user.score} isNegative={isNegativeMode} />
+                <SemiCircleGauge value={user.score} isNegative={isNegativeMode} total={user.total} />
                 <div 
                   style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
                   className="px-4 py-2 rounded-xl border-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] shadow-sm uppercase tracking-widest mt-0 relative z-10 -translate-y-2"
@@ -784,7 +794,7 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
                 </div>
              </div>
              <div className="w-36 md:w-44 flex flex-col items-center group">
-                <SemiCircleGauge value={user.onTimeRate} isNegative={isNegativeMode} />
+                <SemiCircleGauge value={user.onTimeRate} isNegative={isNegativeMode} total={user.completed} />
                 <div 
                   style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
                   className="px-4 py-2 rounded-xl border-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] shadow-sm uppercase tracking-widest mt-0 relative z-10 -translate-y-2"
@@ -829,18 +839,30 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
                   >
                     <tr>
                       <td className="py-4 flex items-center gap-2 font-black text-xs uppercase text-gray-900 dark:text-white"><DocumentTextIcon className="w-5 h-5 text-orange-500 shrink-0"/> Delegations</td>
-                      <td className={`py-4 text-center font-black ${user.delegationStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{isNegativeMode ? user.delegationStats?.score - 100 : user.delegationStats?.score || 0}%</td>
-                      <td className={`py-4 text-center font-black ${user.delegationStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{isNegativeMode ? user.delegationStats?.onTimeRate - 100 : user.delegationStats?.onTimeRate || 0}%</td>
+                      <td className={`py-4 text-center font-black ${user.delegationStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {user.delegationStats?.total === 0 ? "—" : (isNegativeMode ? user.delegationStats?.score - 100 : user.delegationStats?.score || 0) + "%"}
+                      </td>
+                      <td className={`py-4 text-center font-black ${user.delegationStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {user.delegationStats?.completed === 0 ? "—" : (isNegativeMode ? user.delegationStats?.onTimeRate - 100 : user.delegationStats?.onTimeRate || 0) + "%"}
+                      </td>
                     </tr>
                     <tr>
                       <td className="py-4 flex items-center gap-2 font-black text-xs uppercase text-gray-900 dark:text-white"><ClipboardDocumentListIcon className="w-5 h-5 text-emerald-500 shrink-0"/> Checklists</td>
-                      <td className={`py-4 text-center font-black ${user.checklistStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{isNegativeMode ? user.checklistStats?.score - 100 : user.checklistStats?.score || 0}%</td>
-                      <td className={`py-4 text-center font-black ${user.checklistStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{isNegativeMode ? user.checklistStats?.onTimeRate - 100 : user.checklistStats?.onTimeRate || 0}%</td>
+                      <td className={`py-4 text-center font-black ${user.checklistStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {user.checklistStats?.total === 0 ? "—" : (isNegativeMode ? user.checklistStats?.score - 100 : user.checklistStats?.score || 0) + "%"}
+                      </td>
+                      <td className={`py-4 text-center font-black ${user.checklistStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {user.checklistStats?.completed === 0 ? "—" : (isNegativeMode ? user.checklistStats?.onTimeRate - 100 : user.checklistStats?.onTimeRate || 0) + "%"}
+                      </td>
                     </tr>
                     <tr>
                       <td className="py-4 flex items-center gap-2 font-black text-xs uppercase text-gray-900 dark:text-white"><ShoppingBagIcon className="w-5 h-5 text-blue-500 shrink-0"/> O2D FMS Jobs</td>
-                      <td className={`py-4 text-center font-black ${user.o2dStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{isNegativeMode ? user.o2dStats?.score - 100 : user.o2dStats?.score || 0}%</td>
-                      <td className={`py-4 text-center font-black ${user.o2dStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{isNegativeMode ? user.o2dStats?.onTimeRate - 100 : user.o2dStats?.onTimeRate || 0}%</td>
+                      <td className={`py-4 text-center font-black ${user.o2dStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {user.o2dStats?.total === 0 ? "—" : (isNegativeMode ? user.o2dStats?.score - 100 : user.o2dStats?.score || 0) + "%"}
+                      </td>
+                      <td className={`py-4 text-center font-black ${user.o2dStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {user.o2dStats?.completed === 0 ? "—" : (isNegativeMode ? user.o2dStats?.onTimeRate - 100 : user.o2dStats?.onTimeRate || 0) + "%"}
+                      </td>
                     </tr>
 
                   </tbody>
@@ -928,18 +950,22 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
                         </div>
                       </td>
                       {categoryTrendData.map((d, i) => {
-                        const val = (d[cat.catKey] as { score: number; onTime: number }).score;
-                        const display = isNegativeMode ? val - 100 : val;
-                        const colorClass = val >= 80 ? 'text-emerald-500' : val >= 50 ? 'text-amber-500' : 'text-rose-500';
-                        const bgClass = val >= 80 ? 'bg-emerald-50 dark:bg-emerald-950/20' : val >= 50 ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-rose-50 dark:bg-rose-950/20';
-                        const barColor = val >= 80 ? 'bg-emerald-400' : val >= 50 ? 'bg-amber-400' : 'bg-rose-400';
+                        const catStats = d[cat.catKey] as { score: number; onTime: number; total: number };
+                        const val = catStats.score;
+                        const hasNoTasks = catStats.total === 0;
+                        const display = hasNoTasks ? "—" : (isNegativeMode ? val - 100 : val);
+                        const displayStr = hasNoTasks ? display : display + "%";
+                        
+                        const colorClass = hasNoTasks ? 'text-gray-300' : (val >= 80 ? 'text-emerald-500' : val >= 50 ? 'text-amber-500' : 'text-rose-500');
+                        const bgClass = hasNoTasks ? 'bg-gray-50 dark:bg-navy-900/50' : (val >= 80 ? 'bg-emerald-50 dark:bg-emerald-950/20' : val >= 50 ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-rose-50 dark:bg-rose-950/20');
+                        const barColor = hasNoTasks ? 'bg-gray-200' : (val >= 80 ? 'bg-emerald-400' : val >= 50 ? 'bg-amber-400' : 'bg-rose-400');
                         return (
                           <td key={i} className="px-2 py-3 text-center">
                             <div className={`inline-flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl ${bgClass}`}>
-                              <span className={`text-[11px] font-black leading-none ${colorClass}`}>{display}%</span>
+                              <span className={`text-[11px] font-black leading-none ${colorClass}`}>{displayStr}</span>
                               <div className="w-8 h-1 bg-gray-100 dark:bg-navy-800 rounded-full overflow-hidden mt-0.5">
                                 <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                                  style={{ width: `${isNegativeMode ? Math.max(0, 100 - val) : val}%` }} />
+                                  style={{ width: `${hasNoTasks ? 0 : (isNegativeMode ? Math.max(0, 100 - val) : val)}%` }} />
                               </div>
                             </div>
                           </td>
@@ -958,18 +984,22 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
                         </div>
                       </td>
                       {categoryTrendData.map((d, i) => {
-                        const val = (d[cat.catKey] as { score: number; onTime: number }).onTime;
-                        const display = isNegativeMode ? val - 100 : val;
-                        const colorClass = val >= 80 ? 'text-emerald-500' : val >= 50 ? 'text-amber-500' : 'text-rose-500';
-                        const bgClass = val >= 80 ? 'bg-emerald-50 dark:bg-emerald-950/20' : val >= 50 ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-rose-50 dark:bg-rose-950/20';
-                        const barColor = val >= 80 ? 'bg-emerald-400' : val >= 50 ? 'bg-amber-400' : 'bg-rose-400';
+                        const catStats = d[cat.catKey] as { score: number; onTime: number; total: number; completed: number };
+                        const val = catStats.onTime;
+                        const hasNoTasks = catStats.completed === 0;
+                        const display = hasNoTasks ? "—" : (isNegativeMode ? val - 100 : val);
+                        const displayStr = hasNoTasks ? display : display + "%";
+
+                        const colorClass = hasNoTasks ? 'text-gray-300' : (val >= 80 ? 'text-emerald-500' : val >= 50 ? 'text-amber-500' : 'text-rose-500');
+                        const bgClass = hasNoTasks ? 'bg-gray-50 dark:bg-navy-900/50' : (val >= 80 ? 'bg-emerald-50 dark:bg-emerald-950/20' : val >= 50 ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-rose-50 dark:bg-rose-950/20');
+                        const barColor = hasNoTasks ? 'bg-gray-200' : (val >= 80 ? 'bg-emerald-400' : val >= 50 ? 'bg-amber-400' : 'bg-rose-400');
                         return (
                           <td key={i} className="px-2 py-3 text-center">
                             <div className={`inline-flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl ${bgClass}`}>
-                              <span className={`text-[11px] font-black leading-none ${colorClass}`}>{display}%</span>
+                              <span className={`text-[11px] font-black leading-none ${colorClass}`}>{displayStr}</span>
                               <div className="w-8 h-1 bg-gray-100 dark:bg-navy-800 rounded-full overflow-hidden mt-0.5">
                                 <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                                  style={{ width: `${isNegativeMode ? Math.max(0, 100 - val) : val}%` }} />
+                                  style={{ width: `${hasNoTasks ? 0 : (isNegativeMode ? Math.max(0, 100 - val) : val)}%` }} />
                               </div>
                             </div>
                           </td>
@@ -1113,11 +1143,12 @@ const CategoryDrilldownContent = ({ catData, label, dateRange, chartGranularity,
                   </div>
                 </td>
                 {trendData.map((d, i) => {
-                  const display = isNegativeMode ? d.score - 100 : d.score;
-                  const colorClass = d.score >= 80 ? 'text-emerald-500' : d.score >= 50 ? 'text-amber-500' : 'text-rose-500';
+                  const hasNoTasks = d.total === 0;
+                  const display = hasNoTasks ? "—" : (isNegativeMode ? d.score - 100 : d.score);
+                  const colorClass = hasNoTasks ? 'text-gray-300' : (d.score >= 80 ? 'text-emerald-500' : d.score >= 50 ? 'text-amber-500' : 'text-rose-500');
                   return (
                     <td key={i} className="px-2 py-3 text-center">
-                      <span className={`text-[11px] font-black ${colorClass}`}>{display}%</span>
+                      <span className={`text-[11px] font-black ${colorClass}`}>{display}{!hasNoTasks && "%"}</span>
                     </td>
                   );
                 })}
@@ -1130,11 +1161,12 @@ const CategoryDrilldownContent = ({ catData, label, dateRange, chartGranularity,
                   </div>
                 </td>
                 {trendData.map((d, i) => {
-                  const display = isNegativeMode ? d.onTime - 100 : d.onTime;
-                  const colorClass = d.onTime >= 80 ? 'text-emerald-500' : d.onTime >= 50 ? 'text-amber-500' : 'text-rose-500';
+                  const hasNoTasks = d.completed === 0;
+                  const display = hasNoTasks ? "—" : (isNegativeMode ? d.onTime - 100 : d.onTime);
+                  const colorClass = hasNoTasks ? 'text-gray-300' : (d.onTime >= 80 ? 'text-emerald-500' : d.onTime >= 50 ? 'text-amber-500' : 'text-rose-500');
                   return (
                     <td key={i} className="px-2 py-3 text-center">
-                      <span className={`text-[11px] font-black ${colorClass}`}>{display}%</span>
+                      <span className={`text-[11px] font-black ${colorClass}`}>{display}{!hasNoTasks && "%"}</span>
                     </td>
                   );
                 })}
@@ -1212,11 +1244,11 @@ const CategoryDrilldownContent = ({ catData, label, dateRange, chartGranularity,
           </div>
           <div style={{ borderColor: 'var(--panel-border)' }} className="flex items-center justify-center gap-6 md:gap-12 shrink-0 xl:pl-8 xl:border-l w-full xl:w-auto mt-4 xl:mt-0 pt-4 xl:pt-0">
              <div className="w-36 md:w-44 flex flex-col items-center group">
-                <SemiCircleGauge value={catData.score} isNegative={isNegativeMode} />
+                <SemiCircleGauge value={catData.score} isNegative={isNegativeMode} total={catData.total} />
                 <div style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }} className="px-4 py-2 rounded-xl border-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] shadow-sm uppercase tracking-widest mt-0 relative z-10 -translate-y-2">Score %</div>
              </div>
              <div className="w-36 md:w-44 flex flex-col items-center group">
-                <SemiCircleGauge value={catData.onTimeRate} isNegative={isNegativeMode} />
+                <SemiCircleGauge value={catData.onTimeRate} isNegative={isNegativeMode} total={catData.completed} />
                 <div style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }} className="px-4 py-2 rounded-xl border-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] shadow-sm uppercase tracking-widest mt-0 relative z-10 -translate-y-2">On-Time %</div>
              </div>
           </div>
@@ -1925,7 +1957,7 @@ function ScorePageContent() {
                          </h4>
                          <div className="space-y-0.5">
                             <ScoreRow label="Combined Score" completed={companyStats.completed} total={companyStats.total} percentage={companyStats.score} isNegative={isNegativeMode} />
-                            <ScoreRow label="Combined Accuracy" completed={companyStats.onTime} total={companyStats.completed} percentage={companyStats.onTimeRate} isNegative={isNegativeMode} />
+                            <ScoreRow label="Combined Accuracy" completed={companyStats.onTime} total={companyStats.completed} percentage={companyStats.onTimeRate} isNegative={isNegativeMode} isOnTime={true} />
                          </div>
                       </section>
                       {/* Bottom Section: Gauge + Delay Hours */}
@@ -1935,7 +1967,7 @@ function ScorePageContent() {
                       >
                          {/* Average Gauge */}
                          <div className="flex-1 w-full min-w-0">
-                            <SemiCircleGauge value={Math.round((companyStats.score + companyStats.onTimeRate) / 2)} isNegative={isNegativeMode} />
+                            <SemiCircleGauge value={Math.round((companyStats.score + companyStats.onTimeRate) / 2)} isNegative={isNegativeMode} total={companyStats.total} />
                          </div>
                          
                          {/* Average Delayed Hours Indicator (Floating Top Right) */}

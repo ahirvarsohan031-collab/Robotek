@@ -20,7 +20,8 @@ import {
   HighightedCalendar,
   CompactTable,
   BirthdayCelebrationModal,
-  UpcomingMeetingsPanel
+  UpcomingMeetingsPanel,
+  CompactPartyBirthdayCard
 } from "./DashboardComponents";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -82,17 +83,20 @@ export default function Dashboard() {
       
       {/* ROW 1: MISSION CONTROL HEADER */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-12 gap-4">
-        <div className="xl:col-span-4 self-center">
+        <div className="xl:col-span-2 self-center">
           <CompactWelcome firstName={firstName} role={userRole} />
         </div>
         <div className="xl:col-span-2">
-            {!isLoading && data && <CompactScore score={data.score.score} label="FAILURE SCORE (GAP)" isNegative={true} />}
+            {!isLoading && data && <CompactScore score={data.score.score} total={data.score.total} label="FAILURE SCORE (GAP)" isNegative={true} />}
         </div>
         <div className="xl:col-span-2">
-            {!isLoading && data && <CompactScore score={data.score.onTimeRate} label="ACCURACY GAP" isNegative={true} />}
+            {!isLoading && data && <CompactScore score={data.score.onTimeRate} total={data.score.completed} label="ACCURACY GAP" isNegative={true} />}
         </div>
-        <div className="xl:col-span-4">
+        <div className="xl:col-span-3">
             {!isLoading && data && <CompactBirthdayCard birthdays={data.birthdays} />}
+        </div>
+        <div className="xl:col-span-3">
+            {!isLoading && data && <CompactPartyBirthdayCard partyBirthdays={data.partyBirthdays} />}
         </div>
       </div>
 
@@ -190,7 +194,7 @@ export default function Dashboard() {
         />
       </div>
 
-      <BirthdayCelebrationModal birthdays={data?.birthdays} currentUser={firstName} />
+      <BirthdayCelebrationModal birthdays={data?.birthdays} partyBirthdays={data?.partyBirthdays} currentUser={firstName} />
     </div>
   );
 }

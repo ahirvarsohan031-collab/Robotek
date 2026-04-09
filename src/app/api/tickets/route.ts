@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getTickets, addTicket } from '@/lib/ticket-sheets';
+import { getTickets, addTicket, ticketHistoryService } from '@/lib/ticket-sheets';
 import { getUserByUsernameOrEmail } from "@/lib/google-sheets";
 import { uploadFileToDrive } from '@/lib/google-drive';
 import { sendWhatsAppMessage } from "@/lib/maytapi";
@@ -10,6 +10,34 @@ const TICKET_FOLDER_ID = "1zNEIi62bxuCP2g5KadniAWp4hSNpfVzq";
 export async function GET() {
   try {
     const tickets = await getTickets();
+    try {
+      const history = await ticketHistoryService.getAll();
+      
+      // Group history by ticket
+      const historyByTicket: Record<string, any[]> = {};
+      for (const h of history) {
+        if (!h.comment_text) continue;
+        if (!historyByTicket[h.ticket_id]) historyByTicket[h.ticket_id] = [];
+        historyByTicket[h.ticket_id].push(h);
+      }
+
+      // Add latest comment to each ticket
+      for (const ticket of tickets) {
+        const ticketHistory = historyByTicket[ticket.id] || [];
+        if (ticketHistory.length > 0) {
+          // Sort by latest first
+          ticketHistory.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          (ticket as any).latest_comment = {
+            text: ticketHistory[0].comment_text,
+            actor: ticketHistory[0].actor_username,
+            created_at: ticketHistory[0].created_at
+          };
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching ticket history for latest comments:", err);
+    }
+    
     return NextResponse.json(tickets);
   } catch (error) {
     console.error("GET /api/tickets error:", error);
@@ -68,7 +96,8 @@ export async function POST(request: Request) {
         const solver = await getUserByUsernameOrEmail(newTicket.solver_person || "");
         if (solver && solver.phone) {
           const formattedDate = formatDate(newTicket.created_at);
-          const message = `🎫 *Help Ticket - New Ticket Raised*\n\n*ID:* ${newTicket.id}\n*Title:* ${newTicket.title}\n*Category:* ${newTicket.category}\n*Priority:* ${newTicket.priority}\n*Raised By:* ${newTicket.raised_by}\n*Created:* ${formattedDate}\n\n*Description:* ${newTicket.description}`;
+          const dueDate = newTicket.planned_resolution ? formatDate(newTicket.planned_resolution) : "Not Set";
+          const message = `🎫 *New Help Ticket Raised*\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${newTicket.id}\n📌 *Title:* ${newTicket.title}\n🏷️ *Category:* ${newTicket.category}\n🎯 *Priority:* ${newTicket.priority}\n👤 *Raised By:* ${newTicket.raised_by}\n👨‍🔧 *Assigned To:* ${newTicket.solver_person || 'Unassigned'}\n⏳ *Due Date:* ${dueDate}\n⏱️ *Created At:* ${formattedDate}\n\n📝 *Description:* _${newTicket.description}_`;
           await sendWhatsAppMessage(solver.phone, message);
         }
       } catch (err) {

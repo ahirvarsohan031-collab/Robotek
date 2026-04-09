@@ -7,9 +7,10 @@ interface SemiCircleGaugeProps {
   value: number; // 0 to 100
   label?: string;
   isNegative?: boolean;
+  total?: number;
 }
 
-export default function SemiCircleGauge({ value, label = "Overall Avg", isNegative = false }: SemiCircleGaugeProps) {
+export default function SemiCircleGauge({ value, label = "Overall Avg", isNegative = false, total }: SemiCircleGaugeProps) {
   const segments = 24;
   const radius = 65;
   const strokeWidth = 14;
@@ -21,19 +22,25 @@ export default function SemiCircleGauge({ value, label = "Overall Avg", isNegati
   const displayValue = isNegative ? value - 100 : value;
   const roundedValue = useTransform(countValue, Math.round);
 
+  const hasNoTasks = total === 0;
+
   useEffect(() => {
+    if (hasNoTasks) {
+      countValue.set(0);
+      return;
+    }
     const animation = animate(countValue, displayValue, { 
       duration: 1.5, 
       ease: "easeOut",
       delay: 0.2
     });
     return animation.stop;
-  }, [displayValue, countValue]);
+  }, [displayValue, countValue, hasNoTasks]);
 
   const lines = useMemo(() => {
     const l = [];
     // If negative mode, we show the "Failure Gap" (100 - value)
-    const fillPercent = isNegative ? (100 - value) : value;
+    const fillPercent = hasNoTasks ? 0 : (isNegative ? (100 - value) : value);
 
     for (let i = 0; i < segments; i++) {
       const angleDeg = 180 - (i / (segments - 1)) * 180;
@@ -46,7 +53,7 @@ export default function SemiCircleGauge({ value, label = "Overall Avg", isNegati
       const y2 = cy - (radius + strokeWidth / 2) * Math.sin(angleRad);
 
       const percent = (i / (segments - 1)) * 100;
-      const isActive = percent <= fillPercent;
+      const isActive = !hasNoTasks && percent <= fillPercent;
       
       const activeColor = isNegative ? (
         // For Failure view: 0-25% (Good/Green Gap), 25-50% (Amber Gap), 50-100% (Red Gap)
@@ -63,7 +70,7 @@ export default function SemiCircleGauge({ value, label = "Overall Avg", isNegati
       l.push({ x1, y1, x2, y2, isActive, color: activeColor });
     }
     return l;
-  }, [value, segments, isNegative]);
+  }, [value, segments, isNegative, hasNoTasks]);
 
   return (
     <div className="flex flex-col items-center justify-center relative w-full h-full p-2 pt-4">
@@ -88,8 +95,14 @@ export default function SemiCircleGauge({ value, label = "Overall Avg", isNegati
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-end pb-2">
            <div className="text-3xl font-black text-gray-900 dark:text-white leading-none tracking-tighter flex items-center justify-center">
-             <motion.span>{roundedValue}</motion.span>
-             <span>%</span>
+             {hasNoTasks ? (
+               <span>—</span>
+             ) : (
+               <>
+                 <motion.span>{roundedValue}</motion.span>
+                 <span>%</span>
+               </>
+             )}
            </div>
            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">
              {label}

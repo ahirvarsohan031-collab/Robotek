@@ -53,6 +53,11 @@ interface Ticket {
   updated_at: string;
   attachment_url: string;
   voice_note: string;
+  latest_comment?: {
+    text: string;
+    actor: string;
+    created_at: string;
+  };
 }
 
 interface TicketHistory {
@@ -696,6 +701,24 @@ export default function TicketsPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Latest Comment Snippet */}
+                  {ticket.latest_comment && (
+                    <div className="mt-1 pt-3 border-t border-gray-100 dark:border-navy-700/50 flex flex-col gap-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <ChatBubbleLeftRightIcon className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" />
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate flex gap-1.5 items-center">
+                          <span>Latest Comment By {ticket.latest_comment.actor}</span>
+                          <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600"></span>
+                          <span>{new Date(ticket.latest_comment.created_at).toLocaleDateString([], { day: '2-digit', month: 'short' })}</span>
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-600 dark:text-gray-300 line-clamp-2 leading-relaxed bg-gray-50/50 dark:bg-navy-900 px-2 py-1.5 rounded-lg border border-gray-100 dark:border-navy-800 italic">
+                        "{ticket.latest_comment.text}"
+                      </p>
+                    </div>
+                  )}
+
                 </div>
               </div>
             )

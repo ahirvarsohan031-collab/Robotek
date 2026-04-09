@@ -2,7 +2,14 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
-import { O2D, O2DItem, O2D_STEPS, O2D_STEP_SHORTS, O2DStepConfig } from "@/types/o2d";
+import {
+  O2D,
+  O2DItem,
+  O2D_STEPS,
+  O2D_STEP_SHORTS,
+  O2DStepConfig,
+} from "@/types/o2d";
+import { PartyManagement } from "@/types/party-management";
 import useSWR, { mutate } from "swr";
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 import {
@@ -45,7 +52,7 @@ import {
   ClipboardDocumentCheckIcon,
   CheckCircleIcon,
   GiftIcon,
-  TagIcon
+  TagIcon,
 } from "@heroicons/react/24/solid";
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -64,9 +71,23 @@ interface SearchableDropdownProps {
   required?: boolean;
   keepOpen?: boolean;
   listPosition?: "absolute" | "relative";
+  hideLabel?: boolean;
+  isMulti?: boolean;
 }
 
-function SearchableDropdown({ label, icon: Icon, value, onChange, options, placeholder, required, keepOpen = false, listPosition = "absolute" }: SearchableDropdownProps) {
+function SearchableDropdown({
+  label,
+  icon: Icon,
+  value,
+  onChange,
+  options,
+  placeholder,
+  required,
+  keepOpen = false,
+  listPosition = "absolute",
+  hideLabel = false,
+  isMulti = false,
+}: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -74,9 +95,30 @@ function SearchableDropdown({ label, icon: Icon, value, onChange, options, place
   const listRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
+  const selectedValues = useMemo(() => {
+    if (!isMulti) return value ? [value] : [];
+    return value ? value.split(",").map((v) => v.trim()) : [];
+  }, [value, isMulti]);
+
+  const toggleValue = (val: string) => {
+    if (!isMulti) {
+      onChange(val);
+      return;
+    }
+    const current = selectedValues;
+    if (current.includes(val)) {
+      onChange(current.filter((v) => v !== val).join(", "));
+    } else {
+      onChange([...current, val].join(", "));
+    }
+  };
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
@@ -96,23 +138,25 @@ function SearchableDropdown({ label, icon: Icon, value, onChange, options, place
     }
   }, [activeIndex]);
 
-  const filteredOptions = options.filter(opt =>
-    opt.toLowerCase().includes(search.toLowerCase())
+  const filteredOptions = options.filter((opt) =>
+    opt.toLowerCase().includes(search.toLowerCase()),
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isOpen) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIndex(prev => (prev + 1) % filteredOptions.length);
+      setActiveIndex((prev) => (prev + 1) % filteredOptions.length);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActiveIndex(prev => prev <= 0 ? filteredOptions.length - 1 : prev - 1);
+      setActiveIndex((prev) =>
+        prev <= 0 ? filteredOptions.length - 1 : prev - 1,
+      );
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (activeIndex >= 0 && activeIndex < filteredOptions.length) {
-        onChange(filteredOptions[activeIndex]);
-        if (!keepOpen) {
+        toggleValue(filteredOptions[activeIndex]);
+        if (!keepOpen && !isMulti) {
           setIsOpen(false);
           setSearch("");
           setActiveIndex(-1);
@@ -128,29 +172,55 @@ function SearchableDropdown({ label, icon: Icon, value, onChange, options, place
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-1.5 group">
-        <Icon className="w-3 h-3 transition-colors group-hover:text-[#FFD500]" />
-        {label}
-      </label>
+      {!hideLabel && (
+        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-1.5 group">
+          <Icon className="w-3 h-3 transition-colors group-hover:text-[#FFD500]" />
+          {label}
+        </label>
+      )}
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full h-[34px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus-within:border-[#FFD500] cursor-pointer flex items-center justify-between shadow-sm transition-all"
+        className={`w-full ${isMulti ? "min-h-[34px] py-1" : "h-[34px]"} bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus-within:border-[#FFD500] cursor-pointer flex items-center justify-between shadow-sm transition-all`}
       >
-        <span className={`text-[11px] font-bold truncate pr-2 ${value ? 'text-gray-800 dark:text-zinc-100' : 'text-gray-400'}`}>
-          {value || placeholder || `Select...`}
-        </span>
-        <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
+        <div className="flex flex-wrap gap-1 items-center min-w-0 flex-1">
+          {isMulti && selectedValues.length > 0 ? (
+            selectedValues.map((v, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#003875] text-[#FFD500] rounded-md text-[9px] font-black group/chip transition-all hover:pr-1.5"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleValue(v);
+                }}
+              >
+                {v}
+                <XMarkIcon className="w-2.5 h-2.5 opacity-60 group-hover/chip:opacity-100" />
+              </span>
+            ))
+          ) : (
+            <span
+              className={`text-[11px] font-bold truncate pr-2 ${value ? "text-gray-800 dark:text-zinc-100" : "text-gray-400"}`}
+            >
+              {value || placeholder || `Select...`}
+            </span>
+          )}
+        </div>
+        <ChevronDownIcon
+          className={`w-3.5 h-3.5 text-gray-400 transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`}
+        />
       </div>
 
       {isOpen && (
-        <div className={`${listPosition} z-[10000] w-full mt-1 bg-white dark:bg-navy-800 border border-orange-100 dark:border-navy-700 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200`}>
+        <div
+          className={`${listPosition} z-[10000] w-full mt-1 bg-white dark:bg-navy-800 border border-orange-100 dark:border-navy-700 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200`}
+        >
           <div className="p-2 border-b border-gray-100 dark:border-navy-700">
             <div className="relative">
               <MagnifyingGlassIcon className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
               <input
                 type="text"
                 autoFocus
-                placeholder="Search... (â†‘â†“ to navigate, Enter to select)"
+                placeholder="Search... (↑↓ to navigate, Enter to select)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -160,32 +230,40 @@ function SearchableDropdown({ label, icon: Icon, value, onChange, options, place
           </div>
           <div ref={listRef} className="max-h-52 overflow-y-auto no-scrollbar">
             {filteredOptions.length > 0 ? (
-              filteredOptions.map((opt, i) => (
-                <div
-                  key={i}
-                  ref={el => { itemRefs.current[i] = el; }}
-                  onClick={() => {
-                    onChange(opt);
-                    if (!keepOpen) {
-                      setIsOpen(false);
-                      setSearch("");
-                      setActiveIndex(-1);
-                    }
-                  }}
-                  onMouseEnter={() => setActiveIndex(i)}
-                  className={`px-4 py-2 text-[11px] font-bold cursor-pointer transition-colors ${
-                    i === activeIndex
-                      ? 'bg-[#003875] text-white dark:bg-[#FFD500] dark:text-black'
-                      : value === opt
-                        ? 'bg-[#FFD500] text-black'
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-orange-50 dark:hover:bg-white/5'
-                  }`}
-                >
-                  {opt}
-                </div>
-              ))
+              filteredOptions.map((opt, i) => {
+                const isSelected = selectedValues.includes(opt);
+                return (
+                  <div
+                    key={i}
+                    ref={(el) => {
+                      itemRefs.current[i] = el;
+                    }}
+                    onClick={() => {
+                      toggleValue(opt);
+                      if (!keepOpen && !isMulti) {
+                        setIsOpen(false);
+                        setSearch("");
+                        setActiveIndex(-1);
+                      }
+                    }}
+                    onMouseEnter={() => setActiveIndex(i)}
+                    className={`px-4 py-2 text-[11px] font-bold cursor-pointer transition-colors flex items-center justify-between ${
+                      i === activeIndex
+                        ? "bg-[#003875] text-white dark:bg-[#FFD500] dark:text-black"
+                        : isSelected
+                          ? "bg-orange-50 text-[#003875] dark:bg-white/10 dark:text-[#FFD500]"
+                          : "text-gray-600 dark:text-gray-300 hover:bg-orange-50 dark:hover:bg-white/5"
+                    }`}
+                  >
+                    <span>{opt}</span>
+                    {isSelected && <CheckCircleIcon className="w-3.5 h-3.5" />}
+                  </div>
+                );
+              })
             ) : (
-              <div className="px-4 py-3 text-[10px] text-gray-400 font-bold text-center italic">No matches</div>
+              <div className="px-4 py-3 text-[10px] text-gray-400 font-bold text-center italic">
+                No matches
+              </div>
             )}
           </div>
         </div>
@@ -199,59 +277,89 @@ export default function O2DPage() {
   const { data: session } = useSession();
   const currentUser = (session?.user as any)?.username || "";
 
-  const { data: o2ds = [], isLoading: isDataLoading } = useSWR<O2D[]>("O2D", async () => {
-    const res = await fetch("/api/o2d", { cache: "no-store" });
-    return res.json();
-  }, {
-    revalidateOnFocus: true,
-    refreshInterval: 60000,
-  });
+  const { data: o2ds = [], isLoading: isDataLoading } = useSWR<O2D[]>(
+    "O2D",
+    async () => {
+      const res = await fetch("/api/o2d", { cache: "no-store" });
+      return res.json();
+    },
+    {
+      revalidateOnFocus: true,
+      refreshInterval: 60000,
+    },
+  );
 
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrderNo, setEditingOrderNo] = useState<string | null>(null);
-  const userRole = (session?.user as any)?.role || 'User';
-  const isSpecialRole = userRole.toUpperCase() === 'ADMIN' || userRole.toUpperCase() === 'EA';
+  const userRole = (session?.user as any)?.role || "User";
+  const isSpecialRole =
+    userRole.toUpperCase() === "ADMIN" || userRole.toUpperCase() === "EA";
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrderNo, setSelectedOrderNo] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-
   // Data
   const [parties, setParties] = useState<string[]>([]);
   const [fullParties, setFullParties] = useState<any[]>([]);
-  const [dropdownItems, setDropdownItems] = useState<{ name: string; amount: string }[]>([]);
+  const [dropdownItems, setDropdownItems] = useState<
+    { name: string; amount: string }[]
+  >([]);
 
   // Form State
-  const [commonData, setCommonData] = useState({ order_no: "", party_name: "", remark: "" });
-  const [items, setItems] = useState<O2DItem[]>([{ item_name: "", item_qty: "", est_amount: "", item_specification: "" }]);
+  const [commonData, setCommonData] = useState({
+    order_no: "",
+    party_name: "",
+    remark: "",
+  });
+  const [items, setItems] = useState<O2DItem[]>([
+    { item_name: "", item_qty: "", est_amount: "", item_specification: "" },
+  ]);
+  const [newPartyDraft, setNewPartyDraft] =
+    useState<Partial<PartyManagement> | null>(null);
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   // Modals
   const [isPartyModalOpen, setIsPartyModalOpen] = useState(false);
-  const [actionStatus, setActionStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [actionStatus, setActionStatus] = useState<
+    "loading" | "success" | "error"
+  >("loading");
   const [actionMessage, setActionMessage] = useState("");
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [confirmPayload, setConfirmPayload] = useState<{ type: 'delete' | 'hold' | 'cancelled', orderNo: string, currentValue?: string } | null>(null);
-  const [isRemoveFollowUpModalOpen, setIsRemoveFollowUpModalOpen] = useState(false);
+  const [confirmPayload, setConfirmPayload] = useState<{
+    type: "delete" | "hold" | "cancelled";
+    orderNo: string;
+    currentValue?: string;
+  } | null>(null);
+  const [isRemoveFollowUpModalOpen, setIsRemoveFollowUpModalOpen] =
+    useState(false);
   const [removeStep, setRemoveStep] = useState(1);
   const [removeOnwards, setRemoveOnwards] = useState(true);
 
   const [isBusyModalOpen, setIsBusyModalOpen] = useState(false);
   const [busySearchQuery, setBusySearchQuery] = useState("");
 
-  const [detailViewMode, setDetailViewMode] = useState<'full' | 'table'>('full');
-  const [pageViewMode, setPageViewMode] = useState<'panels' | 'table'>('panels');
+  const [detailViewMode, setDetailViewMode] = useState<"full" | "table">(
+    "full",
+  );
+  const [pageViewMode, setPageViewMode] = useState<"panels" | "table">(
+    "panels",
+  );
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [tableFilterParty, setTableFilterParty] = useState("");
   const [tableFilterOrderNo, setTableFilterOrderNo] = useState("");
   const [tableFilterItemName, setTableFilterItemName] = useState("");
+  const [tableFilterPending, setTableFilterPending] = useState(false);
   const [tableCurrentPage, setTableCurrentPage] = useState(1);
   const tableItemsPerPage = 25;
+
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportIncludeDetails, setExportIncludeDetails] = useState(true);
+  const [exportSelectedSteps, setExportSelectedSteps] = useState<number[]>([]);
 
   const [showFilters, setShowFilters] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -262,9 +370,6 @@ export default function O2DPage() {
     }, 1000); // Update every second
     return () => clearInterval(timer);
   }, []);
-
-
-
 
   // Setup Config
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
@@ -277,7 +382,9 @@ export default function O2DPage() {
   const [currentStepToUpdate, setCurrentStepToUpdate] = useState<number>(1);
   const [stepUpdateFields, setStepUpdateFields] = useState<any>({});
   const [stepAttachment, setStepAttachment] = useState<File | null>(null);
-  const [stepAttachmentPreview, setStepAttachmentPreview] = useState<string | null>(null);
+  const [stepAttachmentPreview, setStepAttachmentPreview] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     fetchO2Ds();
@@ -295,7 +402,7 @@ export default function O2DPage() {
       const [detailsRes, configRes, partiesRes] = await Promise.all([
         fetch("/api/o2d?type=details"),
         fetch("/api/o2d/config"),
-        fetch("/api/party-management")
+        fetch("/api/party-management"),
       ]);
       const data = await detailsRes.json();
       const configData = await configRes.json();
@@ -303,8 +410,10 @@ export default function O2DPage() {
 
       if (Array.isArray(partiesData) && partiesData.length > 0) {
         setFullParties(partiesData);
-        const partyNames = partiesData.map((p: any) => p.partyName).filter(Boolean);
-        setParties(partyNames.length > 0 ? partyNames : (data.parties || []));
+        const partyNames = partiesData
+          .map((p: any) => p.partyName)
+          .filter(Boolean);
+        setParties(partyNames.length > 0 ? partyNames : data.parties || []);
       } else {
         setFullParties([]);
         setParties(data.parties || []);
@@ -314,31 +423,38 @@ export default function O2DPage() {
 
       if (configData && Array.isArray(configData)) {
         const mergedConfigs = O2D_STEPS.map((step, idx) => {
-          const found = configData.find(c => c.step_name === step) || configData[idx];
+          const found =
+            configData.find((c) => c.step_name === step) || configData[idx];
           return {
             step_name: step,
             tat: found?.tat || "24 Hrs",
-            responsible_person: found?.responsible_person || ""
+            responsible_person: found?.responsible_person || "",
           };
         });
         setGlobalConfigs(mergedConfigs);
         setStepConfigs(mergedConfigs);
       } else {
-        const fallback = O2D_STEPS.map(step => ({ step_name: step, tat: "24 Hrs", responsible_person: "" }));
+        const fallback = O2D_STEPS.map((step) => ({
+          step_name: step,
+          tat: "24 Hrs",
+          responsible_person: "",
+        }));
         setGlobalConfigs(fallback);
         setStepConfigs(fallback);
       }
-    } catch (error) { console.error(error); }
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const generateOrderNo = (existing: O2D[]) => {
-    const orderNos = Array.from(new Set(existing.map(o => o.order_no)));
+    const orderNos = Array.from(new Set(existing.map((o) => o.order_no)));
     if (orderNos.length === 0) return "OR-01";
     const maxNum = orderNos.reduce((max, no) => {
       const num = parseInt(no.replace("OR-", ""));
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    return `OR-${(maxNum + 1).toString().padStart(2, '0')}`;
+    return `OR-${(maxNum + 1).toString().padStart(2, "0")}`;
   };
 
   const groupedOrders = useMemo(() => {
@@ -349,6 +465,16 @@ export default function O2DPage() {
       return acc;
     }, {});
   }, [o2ds]);
+
+  const memoizedOrderOptions = useMemo(() => {
+    return Array.from(new Set(o2ds.map((o) => o.order_no))).sort((a, b) =>
+      b.localeCompare(a),
+    );
+  }, [o2ds]);
+
+  const memoizedItemOptions = useMemo(() => {
+    return Array.from(new Set(dropdownItems.map((di) => di.name))).sort();
+  }, [dropdownItems]);
   const [selectedDateFilters, setSelectedDateFilters] = useState<string[]>([]);
   const [selectedStepFilters, setSelectedStepFilters] = useState<number[]>([]);
 
@@ -359,30 +485,42 @@ export default function O2DPage() {
 
   useEffect(() => {
     setTableCurrentPage(1);
-  }, [searchTerm, tableFilterParty, tableFilterOrderNo, tableFilterItemName, filterStartDate, filterEndDate]);
-
+  }, [
+    searchTerm,
+    tableFilterParty,
+    tableFilterOrderNo,
+    tableFilterItemName,
+    filterStartDate,
+    filterEndDate,
+  ]);
 
   const toggleDateFilter = (id: string) => {
-    if (id === '') {
+    if (id === "") {
       setSelectedDateFilters([]);
       return;
     }
-    setSelectedDateFilters(prev =>
-      prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]
+    setSelectedDateFilters((prev) =>
+      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id],
     );
   };
 
   const toggleStepFilter = (stepIdx: number) => {
-    setSelectedStepFilters(prev =>
-      prev.includes(stepIdx) ? prev.filter(s => s !== stepIdx) : [...prev, stepIdx]
+    setSelectedStepFilters((prev) =>
+      prev.includes(stepIdx)
+        ? prev.filter((s) => s !== stepIdx)
+        : [...prev, stepIdx],
     );
   };
 
   // Helper: check if an order matches the date filter based on planned times of steps
-  const orderMatchesDateFilter = (orderItems: O2D[], filter: string): boolean => {
-    if (!filter) return true;    // Status-based filters
-    if (filter === 'Hold') return !!orderItems[0].hold && !orderItems[0].cancelled;
-    if (filter === 'Cancelled') return !!orderItems[0].cancelled;
+  const orderMatchesDateFilter = (
+    orderItems: O2D[],
+    filter: string,
+  ): boolean => {
+    if (!filter) return true; // Status-based filters
+    if (filter === "Hold")
+      return !!orderItems[0].hold && !orderItems[0].cancelled;
+    if (filter === "Cancelled") return !!orderItems[0].cancelled;
 
     const now = new Date();
     const today = new Date(now);
@@ -395,7 +533,8 @@ export default function O2DPage() {
 
     const firstItem = orderItems[0] as any;
     const plannedRaw = firstItem[`planned_${pendingStepIdx}`] as string;
-    if (!plannedRaw || plannedRaw === '-' || plannedRaw.trim() === '') return false;
+    if (!plannedRaw || plannedRaw === "-" || plannedRaw.trim() === "")
+      return false;
 
     const pd = new Date(plannedRaw);
     if (isNaN(pd.getTime())) return false;
@@ -403,13 +542,15 @@ export default function O2DPage() {
     const pdDay = new Date(pd);
     pdDay.setHours(0, 0, 0, 0);
 
-    const diffDays = Math.round((pdDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round(
+      (pdDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
 
-    if (filter === 'Delayed') return pd < now;
-    if (filter === 'Today') return diffDays === 0;
-    if (filter === 'Tomorrow') return diffDays === 1;
-    if (filter === 'Next5') return diffDays > 0 && diffDays <= 5;
-    if (filter === 'Next10') return diffDays > 0 && diffDays <= 10;
+    if (filter === "Delayed") return pd < now;
+    if (filter === "Today") return diffDays === 0;
+    if (filter === "Tomorrow") return diffDays === 1;
+    if (filter === "Next5") return diffDays > 0 && diffDays <= 5;
+    if (filter === "Next10") return diffDays > 0 && diffDays <= 10;
 
     return false;
   };
@@ -419,37 +560,82 @@ export default function O2DPage() {
     for (let i = 1; i <= 11; i++) {
       const pVal = (firstItem[`planned_${i}`] || "").toString().trim();
       const aVal = (firstItem[`actual_${i}`] || "").toString().trim();
+      const sVal = (firstItem[`status_${i}`] || "").toString().trim();
 
-      // Step is active if it's PLANNED but NOT yet ACTUALIZED
-      if (pVal && pVal !== "-" && (!aVal || aVal === "-")) {
-        return i;
+      // Step is active if it's PLANNED...
+      if (pVal && pVal !== "-" && pVal !== "") {
+        // ...and either it has NO actual date OR it was marked as "No"
+        if (!aVal || aVal === "-" || aVal === "" || sVal === "No") {
+          return i;
+        }
       }
     }
     return -1;
   };
 
+  const getBaseFilterMatch = (no: string, items: O2D[]): boolean => {
+    const pIdx = getPendingStepIdx(items);
+    const isHold = !!items[0].hold;
+    const isCancelled = !!items[0].cancelled;
+
+    // Search Bar
+    const matchesSearch =
+      no.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      items[0].party_name.toLowerCase().includes(searchTerm.toLowerCase());
+    if (!matchesSearch) return false;
+
+    // Advanced Filters
+    if (tableFilterPending && (isHold || isCancelled || pIdx === -1)) return false;
+    if (tableFilterParty && !items[0].party_name.toLowerCase().includes(tableFilterParty.toLowerCase())) return false;
+    if (tableFilterOrderNo && !no.toLowerCase().includes(tableFilterOrderNo.toLowerCase())) return false;
+    
+    if (tableFilterItemName && !items.some(item => 
+      item.item_name.toLowerCase().includes(tableFilterItemName.toLowerCase())
+    )) return false;
+
+    if (filterStartDate || filterEndDate) {
+      const itemDate = new Date(items[0].created_at || items[0].updated_at);
+      if (filterStartDate) {
+        const start = new Date(filterStartDate);
+        start.setHours(0, 0, 0, 0);
+        if (itemDate < start) return false;
+      }
+      if (filterEndDate) {
+        const end = new Date(filterEndDate);
+        end.setHours(23, 59, 59, 999);
+        if (itemDate > end) return false;
+      }
+    }
+
+    // Role-based Configuration Checking
+    if (!isSpecialRole && pIdx !== -1) {
+      const stepConfig = globalConfigs[pIdx - 1];
+      if (
+        stepConfig?.responsible_person &&
+        userRole.toUpperCase() === "USER" &&
+        !stepConfig.responsible_person.split(",").map((s) => s.trim()).includes(currentUser)
+      ) {
+        return false;
+      }
+    }
+    return true;
+  };
 
   const orderMatchesAnyFilter = (no: string): boolean => {
     const items = groupedOrders[no];
     if (!items || items.length === 0) return false;
 
+    if (!getBaseFilterMatch(no, items)) return false;
+
     const pIdx = getPendingStepIdx(items);
     const isHold = !!items[0].hold;
     const isCancelled = !!items[0].cancelled;
 
-    // Role-based Filtering
+    // Role-based visibility
     if (!isSpecialRole) {
-      if (pIdx !== -1) {
-        const stepConfig = globalConfigs[pIdx - 1];
-        if (stepConfig?.responsible_person && userRole.toUpperCase() === 'USER' && stepConfig.responsible_person !== currentUser) {
-          return false;
-        }
-      } else if (!selectedDateFilters.includes('Hold') && !selectedDateFilters.includes('Cancelled')) {
-        return false;
-      }
-
-      const hasStatusFilter = selectedDateFilters.includes('Hold') || selectedDateFilters.includes('Cancelled');
+      const hasStatusFilter = selectedDateFilters.includes("Hold") || selectedDateFilters.includes("Cancelled");
       if ((isHold || isCancelled) && !hasStatusFilter) return false;
+      if (pIdx === -1 && !isHold && !isCancelled) return false;
     }
 
     // Step Filtering
@@ -457,7 +643,7 @@ export default function O2DPage() {
 
     // Date/Status Filtering
     if (selectedDateFilters.length > 0) {
-      if (!selectedDateFilters.some(f => orderMatchesDateFilter(items, f))) return false;
+      if (!selectedDateFilters.some((f) => orderMatchesDateFilter(items, f))) return false;
     } else if (!isSpecialRole) {
       if (isHold || isCancelled || pIdx === -1) return false;
     }
@@ -466,43 +652,37 @@ export default function O2DPage() {
   };
 
   const getDateFilterCount = (filter: string): number => {
-    return Object.keys(groupedOrders).filter(no => {
+    return Object.keys(groupedOrders).filter((no) => {
       const items = groupedOrders[no];
-      const matchesDate = orderMatchesDateFilter(items, filter);
-      const pIdx = getPendingStepIdx(items);
+      if (!getBaseFilterMatch(no, items)) return false;
 
-      // Respect Role-based filtering
+      const pIdx = getPendingStepIdx(items);
+      const isHold = !!items[0].hold;
+      const isCancelled = !!items[0].cancelled;
+
       if (!isSpecialRole) {
-        if (pIdx !== -1) {
-          const config = globalConfigs[pIdx - 1];
-          if (config?.responsible_person && userRole.toUpperCase() === 'USER' && config.responsible_person !== currentUser) return false;
-        } else if (filter !== 'Hold' && filter !== 'Cancelled') return false;
-        if ((items[0].hold || items[0].cancelled) && filter !== 'Hold' && filter !== 'Cancelled') return false;
+        if (pIdx === -1 && !isHold && !isCancelled) return false;
+        if ((isHold || isCancelled) && filter !== "Hold" && filter !== "Cancelled") return false;
       }
 
-      // Respect ONLY Step Filters
       if (selectedStepFilters.length > 0 && !selectedStepFilters.includes(pIdx)) return false;
 
-      return matchesDate;
+      return orderMatchesDateFilter(items, filter);
     }).length;
   };
 
   const getStepFilterCount = (stepIdx: number): number => {
-    return Object.keys(groupedOrders).filter(no => {
+    return Object.keys(groupedOrders).filter((no) => {
       const items = groupedOrders[no];
+      if (!getBaseFilterMatch(no, items)) return false;
+
       const pIdx = getPendingStepIdx(items);
       if (pIdx !== stepIdx) return false;
 
-      // Respect Role-based filtering
-      if (!isSpecialRole) {
-        const config = globalConfigs[pIdx - 1];
-        if (config?.responsible_person && userRole.toUpperCase() === 'USER' && config.responsible_person !== currentUser) return false;
-        if (items[0].hold || items[0].cancelled) return false;
-      }
+      if (!isSpecialRole && (items[0].hold || items[0].cancelled)) return false;
 
-      // Respect ONLY Date Filters
       if (selectedDateFilters.length > 0) {
-        if (!selectedDateFilters.some(f => orderMatchesDateFilter(items, f))) return false;
+        if (!selectedDateFilters.some((f) => orderMatchesDateFilter(items, f))) return false;
       }
 
       return true;
@@ -511,14 +691,20 @@ export default function O2DPage() {
 
   const sortedOrderNumbers = useMemo(() => {
     return Object.keys(groupedOrders)
-      .filter(no => {
-        const matchesSearch = no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          groupedOrders[no][0].party_name.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFilters = orderMatchesAnyFilter(no);
-        return matchesSearch && matchesFilters;
-      })
+      .filter((no) => orderMatchesAnyFilter(no))
       .sort((a, b) => b.localeCompare(a));
-  }, [groupedOrders, searchTerm, selectedDateFilters, selectedStepFilters]);
+  }, [
+    groupedOrders,
+    searchTerm,
+    selectedDateFilters,
+    selectedStepFilters,
+    tableFilterPending,
+    tableFilterParty,
+    tableFilterOrderNo,
+    tableFilterItemName,
+    filterStartDate,
+    filterEndDate,
+  ]);
 
   const totalPages = Math.ceil(sortedOrderNumbers.length / itemsPerPage);
   const paginatedOrderNumbers = useMemo(() => {
@@ -526,20 +712,32 @@ export default function O2DPage() {
     return sortedOrderNumbers.slice(startIndex, startIndex + itemsPerPage);
   }, [sortedOrderNumbers, currentPage, itemsPerPage]);
 
+  const addItemRow = () =>
+    setItems([
+      ...items,
+      { item_name: "", item_qty: "", est_amount: "", item_specification: "" },
+    ]);
+  const removeItemRow = (index: number) =>
+    items.length > 1 && setItems(items.filter((_, i) => i !== index));
 
-  const addItemRow = () => setItems([...items, { item_name: "", item_qty: "", est_amount: "", item_specification: "" }]);
-  const removeItemRow = (index: number) => items.length > 1 && setItems(items.filter((_, i) => i !== index));
-
-  const handleItemChange = (index: number, field: keyof O2DItem, value: string) => {
+  const handleItemChange = (
+    index: number,
+    field: keyof O2DItem,
+    value: string,
+  ) => {
     const newItems = [...items];
     newItems[index][field] = value;
-    const itemName = field === 'item_name' ? value : newItems[index].item_name;
-    const qty = parseFloat(field === 'item_qty' ? value : newItems[index].item_qty);
-    const match = dropdownItems.find(di => di.name === itemName);
+    const itemName = field === "item_name" ? value : newItems[index].item_name;
+    const qty = parseFloat(
+      field === "item_qty" ? value : newItems[index].item_qty,
+    );
+    const match = dropdownItems.find((di) => di.name === itemName);
     if (match) {
       const unitPrice = parseFloat(match.amount);
-      if (!isNaN(unitPrice) && !isNaN(qty)) newItems[index].est_amount = (unitPrice * qty).toFixed(2);
-      else if (!isNaN(unitPrice)) newItems[index].est_amount = unitPrice.toFixed(2);
+      if (!isNaN(unitPrice) && !isNaN(qty))
+        newItems[index].est_amount = (unitPrice * qty).toFixed(2);
+      else if (!isNaN(unitPrice))
+        newItems[index].est_amount = unitPrice.toFixed(2);
     }
     setItems(newItems);
   };
@@ -554,8 +752,11 @@ export default function O2DPage() {
 
   const resetForm = () => {
     setCommonData({ order_no: "", party_name: "", remark: "" });
-    setItems([{ item_name: "", item_qty: "", est_amount: "", item_specification: "" }]);
-    setScreenshotFile(null); setImagePreview(null);
+    setItems([
+      { item_name: "", item_qty: "", est_amount: "", item_specification: "" },
+    ]);
+    setScreenshotFile(null);
+    setImagePreview(null);
     setEditingOrderNo(null);
   };
 
@@ -573,7 +774,7 @@ export default function O2DPage() {
     let totalMinutesToConsume = unit.includes("day") ? val * 10 * 60 : val * 60;
 
     const WORK_START_HOUR = 9.5; // 9:30 AM
-    const WORK_END_HOUR = 19.5;   // 7:30 PM
+    const WORK_END_HOUR = 19.5; // 7:30 PM
     const MINS_PER_WORK_DAY = (WORK_END_HOUR - WORK_START_HOUR) * 60;
 
     while (totalMinutesToConsume > 0) {
@@ -604,7 +805,8 @@ export default function O2DPage() {
       // 3. Calculate available minutes in the current window
       const endOfToday = new Date(date);
       endOfToday.setHours(19, 30, 0, 0);
-      const availableMinutesToday = (endOfToday.getTime() - date.getTime()) / (1000 * 60);
+      const availableMinutesToday =
+        (endOfToday.getTime() - date.getTime()) / (1000 * 60);
 
       if (totalMinutesToConsume <= availableMinutesToday) {
         date.setMinutes(date.getMinutes() + totalMinutesToConsume);
@@ -631,14 +833,17 @@ export default function O2DPage() {
     const now = new Date().toISOString();
 
     // Show loader
-    setActionStatus('loading');
-    setActionMessage(editingOrderNo ? 'Updating Order...' : 'Creating Order...');
+    setActionStatus("loading");
+    setActionMessage(
+      editingOrderNo ? "Updating Order..." : "Creating Order...",
+    );
     setIsStatusModalOpen(true);
 
     // Optimistic Update
     const currentO2Ds = o2ds;
     let optimisticO2Ds = [...o2ds];
-    let currentMaxId = o2ds.length > 0 ? Math.max(...o2ds.map(o => parseInt(o.id) || 0)) : 0;
+    let currentMaxId =
+      o2ds.length > 0 ? Math.max(...o2ds.map((o) => parseInt(o.id) || 0)) : 0;
 
     try {
       if (editingOrderNo) {
@@ -650,7 +855,11 @@ export default function O2DPage() {
           const tat = globalConfigs[i]?.tat || "24 Hrs";
           const pKey = `planned_${i + 1}`;
           if (i === 0) {
-            if (!(baseRecord as any)[pKey]) (baseRecord as any)[pKey] = calculatePlannedDate(currentBase, tat);
+            if (!(baseRecord as any)[pKey])
+              (baseRecord as any)[pKey] = calculatePlannedDate(
+                currentBase,
+                tat,
+              );
           } else {
             const prevActual = (baseRecord as any)[`actual_${i}`];
             if (prevActual && prevActual !== "-" && prevActual.trim() !== "") {
@@ -661,7 +870,7 @@ export default function O2DPage() {
           }
         }
 
-        const updatedItems = items.map(item => {
+        const updatedItems = items.map((item) => {
           let idToUse = item.id;
           if (!idToUse) {
             currentMaxId++;
@@ -676,7 +885,7 @@ export default function O2DPage() {
             item_specification: item.item_specification,
             party_name: commonData.party_name,
             remark: commonData.remark,
-            updated_at: now
+            updated_at: now,
           } as O2D;
 
           // Recalculate cascading logic for THIS item/row
@@ -687,7 +896,8 @@ export default function O2DPage() {
             const stepIdx = i + 1;
 
             if (i === 0) {
-              if (!(updated as any)[pKey]) (updated as any)[pKey] = calculatePlannedDate(currentBase, tat);
+              if (!(updated as any)[pKey])
+                (updated as any)[pKey] = calculatePlannedDate(currentBase, tat);
             } else {
               const prevActual = (updated as any)[`actual_${i}`];
               const prevStatus = (updated as any)[`status_${i}`];
@@ -705,7 +915,11 @@ export default function O2DPage() {
                 }
               }
 
-              if (prevActual && prevActual !== "-" && prevActual.trim() !== "") {
+              if (
+                prevActual &&
+                prevActual !== "-" &&
+                prevActual.trim() !== ""
+              ) {
                 (updated as any)[pKey] = calculatePlannedDate(prevActual, tat);
               } else if (!(updated as any)[pKey]) {
                 (updated as any)[pKey] = "";
@@ -715,7 +929,9 @@ export default function O2DPage() {
           return updated;
         });
 
-        optimisticO2Ds = optimisticO2Ds.filter(o => o.order_no !== editingOrderNo);
+        optimisticO2Ds = optimisticO2Ds.filter(
+          (o) => o.order_no !== editingOrderNo,
+        );
         optimisticO2Ds = [...updatedItems, ...optimisticO2Ds];
 
         mutate("O2D", optimisticO2Ds, false);
@@ -737,14 +953,21 @@ export default function O2DPage() {
         let initRecord: any = { planned_1: calculatePlannedDate(now, tat1) };
         for (let i = 2; i <= 11; i++) initRecord[`planned_${i}`] = "";
 
-        const newItems = items.map(item => {
+        const newItems = items.map((item) => {
           currentMaxId++;
           return {
             ...initRecord,
-            id: currentMaxId.toString(), order_no: finalOrderNo, party_name: commonData.party_name,
-            item_name: item.item_name, item_qty: item.item_qty, est_amount: item.est_amount,
+            id: currentMaxId.toString(),
+            order_no: finalOrderNo,
+            party_name: commonData.party_name,
+            item_name: item.item_name,
+            item_qty: item.item_qty,
+            est_amount: item.est_amount,
             item_specification: item.item_specification,
-            remark: commonData.remark, filled_by: currentUser, created_at: now, updated_at: now
+            remark: commonData.remark,
+            filled_by: currentUser,
+            created_at: now,
+            updated_at: now,
           } as O2D;
         });
 
@@ -758,15 +981,32 @@ export default function O2DPage() {
         if (screenshotFile) formData.append("order_screenshot", screenshotFile);
         const res = await fetch("/api/o2d", { method: "POST", body: formData });
         if (!res.ok) throw new Error("Creation failed");
+
+        // IF we have a NEW PARTY draft, submit it now with the actual finalOrderNo
+        if (newPartyDraft) {
+          const finalPartyPayload = {
+            ...newPartyDraft,
+            customerType: `NEW (${finalOrderNo})`,
+          };
+
+          await fetch("/api/party-management", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(finalPartyPayload),
+          });
+
+          setNewPartyDraft(null); // Clear draft
+          await fetchDetails(); // Refresh parties to show newly formatted customerType
+        }
       }
-      setActionStatus('success');
-      setActionMessage(editingOrderNo ? 'Order Updated!' : 'Order Created!');
+      setActionStatus("success");
+      setActionMessage(editingOrderNo ? "Order Updated!" : "Order Created!");
       mutate("O2D"); // Revalidate to get real IDs/Server state
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (error: any) {
       console.error(error);
       mutate("O2D", currentO2Ds, false); // Rollback
-      setActionStatus('error');
+      setActionStatus("error");
       setActionMessage(error.message);
       setIsStatusModalOpen(true);
       setTimeout(() => setIsStatusModalOpen(false), 2000);
@@ -779,21 +1019,27 @@ export default function O2DPage() {
     setCommonData({
       order_no: orderNo,
       party_name: orderItems[0].party_name,
-      remark: orderItems[0].remark
+      remark: orderItems[0].remark,
     });
-    setItems(orderItems.map(o => ({
-      id: o.id,
-      item_name: o.item_name,
-      item_qty: o.item_qty,
-      est_amount: o.est_amount,
-      item_specification: o.item_specification || ""
-    })));
-    setImagePreview(orderItems[0].order_screenshot ? getDriveImageUrl(orderItems[0].order_screenshot) : null);
+    setItems(
+      orderItems.map((o) => ({
+        id: o.id,
+        item_name: o.item_name,
+        item_qty: o.item_qty,
+        est_amount: o.est_amount,
+        item_specification: o.item_specification || "",
+      })),
+    );
+    setImagePreview(
+      orderItems[0].order_screenshot
+        ? getDriveImageUrl(orderItems[0].order_screenshot)
+        : null,
+    );
     setIsModalOpen(true);
   };
 
   const handleDeleteClick = (orderNo: string) => {
-    setConfirmPayload({ type: 'delete', orderNo });
+    setConfirmPayload({ type: "delete", orderNo });
     setIsConfirmOpen(true);
   };
 
@@ -802,7 +1048,7 @@ export default function O2DPage() {
     if (!orderNo) return;
 
     const currentO2Ds = o2ds;
-    const optimisticO2Ds = o2ds.filter(o => o.order_no !== orderNo);
+    const optimisticO2Ds = o2ds.filter((o) => o.order_no !== orderNo);
 
     mutate("O2D", optimisticO2Ds, false);
     setSelectedOrderNo(null);
@@ -810,33 +1056,35 @@ export default function O2DPage() {
     setIsConfirmOpen(false);
 
     // Show loader
-    setActionStatus('loading');
-    setActionMessage('Deleting Order...');
+    setActionStatus("loading");
+    setActionMessage("Deleting Order...");
     setIsStatusModalOpen(true);
 
     try {
-      const res = await fetch(`/api/o2d/order/${orderNo}`, { method: "DELETE" });
+      const res = await fetch(`/api/o2d/order/${orderNo}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error("Delete failed");
-      setActionStatus('success');
-      setActionMessage('Order Deleted');
+      setActionStatus("success");
+      setActionMessage("Order Deleted");
       mutate("O2D");
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (error) {
       mutate("O2D", currentO2Ds, false);
-      setActionStatus('error');
+      setActionStatus("error");
       setActionMessage("Delete Failed");
       setTimeout(() => setIsStatusModalOpen(false), 2000);
     }
   };
 
   const handleOpenSetup = async () => {
-    setActionStatus('loading');
+    setActionStatus("loading");
     setActionMessage("Fetching Configurations...");
     setIsStatusModalOpen(true);
     try {
       const [configRes, usersRes] = await Promise.all([
         fetch("/api/o2d/config"),
-        fetch("/api/users")
+        fetch("/api/users"),
       ]);
       const configData = await configRes.json();
       const usersData = await usersRes.json();
@@ -845,25 +1093,28 @@ export default function O2DPage() {
 
       if (configData && Array.isArray(configData)) {
         const mergedConfigs = O2D_STEPS.map((step, idx) => {
-          const found = configData.find(c => c.step_name === step) || configData[idx];
+          const found =
+            configData.find((c) => c.step_name === step) || configData[idx];
           return {
             step_name: step,
             tat: found?.tat || "",
-            responsible_person: found?.responsible_person || ""
+            responsible_person: found?.responsible_person || "",
           };
         });
         setStepConfigs(mergedConfigs);
       } else {
-        setStepConfigs(O2D_STEPS.map(step => ({
-          step_name: step,
-          tat: "",
-          responsible_person: ""
-        })));
+        setStepConfigs(
+          O2D_STEPS.map((step) => ({
+            step_name: step,
+            tat: "",
+            responsible_person: "",
+          })),
+        );
       }
       setIsStatusModalOpen(false);
       setIsSetupModalOpen(true);
     } catch (e: any) {
-      setActionStatus('error');
+      setActionStatus("error");
       setActionMessage(e.message || "Failed to fetch parameters");
       setTimeout(() => setIsStatusModalOpen(false), 2000);
     }
@@ -871,47 +1122,60 @@ export default function O2DPage() {
 
   const handleSaveSetup = async (e: React.FormEvent) => {
     e.preventDefault();
-    setActionStatus('loading');
+    setActionStatus("loading");
     setActionMessage("Saving Configurations...");
     setIsStatusModalOpen(true);
     try {
       const res = await fetch("/api/o2d/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(stepConfigs)
+        body: JSON.stringify(stepConfigs),
       });
       if (!res.ok) throw new Error("Save failed");
 
       // Update global configs in memory
       setGlobalConfigs(stepConfigs);
 
-      setActionStatus('success');
+      setActionStatus("success");
       setActionMessage("Configuration Saved Successfully");
       setTimeout(() => {
         setIsStatusModalOpen(false);
         setIsSetupModalOpen(false);
       }, 1500);
     } catch (e: any) {
-      setActionStatus('error');
+      setActionStatus("error");
       setActionMessage(e.message || "Failed to save configuration");
       setTimeout(() => setIsStatusModalOpen(false), 2000);
     }
   };
 
-  const handleToggleStatus = async (orderNo: string, action: 'hold' | 'cancelled', currentValue: string | undefined) => {
+  const handleToggleStatus = async (
+    orderNo: string,
+    action: "hold" | "cancelled",
+    currentValue: string | undefined,
+  ) => {
     if (!orderNo) return;
 
     const newValue = !currentValue ? new Date().toISOString() : "";
     const currentO2Ds = o2ds;
-    const optimisticO2Ds = o2ds.map(o => o.order_no === orderNo ? { ...o, [action]: newValue } : o);
+    const optimisticO2Ds = o2ds.map((o) =>
+      o.order_no === orderNo ? { ...o, [action]: newValue } : o,
+    );
 
     mutate("O2D", optimisticO2Ds, false);
     setConfirmPayload(null);
     setIsConfirmOpen(false);
 
     // Show loader
-    const actionLabel = action === 'hold' ? (newValue ? 'Putting On Hold...' : 'Releasing Hold...') : (newValue ? 'Cancelling Order...' : 'Restoring Order...');
-    setActionStatus('loading');
+    const actionLabel =
+      action === "hold"
+        ? newValue
+          ? "Putting On Hold..."
+          : "Releasing Hold..."
+        : newValue
+          ? "Cancelling Order..."
+          : "Restoring Order...";
+    setActionStatus("loading");
     setActionMessage(actionLabel);
     setIsStatusModalOpen(true);
 
@@ -919,17 +1183,17 @@ export default function O2DPage() {
       const res = await fetch("/api/o2d/toggle-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderNo, action, value: newValue })
+        body: JSON.stringify({ orderNo, action, value: newValue }),
       });
 
       if (!res.ok) throw new Error(`Failed to toggle ${action}`);
-      setActionStatus('success');
-      setActionMessage('Status Updated');
+      setActionStatus("success");
+      setActionMessage("Status Updated");
       mutate("O2D");
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (e: any) {
       mutate("O2D", currentO2Ds, false);
-      setActionStatus('error');
+      setActionStatus("error");
       setActionMessage(e.message || "Action failed");
       setTimeout(() => setIsStatusModalOpen(false), 2000);
     }
@@ -944,7 +1208,7 @@ export default function O2DPage() {
 
     // 1. Group by order_no
     const groups: Record<string, O2D[]> = {};
-    o2ds.forEach(item => {
+    o2ds.forEach((item) => {
       const no = item.order_no || "Unknown";
       if (!groups[no]) groups[no] = [];
       groups[no].push(item);
@@ -953,16 +1217,26 @@ export default function O2DPage() {
     // 2. Sort groups by their latest item's created_at (descending) -> "latest order on top"
     // Also ensuring items within group are chronological (original order usually)
     const sortedNos = Object.keys(groups).sort((a, b) => {
-      const latestA = Math.max(...groups[a].map(i => new Date(i.created_at || i.updated_at || 0).getTime()));
-      const latestB = Math.max(...groups[b].map(i => new Date(i.created_at || i.updated_at || 0).getTime()));
+      const latestA = Math.max(
+        ...groups[a].map((i) =>
+          new Date(i.created_at || i.updated_at || 0).getTime(),
+        ),
+      );
+      const latestB = Math.max(
+        ...groups[b].map((i) =>
+          new Date(i.created_at || i.updated_at || 0).getTime(),
+        ),
+      );
       return latestB - latestA;
     });
 
     // 3. Flatten back, items in groups should be ASCENDING created_at (first entry on top)
     const result: O2D[] = [];
-    sortedNos.forEach(no => {
-      const sortedGroup = [...groups[no]].sort((x, y) => 
-        new Date(x.created_at || 0).getTime() - new Date(y.created_at || 0).getTime()
+    sortedNos.forEach((no) => {
+      const sortedGroup = [...groups[no]].sort(
+        (x, y) =>
+          new Date(x.created_at || 0).getTime() -
+          new Date(y.created_at || 0).getTime(),
       );
       result.push(...sortedGroup);
     });
@@ -971,22 +1245,31 @@ export default function O2DPage() {
   }, [o2ds]);
 
   const filteredTableData = useMemo(() => {
-    return flattenedO2Ds.filter(item => {
+    return flattenedO2Ds.filter((item) => {
       // Basic Search (Order No, Party, Item Name)
       const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = !searchTerm || 
+      const matchesSearch =
+        !searchTerm ||
         item.order_no.toLowerCase().includes(searchLower) ||
         item.party_name.toLowerCase().includes(searchLower) ||
         item.item_name.toLowerCase().includes(searchLower);
 
       // Party Filter
-      const matchesParty = !tableFilterParty || item.party_name.toLowerCase().includes(tableFilterParty.toLowerCase());
-      
+      const matchesParty =
+        !tableFilterParty ||
+        item.party_name.toLowerCase().includes(tableFilterParty.toLowerCase());
+
       // Order ID Filter
-      const matchesOrderId = !tableFilterOrderNo || item.order_no.toLowerCase().includes(tableFilterOrderNo.toLowerCase());
+      const matchesOrderId =
+        !tableFilterOrderNo ||
+        item.order_no.toLowerCase().includes(tableFilterOrderNo.toLowerCase());
 
       // Item Name Filter
-      const matchesItemName = !tableFilterItemName || item.item_name.toLowerCase().includes(tableFilterItemName.toLowerCase());
+      const matchesItemName =
+        !tableFilterItemName ||
+        item.item_name
+          .toLowerCase()
+          .includes(tableFilterItemName.toLowerCase());
 
       // Date Range Filter
       let matchesDateRange = true;
@@ -994,21 +1277,49 @@ export default function O2DPage() {
         const itemDate = new Date(item.created_at || item.updated_at);
         if (filterStartDate) {
           const start = new Date(filterStartDate);
-          start.setHours(0,0,0,0);
+          start.setHours(0, 0, 0, 0);
           if (itemDate < start) matchesDateRange = false;
         }
         if (filterEndDate) {
           const end = new Date(filterEndDate);
-          end.setHours(23,59,59,999);
+          end.setHours(23, 59, 59, 999);
           if (itemDate > end) matchesDateRange = false;
         }
       }
 
-      return matchesSearch && matchesParty && matchesOrderId && matchesItemName && matchesDateRange;
-    });
-  }, [flattenedO2Ds, searchTerm, tableFilterParty, tableFilterOrderNo, tableFilterItemName, filterStartDate, filterEndDate]);
+      // Pending Filter
+      let matchesPending = true;
+      if (tableFilterPending) {
+        const isHold = !!item.hold;
+        const isCancelled = !!item.cancelled;
+        const oItems = groupedOrders[item.order_no] || [item];
+        const pIdx = getPendingStepIdx(oItems);
+        matchesPending = !isHold && !isCancelled && pIdx !== -1;
+      }
 
-  const tableTotalPages = Math.ceil(filteredTableData.length / tableItemsPerPage);
+      return (
+        matchesSearch &&
+        matchesParty &&
+        matchesOrderId &&
+        matchesItemName &&
+        matchesDateRange &&
+        matchesPending
+      );
+    });
+  }, [
+    flattenedO2Ds,
+    searchTerm,
+    tableFilterParty,
+    tableFilterOrderNo,
+    tableFilterItemName,
+    filterStartDate,
+    filterEndDate,
+    tableFilterPending,
+  ]);
+
+  const tableTotalPages = Math.ceil(
+    filteredTableData.length / tableItemsPerPage,
+  );
   const paginatedTableData = useMemo(() => {
     const start = (tableCurrentPage - 1) * tableItemsPerPage;
     return filteredTableData.slice(start, start + tableItemsPerPage);
@@ -1016,71 +1327,120 @@ export default function O2DPage() {
 
   const handleRemoveFollowUp = async () => {
     if (!selectedOrderNo) return;
-    setActionStatus('loading');
-    setActionMessage(`Purging Step ${removeStep}${removeOnwards ? " Onwards" : ""}...`);
+    setActionStatus("loading");
+    setActionMessage(
+      `Purging Step ${removeStep}${removeOnwards ? " Onwards" : ""}...`,
+    );
     setIsStatusModalOpen(true);
 
     try {
       const res = await fetch("/api/o2d/remove-followup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderNo: selectedOrderNo, startStep: removeStep, onlyThisStep: !removeOnwards })
+        body: JSON.stringify({
+          orderNo: selectedOrderNo,
+          startStep: removeStep,
+          onlyThisStep: !removeOnwards,
+        }),
       });
 
       if (!res.ok) throw new Error("Purge failed");
 
-      setActionStatus('success');
+      setActionStatus("success");
       setActionMessage("Data Cleared Successfully");
       setIsRemoveFollowUpModalOpen(false);
       mutate("O2D");
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (e: any) {
-      setActionStatus('error');
+      setActionStatus("error");
       setActionMessage(e.message || "Purge failed");
       setTimeout(() => setIsStatusModalOpen(false), 2000);
     }
   };
 
   const handleExport = () => {
-    const dataToExport = pageViewMode === 'table' ? filteredTableData : o2ds;
+    const dataToExport = pageViewMode === "table" ? filteredTableData : o2ds;
     if (dataToExport.length === 0) return;
 
-    const headers = ['Order No', 'Party Name', 'Item Name', 'Item Qty', 'Est Amount', 'Created At', 'Filled By', 'Remark'];
-    const csvRows = [headers.join(',')];
+    // Define column groups
+    const detailHeaders = [
+      "Order No",
+      "Party Name",
+      "Item Name",
+      "Item Qty",
+      "Est Amount",
+      "Created At",
+      "Filled By",
+      "Remark",
+    ];
 
-    dataToExport.forEach(item => {
-      const row = [
-        item.order_no,
-        `"${item.party_name.replace(/"/g, '""')}"`,
-        `"${item.item_name.replace(/"/g, '""')}"`,
-        item.item_qty,
-        item.est_amount,
-        (() => {
-          if (!item.created_at) return '-';
-          const d = new Date(item.created_at);
-          const day = d.getDate().toString().padStart(2, '0');
-          const month = (d.getMonth() + 1).toString().padStart(2, '0');
-          const year = d.getFullYear();
-          const hours = d.getHours().toString().padStart(2, '0');
-          const minutes = d.getMinutes().toString().padStart(2, '0');
-          const seconds = d.getSeconds().toString().padStart(2, '0');
-          return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-        })(),
-        `"${item.filled_by || ''}"`,
-        `"${(item.remark || '').replace(/"/g, '""')}"`
-      ];
-      csvRows.push(row.join(','));
+    // Dynamic headers based on user selection
+    let headers: string[] = [];
+    if (exportIncludeDetails) headers = [...detailHeaders];
+
+    exportSelectedSteps
+      .sort((a, b) => a - b)
+      .forEach((stepIdx) => {
+        const stepName = O2D_STEP_SHORTS[stepIdx - 1];
+        headers.push(`${stepName} (Status)`);
+        headers.push(`${stepName} (Actual)`);
+        headers.push(`${stepName} (Planned)`);
+      });
+
+    const csvRows = [headers.join(",")];
+
+    dataToExport.forEach((item) => {
+      let row: string[] = [];
+
+      if (exportIncludeDetails) {
+        row = [
+          item.order_no,
+          `"${item.party_name.replace(/"/g, '""')}"`,
+          `"${item.item_name.replace(/"/g, '""')}"`,
+          item.item_qty,
+          item.est_amount,
+          (() => {
+            if (!item.created_at) return "-";
+            const d = new Date(item.created_at);
+            const pad = (n: number) => n.toString().padStart(2, "0");
+            return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+          })(),
+          `"${item.filled_by || ""}"`,
+          `"${(item.remark || "").replace(/"/g, '""')}"`,
+        ];
+      }
+
+      exportSelectedSteps
+        .sort((a, b) => a - b)
+        .forEach((stepIdx) => {
+          const status = (item as any)[`status_${stepIdx}`] || "-";
+          const actual = (item as any)[`actual_${stepIdx}`]
+            ? new Date((item as any)[`actual_${stepIdx}`]).toLocaleString()
+            : "-";
+          const planned = (item as any)[`planned_${stepIdx}`]
+            ? new Date((item as any)[`planned_${stepIdx}`]).toLocaleString()
+            : "-";
+          row.push(status);
+          row.push(`"${actual}"`);
+          row.push(`"${planned}"`);
+        });
+
+      csvRows.push(row.join(","));
     });
 
-    const csvString = csvRows.join('\n');
-    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const csvString = csvRows.join("\n");
+    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
-    link.setAttribute('download', `O2D_Export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute(
+      "download",
+      `O2D_Export_${new Date().toISOString().split("T")[0]}.csv`,
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setIsExportModalOpen(false);
   };
 
   const getCurrentStep = (order: O2D[]) => {
@@ -1098,7 +1458,7 @@ export default function O2DPage() {
     const now = currentTime.getTime();
     const thirtyMinutes = 30 * 60 * 1000;
 
-    return (now - createdAt) < thirtyMinutes;
+    return now - createdAt < thirtyMinutes;
   }, [selectedOrder, currentTime]);
 
   const lockoutTimeLeft = useMemo(() => {
@@ -1110,7 +1470,7 @@ export default function O2DPage() {
     const thirtyMinutes = 30 * 60 * 1000;
     const timePassed = now - createdAt;
     const timeLeft = Math.max(0, thirtyMinutes - timePassed);
-    
+
     const m = Math.floor(timeLeft / (1000 * 60));
     const s = Math.floor((timeLeft % (1000 * 60)) / 1000);
     return { m, s };
@@ -1127,7 +1487,7 @@ export default function O2DPage() {
     const first = selectedOrder[0];
     const fields: any = {
       status: (first as any)[`status_${stepIdx}`] || "No",
-      actual: (first as any)[`actual_${stepIdx}`] || new Date().toISOString()
+      actual: (first as any)[`actual_${stepIdx}`] || new Date().toISOString(),
     };
 
     // Add step-specific fields
@@ -1137,7 +1497,8 @@ export default function O2DPage() {
       fields.merge_order_with_1 = first?.merge_order_with_1 || "";
     } else if (stepIdx === 6) {
       fields.num_of_parcel_6 = first?.num_of_parcel_6 || "";
-      fields.actual_date_of_order_packed_6 = first?.actual_date_of_order_packed_6 || "";
+      fields.actual_date_of_order_packed_6 =
+        first?.actual_date_of_order_packed_6 || "";
     } else if (stepIdx === 7) {
       fields.voucher_num_7 = first?.voucher_num_7 || "";
     } else if (stepIdx === 8) {
@@ -1162,7 +1523,7 @@ export default function O2DPage() {
     const currentO2Ds = o2ds;
 
     // Prepare optimistic update
-    const updatedO2Ds = o2ds.map(o2d => {
+    const updatedO2Ds = o2ds.map((o2d) => {
       if (o2d.order_no !== selectedOrderNo) return o2d;
 
       const updated = { ...o2d };
@@ -1177,18 +1538,24 @@ export default function O2DPage() {
         updated.merge_order_with_1 = stepUpdateFields.merge_order_with_1;
       } else if (stepIdx === 6) {
         updated.num_of_parcel_6 = stepUpdateFields.num_of_parcel_6;
-        updated.actual_date_of_order_packed_6 = stepUpdateFields.actual_date_of_order_packed_6;
+        updated.actual_date_of_order_packed_6 =
+          stepUpdateFields.actual_date_of_order_packed_6;
       } else if (stepIdx === 7) {
         updated.voucher_num_7 = stepUpdateFields.voucher_num_7;
       } else if (stepIdx === 8) {
-        updated.order_details_checked_8 = stepUpdateFields.order_details_checked_8;
+        updated.order_details_checked_8 =
+          stepUpdateFields.order_details_checked_8;
         updated.voucher_num_51_8 = stepUpdateFields.voucher_num_51_8;
         updated.t_amt_8 = stepUpdateFields.t_amt_8;
       } else if (stepIdx === 9) {
         updated.num_of_parcel_9 = stepUpdateFields.num_of_parcel_9;
       }
 
-      if ((stepUpdateFields.status === "Yes" || (stepIdx === 4 && stepUpdateFields.status === "No")) && stepIdx < 11) {
+      if (
+        (stepUpdateFields.status === "Yes" ||
+          (stepIdx === 4 && stepUpdateFields.status === "No")) &&
+        stepIdx < 11
+      ) {
         let nextStepIdx = stepIdx + 1;
 
         // Skip logic: if Step 4 is Yes, skip Step 5 and go straight to Step 6
@@ -1207,7 +1574,10 @@ export default function O2DPage() {
         if (stepIdx === 6 && stepUpdateFields.actual_date_of_order_packed_6) {
           baseForNext = stepUpdateFields.actual_date_of_order_packed_6;
         }
-        (updated as any)[`planned_${nextStepIdx}`] = calculatePlannedDate(baseForNext, nextTat);
+        (updated as any)[`planned_${nextStepIdx}`] = calculatePlannedDate(
+          baseForNext,
+          nextTat,
+        );
       }
       updated.updated_at = timestamp;
       return updated;
@@ -1217,7 +1587,7 @@ export default function O2DPage() {
     setIsStepUpdateModalOpen(false);
 
     // Show loader
-    setActionStatus('loading');
+    setActionStatus("loading");
     setActionMessage(`Updating Step ${currentStepToUpdate}...`);
     setIsStatusModalOpen(true);
 
@@ -1230,11 +1600,18 @@ export default function O2DPage() {
         formData.append("orderNo", selectedOrderNo);
         formData.append("step", currentStepToUpdate.toString());
 
-        const uploadRes = await fetch("/api/o2d/upload", { method: "POST", body: formData });
+        const uploadRes = await fetch("/api/o2d/upload", {
+          method: "POST",
+          body: formData,
+        });
         if (uploadRes.ok) {
           const { fileId } = await uploadRes.json();
           fileUploaded = true;
-          const fieldMap: any = { 1: 'upload_so_1', 6: 'upload_pi_6', 9: 'attach_bilty_9' };
+          const fieldMap: any = {
+            1: "upload_so_1",
+            6: "upload_pi_6",
+            9: "attach_bilty_9",
+          };
           const targetField = fieldMap[currentStepToUpdate];
           if (targetField) {
             updatedO2Ds.forEach((o: any) => {
@@ -1249,17 +1626,19 @@ export default function O2DPage() {
       const res = await fetch(`/api/o2d/order/${selectedOrderNo}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedO2Ds.filter(o => o.order_no === selectedOrderNo)),
+        body: JSON.stringify(
+          updatedO2Ds.filter((o) => o.order_no === selectedOrderNo),
+        ),
       });
 
       if (!res.ok) throw new Error("Step update failed");
-      setActionStatus('success');
-      setActionMessage('Step Updated Successfully');
+      setActionStatus("success");
+      setActionMessage("Step Updated Successfully");
       mutate("O2D");
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (error: any) {
       mutate("O2D", currentO2Ds, false);
-      setActionStatus('error');
+      setActionStatus("error");
       setActionMessage(error.message);
       setTimeout(() => setIsStatusModalOpen(false), 2000);
     }
@@ -1270,7 +1649,7 @@ export default function O2DPage() {
     try {
       const d = new Date(dateString);
       if (isNaN(d.getTime())) return dateString;
-      const pad = (n: number) => n.toString().padStart(2, '0');
+      const pad = (n: number) => n.toString().padStart(2, "0");
       return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     } catch (e) {
       return dateString;
@@ -1304,8 +1683,10 @@ export default function O2DPage() {
     if (minutes > 0 || textParts.length === 0) textParts.push(`${minutes}m`);
 
     return {
-      text: isDelayed ? `${textParts.join(" ")} Late` : `${textParts.join(" ")} Early`,
-      isDelayed
+      text: isDelayed
+        ? `${textParts.join(" ")} Late`
+        : `${textParts.join(" ")} Early`,
+      isDelayed,
     };
   };
 
@@ -1314,47 +1695,81 @@ export default function O2DPage() {
       {/* Header Row */}
       <div className="flex flex-col lg:flex-row items-center justify-between gap-4 px-2 shrink-0">
         <div className="text-center lg:text-left min-w-0">
-          <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight italic">O2D SYSTEM</h1>
-          <p className="text-[#003875] dark:text-[#FFD500] font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] opacity-80 -mt-1">Syncing Intelligence</p>
+          <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight italic">
+            O2D SYSTEM
+          </h1>
+          <p className="text-[#003875] dark:text-[#FFD500] font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] opacity-80 -mt-1">
+            Syncing Intelligence
+          </p>
         </div>
         <div className="flex justify-end flex-shrink-0 min-w-0 lg:ml-auto">
           <div className="flex items-center gap-1 rounded-full border-2 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-lg p-0.5 overflow-x-auto no-scrollbar max-w-full">
-            <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-4 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all">
-              <PlusIcon className="w-4 h-4 stroke-[3]" /> 
+            <button
+              onClick={() => {
+                resetForm();
+                setIsModalOpen(true);
+              }}
+              className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-4 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all"
+            >
+              <PlusIcon className="w-4 h-4 stroke-[3]" />
               <span className="hidden sm:inline">New Order</span>
             </button>
             <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-0.5" />
-            
+
             {/* View Mode Switcher - Prominent in pill as requested */}
-            <button 
-              onClick={() => setPageViewMode(pageViewMode === 'panels' ? 'table' : 'panels')} 
+            <button
+              onClick={() =>
+                setPageViewMode(pageViewMode === "panels" ? "table" : "panels")
+              }
               className={`flex items-center gap-2 px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full transition-all border-2 ${
-                pageViewMode === 'table' 
-                ? 'bg-[#003875] text-[#FFD500] border-[#003875]' 
-                : 'text-[#003875] dark:text-[#FFD500] border-transparent hover:bg-[#003875]/5 dark:hover:bg-navy-700'
+                pageViewMode === "table"
+                  ? "bg-[#003875] text-[#FFD500] border-[#003875]"
+                  : "text-[#003875] dark:text-[#FFD500] border-transparent hover:bg-[#003875]/5 dark:hover:bg-navy-700"
               }`}
             >
-              {pageViewMode === 'panels' ? <Squares2X2Icon className="w-4 h-4 stroke-[3]" /> : <ListBulletIcon className="w-4 h-4 stroke-[3]" />}
-              <span className="hidden sm:inline">{pageViewMode === 'panels' ? 'Table View' : 'Panel View'}</span>
+              {pageViewMode === "panels" ? (
+                <Squares2X2Icon className="w-4 h-4 stroke-[3]" />
+              ) : (
+                <ListBulletIcon className="w-4 h-4 stroke-[3]" />
+              )}
+              <span className="hidden sm:inline">
+                {pageViewMode === "panels" ? "Table View" : "Panel View"}
+              </span>
             </button>
             <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-0.5" />
 
-            <button onClick={handleExport} className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all">
-              <ArrowDownTrayIcon className="w-4 h-4 stroke-[3]" /> 
+            <button
+              onClick={() => setIsExportModalOpen(true)}
+              className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all"
+            >
+              <ArrowDownTrayIcon className="w-4 h-4 stroke-[3]" />
               <span className="hidden sm:inline">Export</span>
             </button>
             <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-0.5" />
-            <button onClick={handleOpenSetup} className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all">
-              <Cog6ToothIcon className="w-4 h-4 stroke-[3]" /> 
+            <button
+              onClick={handleOpenSetup}
+              className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all"
+            >
+              <Cog6ToothIcon className="w-4 h-4 stroke-[3]" />
               <span className="hidden sm:inline">Setup</span>
             </button>
             <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-0.5" />
-            <button onClick={() => setIsBusyModalOpen(true)} className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all">
-              <ClipboardDocumentCheckIcon className="w-4 h-4 stroke-[3]" /> 
+            <button
+              onClick={() => setIsBusyModalOpen(true)}
+              className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all"
+            >
+              <ClipboardDocumentCheckIcon className="w-4 h-4 stroke-[3]" />
               <span className="hidden sm:inline">For Busy</span>
             </button>
             <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-1" />
-            <button onClick={fetchO2Ds} className="p-1.5 text-[#003875] dark:text-[#FFD500] rounded-full hover:bg-gray-100 dark:hover:bg-navy-700 transition-all"><ArrowPathIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} /></button>
+            <button
+              onClick={fetchO2Ds}
+              className="p-1.5 text-[#003875] dark:text-[#FFD500] rounded-full hover:bg-gray-100 dark:hover:bg-navy-700 transition-all"
+            >
+              <ArrowPathIcon
+                className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`}
+              />
+            </button>
           </div>
         </div>
       </div>
@@ -1367,9 +1782,11 @@ export default function O2DPage() {
             onClick={() => setShowFilters(!showFilters)}
             className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-navy-800 border border-gray-100 dark:border-navy-700 rounded-full shadow-md hover:shadow-lg transition-all text-[#003875] dark:text-[#FFD500] group"
           >
-            <FunnelIcon className={`w-3 h-3 transition-transform duration-300 ${showFilters ? 'rotate-180' : ''}`} />
+            <FunnelIcon
+              className={`w-3 h-3 transition-transform duration-300 ${showFilters ? "rotate-180" : ""}`}
+            />
             <span className="text-[9px] font-black uppercase tracking-widest">
-              {showFilters ? 'Hide Filters' : 'Show Filters'}
+              {showFilters ? "Hide Filters" : "Show Filters"}
             </span>
             {showFilters ? (
               <ChevronUpIcon className="w-3 h-3 opacity-50 group-hover:opacity-100" />
@@ -1392,13 +1809,21 @@ export default function O2DPage() {
                       key={stepIdx}
                       onClick={() => toggleStepFilter(stepIdx)}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all whitespace-nowrap ${
-                        isActive 
-                        ? 'bg-[#CE2029] border-[#CE2029] text-white shadow-lg scale-105' 
-                        : 'bg-white dark:bg-navy-800 border-gray-100 dark:border-navy-700 text-gray-500 hover:border-[#CE2029]/30'
+                        isActive
+                          ? "bg-[#CE2029] border-[#CE2029] text-white shadow-lg scale-105"
+                          : "bg-white dark:bg-navy-800 border-gray-100 dark:border-navy-700 text-gray-500 hover:border-[#CE2029]/30"
                       }`}
                     >
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-white' : 'text-gray-600 dark:text-gray-300'}`}>{stepName}</span>
-                      <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-black ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-navy-700 text-gray-400'}`}>{count}</span>
+                      <span
+                        className={`text-[10px] font-black uppercase tracking-widest ${isActive ? "text-white" : "text-gray-600 dark:text-gray-300"}`}
+                      >
+                        {stepName}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded-md text-[9px] font-black ${isActive ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-navy-700 text-gray-400"}`}
+                      >
+                        {count}
+                      </span>
                     </button>
                   );
                 })}
@@ -1407,89 +1832,223 @@ export default function O2DPage() {
               {/* Advanced Filter Sub-Row */}
               <div className="flex flex-wrap items-center gap-4 px-4 py-2 bg-gray-50/50 dark:bg-navy-800/20 border-t border-gray-100 dark:border-navy-800">
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Date Range:</span>
-                  <input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500]" />
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                    Date Range:
+                  </span>
+                  <input
+                    type="date"
+                    value={filterStartDate}
+                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500]"
+                  />
                   <span className="text-gray-300">-</span>
-                  <input type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500]" />
+                  <input
+                    type="date"
+                    value={filterEndDate}
+                    onChange={(e) => setFilterEndDate(e.target.value)}
+                    className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500]"
+                  />
                 </div>
                 <div className="h-4 w-[1px] bg-gray-200 dark:bg-navy-700" />
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Party:</span>
-                  <input type="text" placeholder="Filter by Party..." value={tableFilterParty} onChange={(e) => setTableFilterParty(e.target.value)} className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-3 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500] w-40" />
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                    Party:
+                  </span>
+                  <div className="w-44">
+                    <SearchableDropdown
+                      label="Party"
+                      icon={IdentificationIcon}
+                      value={tableFilterParty}
+                      onChange={(val) => setTableFilterParty(val)}
+                      options={parties}
+                      placeholder="Filter Party..."
+                      hideLabel={true}
+                    />
+                  </div>
                 </div>
+
                 <div className="h-4 w-[1px] bg-gray-200 dark:bg-navy-700" />
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Order ID:</span>
-                  <input type="text" placeholder="OR-XXXXX" value={tableFilterOrderNo} onChange={(e) => setTableFilterOrderNo(e.target.value)} className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-3 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500] w-28" />
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                    Order ID:
+                  </span>
+                  <div className="w-32">
+                    <SearchableDropdown
+                      label="Order ID"
+                      icon={HashtagIcon}
+                      value={tableFilterOrderNo}
+                      onChange={(val) => setTableFilterOrderNo(val)}
+                      options={memoizedOrderOptions}
+                      placeholder="OR-XXXXX"
+                      hideLabel={true}
+                    />
+                  </div>
                 </div>
+
                 <div className="h-4 w-[1px] bg-gray-200 dark:bg-navy-700" />
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Item Name:</span>
-                  <input type="text" placeholder="Search Item..." value={tableFilterItemName} onChange={(e) => setTableFilterItemName(e.target.value)} className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-3 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500] w-40" />
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                    Item Name:
+                  </span>
+                  <div className="w-44">
+                    <SearchableDropdown
+                      label="Item Name"
+                      icon={ShoppingBagIcon}
+                      value={tableFilterItemName}
+                      onChange={(val) => setTableFilterItemName(val)}
+                      options={memoizedItemOptions}
+                      placeholder="Search Item..."
+                      hideLabel={true}
+                    />
+                  </div>
                 </div>
-                <button onClick={() => { setFilterStartDate(""); setFilterEndDate(""); setTableFilterParty(""); setTableFilterOrderNo(""); setTableFilterItemName(""); setSearchTerm(""); }} className="ml-auto px-3 py-1.5 text-[9px] font-black uppercase text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all">Reset Filters</button>
+                <div className="h-4 w-[1px] bg-gray-200 dark:bg-navy-700" />
+                <button
+                  onClick={() => setTableFilterPending(!tableFilterPending)}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 border ${
+                    tableFilterPending
+                      ? "bg-[#003875] text-[#FFD500] border-[#003875] shadow-md"
+                      : "bg-white dark:bg-navy-800 text-gray-400 border-gray-200 dark:border-navy-700 hover:border-[#003875]"
+                  }`}
+                >
+                  <ClockIcon
+                    className={`w-3.5 h-3.5 ${tableFilterPending ? "text-[#FFD500]" : "text-gray-400"}`}
+                  />
+                  Pending
+                </button>
+                <button
+                  onClick={() => {
+                    setFilterStartDate("");
+                    setFilterEndDate("");
+                    setTableFilterParty("");
+                    setTableFilterOrderNo("");
+                    setTableFilterItemName("");
+                    setTableFilterPending(false);
+                    setSearchTerm("");
+                  }}
+                  className="ml-auto px-3 py-1.5 text-[9px] font-black uppercase text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                >
+                  Reset Filters
+                </button>
               </div>
             </div>
           )}
 
-        {/* Simple Table vs Master-Detail Panels Row */}
-        <div className="flex-1 flex overflow-hidden">
-          {pageViewMode === 'table' ? (
-             <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-navy-900">
-               <div className="flex-1 overflow-auto no-scrollbar pb-10">
-                 <table className="w-full text-left border-collapse min-w-[1000px]">
-                   <thead className="sticky top-0 z-20 shadow-sm">
-                     <tr className="bg-gray-50 dark:bg-navy-950 text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-navy-800">
-                       <th className="px-6 py-4">Order ID</th>
-                       <th className="px-6 py-4">Party Name</th>
-                       <th className="px-6 py-4">Item Name</th>
-                       <th className="px-6 py-4 text-center">Item Qty</th>
-                       <th className="px-6 py-4">Created At</th>
-                       <th className="px-6 py-4">Filled By</th>
-                       <th className="px-6 py-4">Actions</th>
-                     </tr>
-                   </thead>
-                   <tbody className="divide-y divide-gray-50 dark:divide-navy-800/20">
-                     {paginatedTableData.length > 0 ? (
-                       paginatedTableData.map((item, idx) => (
-                         <tr key={idx} className="group hover:bg-[#003875]/[0.02] dark:hover:bg-white/5 transition-colors">
-                           <td className="px-6 py-4">
-                             <div className="flex flex-col">
-                               <span className="text-[13px] font-black text-[#003875] dark:text-[#FFD500]">{item.order_no}</span>
-                               {item.hold && <span className="text-[7px] text-orange-500 font-black uppercase tracking-tighter">On Hold</span>}
-                               {item.cancelled && <span className="text-[7px] text-red-500 font-black uppercase tracking-tighter">Cancelled</span>}
-                             </div>
-                           </td>
-                           <td className="px-6 py-4 text-[12px] font-black text-gray-700 dark:text-gray-200 uppercase max-w-[200px] truncate" title={item.party_name}>{item.party_name}</td>
-                           <td className="px-6 py-4 text-[12px] font-bold text-gray-600 dark:text-gray-300 uppercase max-w-[250px] truncate" title={item.item_name}>{item.item_name}</td>
-                           <td className="px-6 py-4 text-center font-black text-[#003875] dark:text-[#FFD500] text-[13px]">{item.item_qty}</td>
-                           <td className="px-6 py-4 text-[11px] font-bold text-gray-400 tracking-tight">
+          {/* Simple Table vs Master-Detail Panels Row */}
+          <div className="flex-1 flex overflow-hidden">
+            {pageViewMode === "table" ? (
+              <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-navy-900">
+                <div className="flex-1 overflow-auto no-scrollbar pb-10">
+                  <table className="w-full text-left border-collapse min-w-[1000px]">
+                    <thead className="sticky top-0 z-20 shadow-sm">
+                      <tr className="bg-gray-50 dark:bg-navy-950 text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-navy-800">
+                        <th className="px-6 py-4">Order ID</th>
+                        <th className="px-6 py-4">Party Name</th>
+                        <th className="px-6 py-4">Item Name</th>
+                        <th className="px-6 py-4 text-center">Item Qty</th>
+                        <th className="px-6 py-4">Created At</th>
+                        <th className="px-6 py-4">Filled By</th>
+                        <th className="px-6 py-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 dark:divide-navy-800/20">
+                      {paginatedTableData.length > 0 ? (
+                        paginatedTableData.map((item, idx) => (
+                          <tr
+                            key={idx}
+                            className="group hover:bg-[#003875]/[0.02] dark:hover:bg-white/5 transition-colors"
+                          >
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col">
+                                <span className="text-[13px] font-black text-[#003875] dark:text-[#FFD500]">
+                                  {item.order_no}
+                                </span>
+                                {item.hold && (
+                                  <span className="text-[7px] text-orange-500 font-black uppercase tracking-tighter">
+                                    On Hold
+                                  </span>
+                                )}
+                                {item.cancelled && (
+                                  <span className="text-[7px] text-red-500 font-black uppercase tracking-tighter">
+                                    Cancelled
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td
+                              className="px-6 py-4 text-[12px] font-black text-gray-700 dark:text-gray-200 uppercase max-w-[200px] truncate"
+                              title={item.party_name}
+                            >
+                              {item.party_name}
+                            </td>
+                            <td
+                              className="px-6 py-4 text-[12px] font-bold text-gray-600 dark:text-gray-300 uppercase max-w-[250px] truncate"
+                              title={item.item_name}
+                            >
+                              {item.item_name}
+                            </td>
+                            <td className="px-6 py-4 text-center font-black text-[#003875] dark:text-[#FFD500] text-[13px]">
+                              {item.item_qty}
+                            </td>
+                            <td className="px-6 py-4 text-[11px] font-bold text-gray-400 tracking-tight">
                               {item.created_at ? (
                                 <div className="flex flex-col">
-                                  <span className="text-gray-700 dark:text-gray-200">{new Date(item.created_at).toLocaleDateString('en-GB')}</span>
-                                  <span className="text-[9px] text-[#003875] dark:text-[#FFD500] font-black opacity-70 uppercase">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
+                                  <span className="text-gray-700 dark:text-gray-200">
+                                    {new Date(
+                                      item.created_at,
+                                    ).toLocaleDateString("en-GB")}
+                                  </span>
+                                  <span className="text-[9px] text-[#003875] dark:text-[#FFD500] font-black opacity-70 uppercase">
+                                    {new Date(
+                                      item.created_at,
+                                    ).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      second: "2-digit",
+                                      hour12: false,
+                                    })}
+                                  </span>
                                 </div>
-                              ) : '-'}
+                              ) : (
+                                "-"
+                              )}
                             </td>
-                           <td className="px-6 py-4 text-[11px] font-black text-gray-500 uppercase tracking-tighter">{item.filled_by || '-'}</td>
-                           <td className="px-6 py-4">
+                            <td className="px-6 py-4 text-[11px] font-black text-gray-500 uppercase tracking-tighter">
+                              {item.filled_by || "-"}
+                            </td>
+                            <td className="px-6 py-4">
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => { setSelectedOrderNo(item.order_no); setPageViewMode('panels'); }} className="p-1.5 bg-[#003875]/5 text-[#003875] rounded-lg hover:bg-[#003875] hover:text-white transition-all"><EyeIcon className="w-3.5 h-3.5" /></button>
-                                <button onClick={() => handleEdit(item.order_no)} className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-500 hover:text-white transition-all"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedOrderNo(item.order_no);
+                                    setPageViewMode("panels");
+                                  }}
+                                  className="p-1.5 bg-[#003875]/5 text-[#003875] rounded-lg hover:bg-[#003875] hover:text-white transition-all"
+                                >
+                                  <EyeIcon className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleEdit(item.order_no)}
+                                  className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-500 hover:text-white transition-all"
+                                >
+                                  <PencilSquareIcon className="w-3.5 h-3.5" />
+                                </button>
                               </div>
-                           </td>
-                         </tr>
-                       ))
-                     ) : (
-                       <tr>
-                         <td colSpan={7} className="px-6 py-20 text-center">
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={7} className="px-6 py-20 text-center">
                             <ArchiveBoxIcon className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-                            <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em]">No data matches your intelligence criteria</p>
-                         </td>
-                       </tr>
-                     )}
-                   </tbody>
-                                   </table>
+                            <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em]">
+                              No data matches your intelligence criteria
+                            </p>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
 
                 {/* Table View Pagination Footer */}
@@ -1497,14 +2056,31 @@ export default function O2DPage() {
                   <div className="shrink-0 px-6 py-4 bg-gray-50 dark:bg-navy-950 border-t border-gray-100 dark:border-navy-800 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                        Showing <span className="text-[#003875] dark:text-[#FFD500]">{(tableCurrentPage - 1) * tableItemsPerPage + 1}</span> to <span className="text-[#003875] dark:text-[#FFD500]">{Math.min(tableCurrentPage * tableItemsPerPage, filteredTableData.length)}</span> of <span className="text-gray-600 dark:text-gray-300 font-black">{filteredTableData.length}</span> entries
+                        Showing{" "}
+                        <span className="text-[#003875] dark:text-[#FFD500]">
+                          {(tableCurrentPage - 1) * tableItemsPerPage + 1}
+                        </span>{" "}
+                        to{" "}
+                        <span className="text-[#003875] dark:text-[#FFD500]">
+                          {Math.min(
+                            tableCurrentPage * tableItemsPerPage,
+                            filteredTableData.length,
+                          )}
+                        </span>{" "}
+                        of{" "}
+                        <span className="text-gray-600 dark:text-gray-300 font-black">
+                          {filteredTableData.length}
+                        </span>{" "}
+                        entries
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
                       <button
                         disabled={tableCurrentPage === 1}
-                        onClick={() => setTableCurrentPage(prev => Math.max(1, prev - 1))}
+                        onClick={() =>
+                          setTableCurrentPage((prev) => Math.max(1, prev - 1))
+                        }
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-navy-900 border border-gray-200 dark:border-navy-800 text-[10px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] disabled:opacity-30 hover:shadow-md transition-all active:scale-95 shadow-sm"
                       >
                         <ChevronLeftIcon className="w-3.5 h-3.5" />
@@ -1512,32 +2088,40 @@ export default function O2DPage() {
                       </button>
 
                       <div className="flex items-center gap-1">
-                        {Array.from({ length: Math.min(5, tableTotalPages) }, (_, i) => {
-                          let pageNum = tableCurrentPage;
-                          if (tableTotalPages <= 5) pageNum = i + 1;
-                          else if (tableCurrentPage <= 3) pageNum = i + 1;
-                          else if (tableCurrentPage >= tableTotalPages - 2) pageNum = tableTotalPages - 4 + i;
-                          else pageNum = tableCurrentPage - 2 + i;
+                        {Array.from(
+                          { length: Math.min(5, tableTotalPages) },
+                          (_, i) => {
+                            let pageNum = tableCurrentPage;
+                            if (tableTotalPages <= 5) pageNum = i + 1;
+                            else if (tableCurrentPage <= 3) pageNum = i + 1;
+                            else if (tableCurrentPage >= tableTotalPages - 2)
+                              pageNum = tableTotalPages - 4 + i;
+                            else pageNum = tableCurrentPage - 2 + i;
 
-                          return (
-                            <button
-                              key={pageNum}
-                              onClick={() => setTableCurrentPage(pageNum)}
-                              className={`w-9 h-9 rounded-xl text-[11px] font-black transition-all ${
-                                tableCurrentPage === pageNum 
-                                ? 'bg-[#003875] text-[#FFD500] shadow-lg scale-110 z-10' 
-                                : 'bg-white dark:bg-navy-900 text-gray-400 border border-gray-100 dark:border-navy-800 hover:border-[#003875] dark:hover:border-[#FFD500]'
-                              }`}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        })}
+                            return (
+                              <button
+                                key={pageNum}
+                                onClick={() => setTableCurrentPage(pageNum)}
+                                className={`w-9 h-9 rounded-xl text-[11px] font-black transition-all ${
+                                  tableCurrentPage === pageNum
+                                    ? "bg-[#003875] text-[#FFD500] shadow-lg scale-110 z-10"
+                                    : "bg-white dark:bg-navy-900 text-gray-400 border border-gray-100 dark:border-navy-800 hover:border-[#003875] dark:hover:border-[#FFD500]"
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            );
+                          },
+                        )}
                       </div>
 
                       <button
                         disabled={tableCurrentPage === tableTotalPages}
-                        onClick={() => setTableCurrentPage(prev => Math.min(tableTotalPages, prev + 1))}
+                        onClick={() =>
+                          setTableCurrentPage((prev) =>
+                            Math.min(tableTotalPages, prev + 1),
+                          )
+                        }
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-navy-900 border border-gray-200 dark:border-navy-800 text-[10px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] disabled:opacity-30 hover:shadow-md transition-all active:scale-95 shadow-sm"
                       >
                         Next
@@ -1547,587 +2131,1234 @@ export default function O2DPage() {
                   </div>
                 )}
               </div>
-          ) : (
-             <>
-               {/* Master Pane: Order List */}
-          <div className={`w-full lg:w-80 flex flex-col border-r border-[#003875]/5 dark:border-navy-800 ${selectedOrderNo ? 'hidden lg:flex' : 'flex'}`}>
-            <div className="p-2 border-b border-gray-50 dark:border-navy-800 bg-gray-50/30 dark:bg-navy-900/40">
-              <div className="relative group mb-2">
-                <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
-                <input
-                  type="text"
-                  placeholder="Search resources..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 h-[34px] bg-white dark:bg-black border border-gray-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] rounded-xl transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)] focus:shadow-md"
-                />
-              </div>
-
-              {/* Sidebar Pagination - Top Position */}
-              {!isLoading && sortedOrderNumbers.length > itemsPerPage && (
-                <div className="flex items-center justify-between gap-2 px-1 py-1 bg-white/50 dark:bg-navy-800/50 rounded-xl border border-gray-100 dark:border-navy-700 shadow-sm">
-                  <button
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    className="p-1.5 rounded-lg bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 disabled:opacity-30 text-[#003875] dark:text-[#FFD500] hover:shadow-md transition-all active:scale-95"
-                  >
-                    <ChevronLeftIcon className="w-3.5 h-3.5" />
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Page</span>
-                    <span className="text-[11px] font-black text-[#003875] dark:text-white leading-none">
-                      {currentPage} <span className="text-gray-300 dark:text-gray-600 mx-0.5">/</span> {totalPages}
-                    </span>
-                  </div>
-                  <button
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    className="p-1.5 rounded-lg bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 disabled:opacity-30 text-[#003875] dark:text-[#FFD500] hover:shadow-md transition-all active:scale-95"
-                  >
-                    <ChevronRightIcon className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-1.5">
-              {isLoading ? (
-                <div className="flex flex-col items-center justify-center h-40 space-y-2">
-                  <div className="w-6 h-6 border-2 border-[#FFD500]/20 border-t-[#FFD500] rounded-full animate-spin" />
-                  <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Fetching...</p>
-                </div>
-              ) : sortedOrderNumbers.length === 0 ? (
-                <div className="text-center py-20 opacity-50">
-                  <ShoppingBagIcon className="w-10 h-10 text-gray-100 mx-auto mb-2" />
-                  <p className="text-[11px] font-black uppercase tracking-widest italic text-gray-400">No records</p>
-                </div>
-              ) : (
-                paginatedOrderNumbers.map((no) => {
-                  const orderItems = groupedOrders[no];
-                  const first = orderItems[0];
-                  const totalQty = orderItems.reduce((sum: number, item: O2D) => sum + (parseFloat(item.item_qty) || 0), 0);
-                  const totalAmt = orderItems.reduce((sum: number, item: O2D) => sum + (parseFloat(item.est_amount) || 0), 0);
-
-
-                  // Find current pending stage using the unified helper
-                  const pIdx = getPendingStepIdx(orderItems);
-                  const currentStageIdx = pIdx !== -1 ? pIdx - 1 : -1;
-                  const allDone = currentStageIdx === -1;
-                  const isSelected = selectedOrderNo === no;
-                  const isCancelled = !!first?.cancelled;
-                  const isHold = !!first?.hold && !isCancelled;
-
-
-                  return (
-                    <div
-                      key={no}
-                      onClick={() => setSelectedOrderNo(no)}
-                      className={`group relative p-2 rounded-xl border transition-all cursor-pointer ${isSelected
-                          ? 'border-[#003875] dark:border-[#FFD500] bg-[#003875]/5 dark:bg-[#FFD500]/5 shadow-xl scale-[1.02] z-10'
-                          : isCancelled
-                            ? 'border-red-200 dark:border-red-800/40 bg-gradient-to-br from-red-100 via-red-50 to-white dark:from-red-900/30 dark:via-red-900/10 dark:to-navy-800/50 shadow-md hover:shadow-lg hover:scale-[1.01]'
-                            : isHold
-                              ? 'border-orange-200 dark:border-orange-800/40 bg-gradient-to-br from-orange-100 via-orange-50 to-white dark:from-orange-900/30 dark:via-orange-900/10 dark:to-navy-800/50 shadow-md hover:shadow-lg hover:scale-[1.01]'
-                              : 'border-gray-100 dark:border-navy-700 bg-white dark:bg-navy-800/50 shadow-md hover:shadow-lg dark:hover:border-navy-600 hover:scale-[1.01]'
-                        }`}
-                    >
-                      <div className={`absolute left-0 top-1 bottom-1 w-0.5 rounded-full transition-all ${isSelected ? 'bg-[#FFD500]' : isCancelled ? 'bg-red-500' : isHold ? 'bg-orange-500' : 'bg-[#003875]/10 group-hover:bg-[#003875]/20'
-                        }`} />
-
-                      {/* Line 1: Order No & Status Labels */}
-                      <div className="flex justify-between items-start mb-0.5 pl-1.5">
-                        <div className="flex flex-wrap items-center gap-2 min-w-0">
-                          <span className="text-[13px] font-black text-gray-900 dark:text-white truncate tracking-tight flex items-center gap-2">
-                            {currentStageIdx === 0 && !isCancelled && !isHold && (
-                              <span className="relative flex h-2 w-2 shrink-0">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse"></span>
-                              </span>
-                            )}
-                            {no}
-                          </span>
-                          {first?.cancelled ? <span className="px-1.5 py-0.5 rounded-sm bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 text-[7px] uppercase tracking-widest leading-none font-bold">Cancelled</span> : null}
-                          {first?.hold && !first?.cancelled ? <span className="px-1.5 py-0.5 rounded-sm bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400 text-[7px] uppercase tracking-widest leading-none font-bold">Hold</span> : null}
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0 ml-1">
-                          <button onClick={(e) => { e.stopPropagation(); handleEdit(no); }} className="p-1 px-1.5 bg-[#003875]/5 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all"><PencilSquareIcon className="w-3 h-3" /></button>
-                          <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(no); }} className="p-1 px-1.5 bg-[#CE2029]/5 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all"><TrashIcon className="w-3 h-3" /></button>
-                        </div>
-                      </div>
-
-                      {/* Line 2: Party Name */}
-                      <div className="pl-1.5 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide truncate">
-                        {first?.party_name}
-                      </div>
-
-                      {/* Line 3: Current Stage & Item Details */}
-                      <div className="flex items-end justify-between pl-1.5 min-w-0">
-                        <div className="min-w-0 mr-2">
-                          {allDone ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 truncate">
-                              <span className="w-1 h-1 rounded-full bg-emerald-500 inline-block" />
-                              Completed
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800 truncate">
-                              <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse inline-block" />
-                              Step {currentStageIdx + 1}: {O2D_STEP_SHORTS[currentStageIdx]}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end shrink-0 leading-[1.1]">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">{totalQty} ITEMS</span>
-                          <span className="text-[12px] font-black text-[#003875] dark:text-[#FFD500]">â‚¹{totalAmt.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-                        </div>
-                      </div>
+            ) : (
+              <>
+                {/* Master Pane: Order List */}
+                <div
+                  className={`w-full lg:w-80 flex flex-col border-r border-[#003875]/5 dark:border-navy-800 ${selectedOrderNo ? "hidden lg:flex" : "flex"}`}
+                >
+                  <div className="p-2 border-b border-gray-50 dark:border-navy-800 bg-gray-50/30 dark:bg-navy-900/40">
+                    <div className="relative group mb-2">
+                      <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
+                      <input
+                        type="text"
+                        placeholder="Search resources..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 h-[34px] bg-white dark:bg-black border border-gray-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] rounded-xl transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)] focus:shadow-md"
+                      />
                     </div>
-                  );
-                })
-              )}
-            </div>
 
-          </div>
-
-          {/* Thick Dark Blue Divider Line */}
-          <div className="w-[3px] bg-[#003875] h-full hidden lg:block opacity-80" />
-
-          {/* Detail Pane: Order Details - Compact Layout */}
-          <div className={`flex-1 flex flex-col min-w-0 bg-white dark:bg-navy-900/20 ${!selectedOrderNo ? 'hidden lg:flex' : 'flex'}`}>
-            {selectedOrder && selectedOrder.length > 0 ? (
-              <div className="flex-1 flex flex-col overflow-hidden">                {/* CREAM HEADER - Compact with all Actions */}
-                <div className="px-4 py-2 flex items-center justify-between bg-[#FEF6DB] dark:bg-navy-800 border-b border-orange-100 dark:border-navy-700 text-[#003875] dark:text-[#FFD500]">
-                  <div className="flex items-center gap-2.5">
-                    <button onClick={() => setSelectedOrderNo(null)} className="lg:hidden p-1.5 bg-[#003875]/10 hover:bg-[#003875]/20 rounded-full transition-all"><ArrowLeftIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" /></button>
-                    <h2 className="text-[15px] font-black italic tracking-tight uppercase">{selectedOrderNo}</h2>
-                  </div>
-
-                  <div className="flex items-center gap-1">                    {/* Workflow Actions */}
-                    {!selectedOrder[0]?.hold && !selectedOrder[0]?.cancelled && !isStep1Lockout && (
-                      <div className="flex items-center gap-1.5">
-                        {isSpecialRole && (
-                          <button
-                            onClick={() => setIsRemoveFollowUpModalOpen(true)}
-                            className="flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 bg-[#003875]/5 hover:bg-[#003875]/10 rounded-full text-[#003875] dark:text-[#FFD500] transition-all transition-transform active:scale-90 border border-[#003875]/10 dark:border-[#FFD500]/10"
-                            title="Remove Follow-up"
-                          >
-                            <MinusCircleIcon className="w-4 h-4" />
-                            <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">Remove Follow-up</span>
-                          </button>
-                        )}
+                    {/* Sidebar Pagination - Top Position */}
+                    {!isLoading && sortedOrderNumbers.length > itemsPerPage && (
+                      <div className="flex items-center justify-between gap-2 px-1 py-1 bg-white/50 dark:bg-navy-800/50 rounded-xl border border-gray-100 dark:border-navy-700 shadow-sm">
                         <button
-                          onClick={openStepUpdateModal}
-                          className="flex items-center gap-1.5 p-1.5 sm:px-5 sm:py-1.5 bg-[#003875] text-[#FFD500] hover:bg-[#002a5a] rounded-full transition-all transition-transform active:scale-90 shadow-lg shadow-black/10 animate-pulse"
-                          title="Update Progress"
+                          disabled={currentPage === 1}
+                          onClick={() =>
+                            setCurrentPage((prev) => Math.max(1, prev - 1))
+                          }
+                          className="p-1.5 rounded-lg bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 disabled:opacity-30 text-[#003875] dark:text-[#FFD500] hover:shadow-md transition-all active:scale-95"
                         >
-                          <ArrowPathIcon className="w-4 h-4" />
-                          <span className="hidden lg:inline text-[10px] font-black uppercase opacity-90">Update</span>
+                          <ChevronLeftIcon className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            Page
+                          </span>
+                          <span className="text-[11px] font-black text-[#003875] dark:text-white leading-none">
+                            {currentPage}{" "}
+                            <span className="text-gray-300 dark:text-gray-600 mx-0.5">
+                              /
+                            </span>{" "}
+                            {totalPages}
+                          </span>
+                        </div>
+                        <button
+                          disabled={currentPage === totalPages}
+                          onClick={() =>
+                            setCurrentPage((prev) =>
+                              Math.min(totalPages, prev + 1),
+                            )
+                          }
+                          className="p-1.5 rounded-lg bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 disabled:opacity-30 text-[#003875] dark:text-[#FFD500] hover:shadow-md transition-all active:scale-95"
+                        >
+                          <ChevronRightIcon className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     )}
-
-                    {/* Status Actions: Hold & Cancel */}
-                    <button
-                      onClick={() => {
-                        setConfirmPayload({ type: 'hold', orderNo: selectedOrderNo as string, currentValue: selectedOrder[0]?.hold });
-                        setIsConfirmOpen(true);
-                      }}
-                       className={`flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 rounded-full transition-all transition-transform active:scale-90 border ${selectedOrder[0]?.hold ? 'bg-orange-500 text-white border-orange-400 shadow-md' : 'bg-[#003875]/5 text-[#003875]/80 border-[#003875]/10 hover:bg-[#003875]/10 hover:text-[#003875] dark:text-[#FFD500]/80 dark:border-[#FFD500]/10 dark:hover:bg-[#FFD500]/10 dark:hover:text-[#FFD500]'}`}
-                      title={selectedOrder[0]?.hold ? 'Resume Order' : 'Put on Hold'}
-                    >
-                      <PauseCircleIcon className="w-4 h-4" />
-                      <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">{selectedOrder[0]?.hold ? 'On Hold' : 'Hold'}</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setConfirmPayload({ type: 'cancelled', orderNo: selectedOrderNo as string, currentValue: selectedOrder[0]?.cancelled });
-                        setIsConfirmOpen(true);
-                      }}
-                      className={`flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 rounded-full transition-all transition-transform active:scale-90 border ${selectedOrder[0]?.cancelled ? 'bg-black text-white border-black shadow-md' : 'bg-[#003875]/5 text-[#003875]/80 border-[#003875]/10 hover:bg-[#003875]/10 hover:text-[#003875] dark:text-[#FFD500]/80 dark:border-[#FFD500]/10 dark:hover:bg-[#FFD500]/10 dark:hover:text-[#FFD500]'}`}
-                      title={selectedOrder[0]?.cancelled ? 'Undo Cancellation' : 'Cancel Order'}
-                    >
-                      <NoSymbolIcon className="w-4 h-4" />
-                      <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">{selectedOrder[0]?.cancelled ? 'Cancelled' : 'Cancel'}</span>
-                    </button>
-
-                    <div className="w-px h-5 bg-[#003875]/10 dark:bg-white/20 mx-1 hidden sm:block" />
-
-                    <div className="flex items-center gap-1.5 p-1 bg-[#003875]/5 dark:bg-black/10 rounded-full border border-[#003875]/10 dark:border-white/20 backdrop-blur-sm">
-                      <button
-                        onClick={() => setDetailViewMode('full')}
-                        className={`p-1.5 rounded-full transition-all ${detailViewMode === 'full' ? 'bg-[#003875] text-[#FFD500] shadow-md scale-105' : 'text-[#003875]/60 hover:text-[#003875] dark:text-white/60 dark:hover:text-white'}`}
-                      >
-                        <Squares2X2Icon className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setDetailViewMode('table')}
-                        className={`p-1.5 rounded-full transition-all ${detailViewMode === 'table' ? 'bg-[#003875] text-[#FFD500] shadow-md scale-105' : 'text-[#003875]/60 hover:text-[#003875] dark:text-white/60 dark:hover:text-white'}`}
-                      >
-                        <ListBulletIcon className="w-4 h-4" />
-                      </button>
-                    </div>
                   </div>
-                </div>
+                  <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-1.5">
+                    {isLoading ? (
+                      <div className="flex flex-col items-center justify-center h-40 space-y-2">
+                        <div className="w-6 h-6 border-2 border-[#FFD500]/20 border-t-[#FFD500] rounded-full animate-spin" />
+                        <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
+                          Fetching...
+                        </p>
+                      </div>
+                    ) : sortedOrderNumbers.length === 0 ? (
+                      <div className="text-center py-20 opacity-50">
+                        <ShoppingBagIcon className="w-10 h-10 text-gray-100 mx-auto mb-2" />
+                        <p className="text-[11px] font-black uppercase tracking-widest italic text-gray-400">
+                          No records
+                        </p>
+                      </div>
+                    ) : (
+                      paginatedOrderNumbers.map((no) => {
+                        const orderItems = groupedOrders[no];
+                        const first = orderItems[0];
+                        const totalQty = orderItems.reduce(
+                          (sum: number, item: O2D) =>
+                            sum + (parseFloat(item.item_qty) || 0),
+                          0,
+                        );
+                        const totalAmt = orderItems.reduce(
+                          (sum: number, item: O2D) =>
+                            sum + (parseFloat(item.est_amount) || 0),
+                          0,
+                        );
 
-                {detailViewMode === 'full' ? (
-                  <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-6 animate-in fade-in duration-200">
-                    {/* Consolidated Summary - Cream Background */}
-                    <div className="bg-white dark:bg-navy-800/50 p-6 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                      <div className="md:col-span-9">
-                        <div className="mb-5">
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mb-1">ESTABLISHED PARTNER</p>
-                          <p className="text-lg font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-wide">{selectedOrder[0]?.party_name}</p>
-                        </div>
-                        <div className="flex flex-wrap gap-6">
-                          <div className="flex items-center gap-3">
-                            <ArchiveBoxIcon className="w-4.5 h-4.5 text-[#003875]/40" />
-                            <div className="flex flex-col">
-                              <span className="text-[9px] font-black text-gray-400 uppercase">Loadout</span>
-                              <span className="text-[13px] font-black text-gray-700 dark:text-gray-100">{selectedOrder.length} Items</span>
-                            </div>
-                          </div>
-                          <div className="w-px h-8 bg-[#003875]/5 mx-1 hidden sm:block" />
-                          <div className="flex items-center gap-3">
-                            <UserIcon className="w-4.5 h-4.5 text-[#003875]/40" />
-                            <div className="flex flex-col">
-                              <span className="text-[9px] font-black text-gray-400 uppercase">Operator</span>
-                              <span className="text-[13px] font-black text-gray-700 dark:text-gray-100 uppercase truncate max-w-[120px]">{selectedOrder[0]?.filled_by}</span>
-                            </div>
-                          </div>
-                          <div className="w-px h-8 bg-[#003875]/5 mx-1 hidden sm:block" />
-                          <div className="flex items-center gap-3">
-                            <CalendarDaysIcon className="w-4.5 h-4.5 text-[#003875]/40" />
-                            <div className="flex flex-col">
-                              <span className="text-[9px] font-black text-gray-400 uppercase">Timestamp</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[13px] font-black text-gray-700 dark:text-gray-100">
-                                  {new Date(selectedOrder[0]?.created_at).toLocaleString(undefined, {
-                                    dateStyle: 'short',
-                                    timeStyle: 'short'
-                                  })}
+                        // Find current pending stage using the unified helper
+                        const pIdx = getPendingStepIdx(orderItems);
+                        const currentStageIdx = pIdx !== -1 ? pIdx - 1 : -1;
+                        const allDone = currentStageIdx === -1;
+                        const isSelected = selectedOrderNo === no;
+                        const isCancelled = !!first?.cancelled;
+                        const isHold = !!first?.hold && !isCancelled;
+
+                        // Extract planned time for current stage
+                        let plannedTimeStr = "";
+                        if (!allDone && first) {
+                          const pVal = (first as any)[`planned_${pIdx}`];
+                          if (pVal && pVal !== "-") {
+                            const d = new Date(pVal);
+                            if (!isNaN(d.getTime())) {
+                              plannedTimeStr = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short' }) + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            } else {
+                              plannedTimeStr = pVal;
+                            }
+                          }
+                        }
+
+                        return (
+                          <div
+                            key={no}
+                            onClick={() => setSelectedOrderNo(no)}
+                            className={`group relative p-2 rounded-xl border transition-all cursor-pointer ${
+                              isSelected
+                                ? "border-[#003875] dark:border-[#FFD500] bg-[#003875]/5 dark:bg-[#FFD500]/5 shadow-xl scale-[1.02] z-10"
+                                : isCancelled
+                                  ? "border-red-200 dark:border-red-800/40 bg-gradient-to-br from-red-100 via-red-50 to-white dark:from-red-900/30 dark:via-red-900/10 dark:to-navy-800/50 shadow-md hover:shadow-lg hover:scale-[1.01]"
+                                  : isHold
+                                    ? "border-orange-200 dark:border-orange-800/40 bg-gradient-to-br from-orange-100 via-orange-50 to-white dark:from-orange-900/30 dark:via-orange-900/10 dark:to-navy-800/50 shadow-md hover:shadow-lg hover:scale-[1.01]"
+                                    : "border-gray-100 dark:border-navy-700 bg-white dark:bg-navy-800/50 shadow-md hover:shadow-lg dark:hover:border-navy-600 hover:scale-[1.01]"
+                            }`}
+                          >
+                            <div
+                              className={`absolute left-0 top-1 bottom-1 w-0.5 rounded-full transition-all ${
+                                isSelected
+                                  ? "bg-[#FFD500]"
+                                  : isCancelled
+                                    ? "bg-red-500"
+                                    : isHold
+                                      ? "bg-orange-500"
+                                      : "bg-[#003875]/10 group-hover:bg-[#003875]/20"
+                              }`}
+                            />
+
+                            {/* Line 1: Order No & Status Labels */}
+                            <div className="flex justify-between items-start mb-0.5 pl-1.5">
+                              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                <span className="text-[13px] font-black text-gray-900 dark:text-white truncate tracking-tight flex items-center gap-2">
+                                  {currentStageIdx === 0 &&
+                                    !isCancelled &&
+                                    !isHold && (
+                                      <span className="relative flex h-2 w-2 shrink-0">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse"></span>
+                                      </span>
+                                    )}
+                                  {no}
                                 </span>
-                                {isStep1Lockout && (
-                                  <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800 text-[12px] font-black shadow-sm">
-                                    <ClockIcon className="w-4 h-4 animate-pulse" />
-                                    -{lockoutTimeLeft.m.toString().padStart(2, '0')}:{lockoutTimeLeft.s.toString().padStart(2, '0')} to enable
+                                {first?.cancelled ? (
+                                  <span className="px-1.5 py-0.5 rounded-sm bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 text-[7px] uppercase tracking-widest leading-none font-bold">
+                                    Cancelled
+                                  </span>
+                                ) : null}
+                                {first?.hold && !first?.cancelled ? (
+                                  <span className="px-1.5 py-0.5 rounded-sm bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400 text-[7px] uppercase tracking-widest leading-none font-bold">
+                                    Hold
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0 ml-1">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEdit(no);
+                                  }}
+                                  className="p-1 px-1.5 bg-[#003875]/5 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all"
+                                >
+                                  <PencilSquareIcon className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteClick(no);
+                                  }}
+                                  className="p-1 px-1.5 bg-[#CE2029]/5 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all"
+                                >
+                                  <TrashIcon className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Line 2: Party Name */}
+                            <div className="pl-1.5 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide truncate">
+                              {first?.party_name}
+                            </div>
+
+                            {/* Line 3: Current Stage & Item Details */}
+                            <div className="flex items-end justify-between pl-1.5 min-w-0">
+                              <div className="min-w-0 mr-2">
+                                {allDone ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 truncate">
+                                    <span className="w-1 h-1 rounded-full bg-emerald-500 inline-block" />
+                                    Completed
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex flex-col items-start px-1.5 py-0.5 rounded-md text-[9.5px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800 leading-none">
+                                    <span className="flex items-center gap-1 min-w-0">
+                                      <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse shrink-0 block" />
+                                      <span className="truncate">
+                                        Step {currentStageIdx + 1}:{" "}
+                                        {O2D_STEP_SHORTS[currentStageIdx]}
+                                      </span>
+                                    </span>
+                                    {plannedTimeStr && (
+                                      <span className="text-[8px] opacity-75 font-semibold pl-2 mt-0.5 flex items-center gap-1 tracking-wider normal-case">
+                                        <ClockIcon className="w-2 h-2" />
+                                        {plannedTimeStr}
+                                      </span>
+                                    )}
                                   </span>
                                 )}
                               </div>
+                              <div className="flex flex-col items-end shrink-0 leading-[1.1]">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">
+                                  {orderItems.length} ITEMS
+                                </span>
+                                <span className="text-[12px] font-black text-[#003875] dark:text-[#FFD500]">
+                                  ₹
+                                  {(totalAmt || 0).toLocaleString(undefined, {
+                                    minimumFractionDigits: 1,
+                                    maximumFractionDigits: 1,
+                                  })}
+                                </span>
+                              </div>
                             </div>
                           </div>
-
-                          {selectedOrder[0]?.hold && !selectedOrder[0]?.cancelled && (
-                            <>
-                              <div className="w-px h-8 bg-orange-500/10 mx-1 hidden sm:block" />
-                              <div className="flex items-center gap-3">
-                                <PauseCircleIcon className="w-4.5 h-4.5 text-orange-500/60" />
-                                <div className="flex flex-col">
-                                  <span className="text-[9px] font-black text-orange-400 uppercase">Held On</span>
-                                  <span className="text-[13px] font-black text-orange-500">
-                                    {selectedOrder[0]?.hold && new Date(selectedOrder[0]?.hold).toLocaleString(undefined, {
-                                      dateStyle: 'short',
-                                      timeStyle: 'short'
-                                    })}
-                                  </span>
-                                </div>
-                              </div>
-                            </>
-                          )}
-
-                          {selectedOrder[0]?.cancelled && (
-                            <>
-                              <div className="w-px h-8 bg-red-500/10 mx-1 hidden sm:block" />
-                              <div className="flex items-center gap-3">
-                                <NoSymbolIcon className="w-4.5 h-4.5 text-red-500/60" />
-                                <div className="flex flex-col">
-                                  <span className="text-[9px] font-black text-red-400 uppercase">Cancelled On</span>
-                                  <span className="text-[13px] font-black text-[#CE2029]">
-                                    {selectedOrder[0]?.cancelled && new Date(selectedOrder[0]?.cancelled).toLocaleString(undefined, {
-                                      dateStyle: 'short',
-                                      timeStyle: 'short'
-                                    })}
-                                  </span>
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <div className="md:col-span-3 flex justify-end">
-                        <div className="relative group w-28 h-28">
-                          <div className="absolute inset-0 bg-[#FFD500] blur-lg opacity-10" />
-                          <div className="relative h-full bg-white dark:bg-black border-4 border-white dark:border-navy-800 rounded-xl overflow-hidden shadow-xl group-hover:scale-105 transition-transform">
-                            {selectedOrder[0]?.order_screenshot ? (
-                              <img src={getDriveImageUrl(selectedOrder[0]?.order_screenshot)} className="w-full h-full object-cover" />
-                            ) : (
-                              <PhotoIcon className="w-6 h-6 text-gray-100 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                            )}
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <a href={selectedOrder[0]?.order_screenshot ? getDriveImageUrl(selectedOrder[0]?.order_screenshot) : "#"} target="_blank" className="p-2 bg-white rounded-full transition-transform hover:scale-110"><EyeIcon className="w-4.5 h-4.5 text-black" /></a>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Promotional Deployment - Extra Items for Dispatch */}
-                    {(() => {
-                      const activeParty = fullParties.find(p => p.partyName === selectedOrder[0]?.party_name);
-                      if (activeParty && activeParty.firstOrderItems) {
-                        // Parse order no from customerType e.g. "NEW (OR-05)"
-                        const match = (activeParty.customerType || '').match(/NEW\s*\((.+?)\)/i);
-                        const firstOrderNo = match ? match[1].trim() : null;
-                        // Only show if this is the specific linked first order
-                        if (firstOrderNo && firstOrderNo === selectedOrder[0]?.order_no) {
-                          const promoItems = activeParty.firstOrderItems.split(',').map((s: string) => s.trim()).filter(Boolean);
-                          if (promoItems.length > 0) {
-                            // Icon + color map for known promo items
-                            const promoIconMap: Record<string, { icon: React.ElementType; color: string }> = {
-                              "T Shirt": { icon: TagIcon, color: "text-rose-500" },
-                              "Note Pad": { icon: DocumentTextIcon, color: "text-sky-500" },
-                              "Pen": { icon: PencilSquareIcon, color: "text-violet-500" },
-                              "Thele": { icon: ShoppingBagIcon, color: "text-emerald-500" },
-                              "Tape Roll": { icon: ArchiveBoxIcon, color: "text-amber-500" },
-                              "Posters": { icon: PhotoIcon, color: "text-pink-500" },
-                              "Catalogue": { icon: ClipboardDocumentCheckIcon, color: "text-teal-500" },
-                            };
-                            return (
-                              <div className="bg-gradient-to-r from-amber-50 to-[#FFFBF0] dark:from-navy-800 dark:to-navy-900 rounded-2xl border-2 border-[#FFD500] shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-400 relative">
-                                <div className="absolute top-0 left-0 w-1.5 h-full bg-[#FFD500]" />
-                                <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                  <div>
-                                    <h3 className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest flex items-center gap-2">
-                                      <GiftIcon className="w-5 h-5 text-[#FFD500]" />
-                                      PROMOTIONAL DEPLOYMENT
-                                    </h3>
-                                    <p className="text-[10px] font-bold text-gray-500 mt-0.5 ml-7 uppercase tracking-wider">Required First Order Extras for Dispatch</p>
-                                  </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    {promoItems.map((item: string, idx: number) => {
-                                      const itemMatch = item.match(/(.*?)\s*\(Qty:\s*(.*?)\)/);
-                                      const name = itemMatch ? itemMatch[1].trim() : item;
-                                      const qty = itemMatch ? itemMatch[2] : "1";
-                                      const promo = promoIconMap[name] || { icon: GiftIcon, color: "text-orange-500" };
-                                      const ItemIcon = promo.icon;
-                                      return (
-                                        <div key={idx} className="bg-white dark:bg-black px-3 py-1.5 rounded-lg border border-orange-100 dark:border-navy-700 flex items-center gap-2 shadow-sm">
-                                          <ItemIcon className={`w-3.5 h-3.5 shrink-0 ${promo.color}`} />
-                                          <span className="text-[11px] font-black text-gray-800 dark:text-gray-100">{name}</span>
-                                          <div className="w-px h-3 bg-gray-200 dark:bg-navy-700" />
-                                          <span className="text-[11px] font-black text-[#003875] dark:text-[#FFD500]">Ã—{qty}</span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          }
-                        }
-                      }
-                      return null;
-                    })()}
-
-                    {/* Tactical Inventory - Reverted to Simple 4-Column Table View */}
-                    <div className="bg-white dark:bg-navy-800/50 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-500">
-                      <div className="px-6 py-3 border-b border-gray-100 dark:border-navy-700 flex items-center justify-between bg-white/40 dark:bg-transparent">
-                        <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 items-center">
-                          <div className="w-1 h-3.5 bg-[#003875] rounded-full" /> Tactical Inventory
-                        </h3>
-                        <div className="text-[12px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter">
-                          TOTAL Value: â‚¹{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}
-                        </div>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="bg-amber-100 dark:bg-navy-950 text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">
-                              <th className="px-6 py-3">NOMENCLATURE</th>
-                              <th className="px-6 py-3">ITEM SPECIFICATION</th>
-                              <th className="px-6 py-3 text-center">QUANTITY</th>
-                              <th className="px-6 py-3 text-right">ESTIMATED AMOUNT</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100 dark:divide-navy-800/20">
-                            {selectedOrder.map((item, idx) => (
-                              <tr key={idx} className="text-[12px] font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/[0.02] dark:hover:bg-navy-700/10 transition-colors">
-                                <td className="px-6 py-4 font-black text-gray-900 dark:text-white uppercase">{item.item_name}</td>
-                                <td className="px-6 py-4 text-[11px] font-medium text-gray-500 dark:text-gray-400 italic italic">{item.item_specification || "-"}</td>
-                                <td className="px-6 py-4 text-center font-black text-[#003875] dark:text-[#FFD500]">{item.item_qty}</td>
-                                <td className="px-6 py-4 text-right font-black text-[#CE2029]">â‚¹{parseFloat(item.est_amount).toLocaleString()}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr className="bg-amber-100/50 dark:bg-black/20 text-[11px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500]">
-                              <td colSpan={2} className="px-6 py-4 italic">Aggregate Order Sum</td>
-                              <td className="px-6 py-4 text-center bg-[#003875]/5 dark:bg-[#003875]/10 text-gray-700 dark:text-gray-300">
-                                {selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.item_qty) || 0), 0)} Units
-                              </td>
-                              <td className="px-6 py-4 text-right bg-[#003875] text-white">
-                                â‚¹{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
-                    </div>
-                    {/* Operational Manifest - Step Specific Details */}
-                    <div className="bg-white dark:bg-navy-800/50 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md overflow-hidden">
-                      <div className="px-6 py-3 border-b border-gray-100 dark:border-navy-700 bg-white/40 dark:bg-transparent">
-                        <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 items-center">
-                          <div className="w-1 h-3.5 bg-[#003875] rounded-full" /> Operational Manifest
-                        </h3>
-                      </div>
-                      <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-8 gap-x-12">
-                        {/* Step 1: SO Details */}
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2"><IdentificationIcon className="w-4 h-4" /> Step 1: SO Protocol</div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">SO Number</span><span className="text-[14px] font-black text-gray-700 dark:text-gray-200">{selectedOrder[0]?.so_number_1 || "-"}</span></div>
-                            <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Final Amt</span><span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">â‚¹{parseFloat(selectedOrder[0]?.final_amount_1 || "0").toLocaleString()}</span></div>
-                          </div>
-                          <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Merge With</span><span className="text-[14px] font-black text-gray-700 dark:text-gray-200">{selectedOrder[0]?.merge_order_with_1 || "N/A"}</span></div>
-                          {selectedOrder[0]?.upload_so_1 && (
-                            <a href={getDriveImageUrl(selectedOrder[0]?.upload_so_1)} target="_blank" className="flex items-center gap-2 px-4 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest mt-1"><EyeIcon className="w-4 h-4" /> View SO Doc</a>
-                          )}
-                        </div>
-
-                        {/* Step 6: Packing */}
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2"><ArchiveBoxIcon className="w-4 h-4" /> Step 6: Packing</div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Parcels</span><span className="text-[14px] font-black text-gray-700 dark:text-gray-200">{selectedOrder[0]?.num_of_parcel_6 || "-"}</span></div>
-                            <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Packed On</span><span className="text-[14px] font-black text-gray-700 dark:text-gray-200">{selectedOrder[0]?.actual_date_of_order_packed_6 ? new Date(selectedOrder[0]?.actual_date_of_order_packed_6).toLocaleDateString() : "-"}</span></div>
-                          </div>
-                          {selectedOrder[0]?.upload_pi_6 && (
-                            <a href={getDriveImageUrl(selectedOrder[0]?.upload_pi_6)} target="_blank" className="flex items-center gap-2 px-4 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest mt-1"><EyeIcon className="w-4 h-4" /> View PI Doc</a>
-                          )}
-                        </div>
-
-                        {/* Step 7 & 9: Dispatch & Bilty */}
-                        <div className="space-y-8">
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2"><CalendarDaysIcon className="w-4 h-4" /> Step 7: Dispatch</div>
-                            <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Voucher #</span><span className="text-[14px] font-black text-gray-700 dark:text-gray-200">{selectedOrder[0]?.voucher_num_7 || "-"}</span></div>
-                          </div>
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2"><HashtagIcon className="w-4 h-4" /> Step 9: Bilty</div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Parcels</span><span className="text-[14px] font-black text-gray-700 dark:text-gray-200">{selectedOrder[0]?.num_of_parcel_9 || "-"}</span></div>
-                              {selectedOrder[0]?.attach_bilty_9 && (
-                                <a href={getDriveImageUrl(selectedOrder[0]?.attach_bilty_9)} target="_blank" className="flex items-center gap-2 px-3 py-1.5 bg-[#003875]/5 rounded-lg text-[10px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest self-end mb-1"><EyeIcon className="w-3.5 h-3.5" /> Bilty</a>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Step 8: Verification */}
-                        <div className="space-y-4 lg:col-span-2">
-                          <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2"><CalendarDaysIcon className="w-4 h-4" /> Step 8: Operational Audit</div>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                            <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Checked</span><span className={`text-[14px] font-black ${selectedOrder[0]?.order_details_checked_8 === 'Yes' ? 'text-green-500' : 'text-red-500'}`}>{selectedOrder[0]?.order_details_checked_8 || "No"}</span></div>
-                            <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Voucher 51</span><span className="text-[14px] font-black text-gray-700 dark:text-gray-200">{selectedOrder[0]?.voucher_num_51_8 || "-"}</span></div>
-                            <div className="flex flex-col sm:col-span-2"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">T. Amount</span><span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">â‚¹{parseFloat(selectedOrder[0]?.t_amt_8 || "0").toLocaleString()}</span></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Dark Blue Decorative Line */}
-                    <div className="h-0.5 bg-gradient-to-r from-transparent via-[#003875]/20 to-transparent" />
-
-                    {/* Compact Remarks - Cream Background */}
-                    {selectedOrder[0]?.remark && (
-                      <div className="bg-[#FEF6DB] dark:bg-navy-800/50 p-5 rounded-2xl border-2 border-orange-100 dark:border-navy-700 relative shadow-md">
-                        <ChatBubbleBottomCenterTextIcon className="absolute top-4 right-4 w-6 h-6 text-[#003875]/10" />
-                        <span className="text-[9px] font-black text-[#003875]/40 uppercase tracking-[0.2em] block mb-1.5 font-bold">Intelligence Report</span>
-                        <p className="text-[12px] font-bold text-gray-600 dark:text-gray-400 leading-relaxed italic">"{selectedOrder[0]?.remark}"</p>
-                      </div>
+                        );
+                      })
                     )}
                   </div>
-                ) : (
-                  /* Pure Simple Table View - Cream Background Theme */
-                  <div className="flex-1 overflow-y-auto overflow-x-auto no-scrollbar p-6 animate-in slide-in-from-bottom-2 duration-200">
-                    <div className="bg-white dark:bg-navy-900 rounded-xl border-2 border-gray-100 dark:border-navy-700 shadow-xl w-max min-w-full overflow-hidden">
-                      <table className="w-full text-left border-collapse whitespace-nowrap">
-                        <thead>
-                          <tr className="bg-amber-100 dark:bg-navy-950 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">
-                            <th className="px-6 py-4 border-r border-[#003875]/10 sticky left-0 z-10 bg-amber-100 dark:bg-navy-950">Nomenclature</th>
-                            <th className="px-6 py-4 border-r border-[#003875]/10">Item Specification</th>
-                            <th className="px-6 py-4 text-center border-r border-[#003875]/10">Quantity</th>
-                            <th className="px-6 py-4 text-right border-r border-[#003875]/10">Estimated Amount</th>
-                            {O2D_STEPS.map((step, idx) => (
-                              <th key={idx} className="px-4 py-3 text-center border-r border-[#003875]/10 last:border-r-0 align-top" title={step}>
-                                <div className="flex flex-col items-center justify-center gap-0.5 min-w-[120px]">
-                                  <span className="text-[8px] opacity-50 uppercase tracking-[0.2em] font-black">Step {idx + 1}</span>
-                                  <span className="text-[10px] whitespace-normal leading-tight">{O2D_STEP_SHORTS[idx]}</span>
+                </div>
+
+                {/* Thick Dark Blue Divider Line */}
+                <div className="w-[3px] bg-[#003875] h-full hidden lg:block opacity-80" />
+
+                {/* Detail Pane: Order Details - Compact Layout */}
+                <div
+                  className={`flex-1 flex flex-col min-w-0 bg-white dark:bg-navy-900/20 ${!selectedOrderNo ? "hidden lg:flex" : "flex"}`}
+                >
+                  {selectedOrder && selectedOrder.length > 0 ? (
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                      {" "}
+                      {/* CREAM HEADER - Compact with all Actions */}
+                      <div className="px-4 py-2 flex items-center justify-between bg-[#FEF6DB] dark:bg-navy-800 border-b border-orange-100 dark:border-navy-700 text-[#003875] dark:text-[#FFD500]">
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            onClick={() => setSelectedOrderNo(null)}
+                            className="lg:hidden p-1.5 bg-[#003875]/10 hover:bg-[#003875]/20 rounded-full transition-all"
+                          >
+                            <ArrowLeftIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" />
+                          </button>
+                          <h2 className="text-[15px] font-black italic tracking-tight uppercase">
+                            {selectedOrderNo}
+                          </h2>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          {" "}
+                          {/* Workflow Actions */}
+                          {!selectedOrder[0]?.hold &&
+                            !selectedOrder[0]?.cancelled &&
+                            !isStep1Lockout && (
+                              <div className="flex items-center gap-1.5">
+                                {isSpecialRole && (
+                                  <button
+                                    onClick={() =>
+                                      setIsRemoveFollowUpModalOpen(true)
+                                    }
+                                    className="flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 bg-[#003875]/5 hover:bg-[#003875]/10 rounded-full text-[#003875] dark:text-[#FFD500] transition-all transition-transform active:scale-90 border border-[#003875]/10 dark:border-[#FFD500]/10"
+                                    title="Remove Follow-up"
+                                  >
+                                    <MinusCircleIcon className="w-4 h-4" />
+                                    <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">
+                                      Remove Follow-up
+                                    </span>
+                                  </button>
+                                )}
+                                <button
+                                  onClick={openStepUpdateModal}
+                                  className="flex items-center gap-1.5 p-1.5 sm:px-5 sm:py-1.5 bg-[#003875] text-[#FFD500] hover:bg-[#002a5a] rounded-full transition-all transition-transform active:scale-90 shadow-lg shadow-black/10 animate-pulse"
+                                  title="Update Progress"
+                                >
+                                  <ArrowPathIcon className="w-4 h-4" />
+                                  <span className="hidden lg:inline text-[10px] font-black uppercase opacity-90">
+                                    Update
+                                  </span>
+                                </button>
+                              </div>
+                            )}
+                          {/* Status Actions: Hold & Cancel */}
+                          <button
+                            onClick={() => {
+                              setConfirmPayload({
+                                type: "hold",
+                                orderNo: selectedOrderNo as string,
+                                currentValue: selectedOrder[0]?.hold,
+                              });
+                              setIsConfirmOpen(true);
+                            }}
+                            className={`flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 rounded-full transition-all transition-transform active:scale-90 border ${selectedOrder[0]?.hold ? "bg-orange-500 text-white border-orange-400 shadow-md" : "bg-[#003875]/5 text-[#003875]/80 border-[#003875]/10 hover:bg-[#003875]/10 hover:text-[#003875] dark:text-[#FFD500]/80 dark:border-[#FFD500]/10 dark:hover:bg-[#FFD500]/10 dark:hover:text-[#FFD500]"}`}
+                            title={
+                              selectedOrder[0]?.hold
+                                ? "Resume Order"
+                                : "Put on Hold"
+                            }
+                          >
+                            <PauseCircleIcon className="w-4 h-4" />
+                            <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">
+                              {selectedOrder[0]?.hold ? "On Hold" : "Hold"}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setConfirmPayload({
+                                type: "cancelled",
+                                orderNo: selectedOrderNo as string,
+                                currentValue: selectedOrder[0]?.cancelled,
+                              });
+                              setIsConfirmOpen(true);
+                            }}
+                            className={`flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 rounded-full transition-all transition-transform active:scale-90 border ${selectedOrder[0]?.cancelled ? "bg-black text-white border-black shadow-md" : "bg-[#003875]/5 text-[#003875]/80 border-[#003875]/10 hover:bg-[#003875]/10 hover:text-[#003875] dark:text-[#FFD500]/80 dark:border-[#FFD500]/10 dark:hover:bg-[#FFD500]/10 dark:hover:text-[#FFD500]"}`}
+                            title={
+                              selectedOrder[0]?.cancelled
+                                ? "Undo Cancellation"
+                                : "Cancel Order"
+                            }
+                          >
+                            <NoSymbolIcon className="w-4 h-4" />
+                            <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">
+                              {selectedOrder[0]?.cancelled
+                                ? "Cancelled"
+                                : "Cancel"}
+                            </span>
+                          </button>
+                          <div className="w-px h-5 bg-[#003875]/10 dark:bg-white/20 mx-1 hidden sm:block" />
+                          <div className="flex items-center gap-1.5 p-1 bg-[#003875]/5 dark:bg-black/10 rounded-full border border-[#003875]/10 dark:border-white/20 backdrop-blur-sm">
+                            <button
+                              onClick={() => setDetailViewMode("full")}
+                              className={`p-1.5 rounded-full transition-all ${detailViewMode === "full" ? "bg-[#003875] text-[#FFD500] shadow-md scale-105" : "text-[#003875]/60 hover:text-[#003875] dark:text-white/60 dark:hover:text-white"}`}
+                            >
+                              <Squares2X2Icon className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setDetailViewMode("table")}
+                              className={`p-1.5 rounded-full transition-all ${detailViewMode === "table" ? "bg-[#003875] text-[#FFD500] shadow-md scale-105" : "text-[#003875]/60 hover:text-[#003875] dark:text-white/60 dark:hover:text-white"}`}
+                            >
+                              <ListBulletIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      {detailViewMode === "full" ? (
+                        <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-6 animate-in fade-in duration-200">
+                          {/* Consolidated Summary - Cream Background */}
+                          <div className="bg-white dark:bg-navy-800/50 p-6 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                            <div className="md:col-span-9">
+                              <div className="mb-5">
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mb-1">
+                                  ESTABLISHED PARTNER
+                                </p>
+                                <p className="text-lg font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-wide">
+                                  {selectedOrder[0]?.party_name}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-6">
+                                <div className="flex items-center gap-3">
+                                  <ArchiveBoxIcon className="w-4.5 h-4.5 text-[#003875]/40" />
+                                  <div className="flex flex-col">
+                                    <span className="text-[9px] font-black text-gray-400 uppercase">
+                                      Loadout
+                                    </span>
+                                    <span className="text-[13px] font-black text-gray-700 dark:text-gray-100">
+                                      {selectedOrder.length} Items
+                                    </span>
+                                  </div>
                                 </div>
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#CE2029]/5 dark:divide-navy-800/20">
-                          {selectedOrder.map((item, idx) => (
-                            <tr key={idx} className="hover:bg-white/50 dark:hover:bg-white/5 transition-colors text-[13px] font-medium text-gray-700 dark:text-gray-200">
-                              <td className="px-6 py-3 border-r border-[#CE2029]/5 sticky left-0 z-10 bg-white dark:bg-navy-800">{item.item_name}</td>
-                              <td className="px-6 py-3 border-r border-[#CE2029]/5 italic text-gray-500 text-[11px] max-w-[250px] truncate" title={item.item_specification}>{item.item_specification || "-"}</td>
-                              <td className="px-6 py-3 text-center border-r border-[#CE2029]/5 bg-[#FFD500]/5 dark:bg-navy-900 font-black">{item.item_qty}</td>
-                              <td className="px-6 py-3 text-right font-black text-[#003875] dark:text-[#FFD500] border-r border-[#CE2029]/5">â‚¹{parseFloat(item.est_amount).toLocaleString()}</td>
-                              {O2D_STEPS.map((_, stepIdx) => {
-                                const plannedRaw = item[`planned_${stepIdx + 1}` as keyof O2D] as string;
-                                const actualRaw = item[`actual_${stepIdx + 1}` as keyof O2D] as string;
-                                const status = item[`status_${stepIdx + 1}` as keyof O2D] as string;
-
-                                const planned = formatDate(plannedRaw);
-                                const actual = formatDate(actualRaw);
-                                const delay = getTimeDelay(plannedRaw, actualRaw);
-
-                                return (
-                                  <td key={stepIdx} className="px-6 py-2 min-w-[140px] border-r border-[#CE2029]/5 last:border-r-0">
-                                    <div className="flex flex-col gap-1.5 text-[10.5px]">
-                                      <div className="flex justify-between items-center gap-2"><span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">Plan</span> <span className="font-bold text-gray-800 dark:text-gray-200">{planned}</span></div>
-                                      <div className="flex justify-between items-center gap-2"><span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">Actual</span> <span className="font-black text-[#003875] dark:text-[#FFD500]">{actual}</span></div>
-                                      <div className="flex justify-between items-center gap-2"><span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">Status</span> <span className={`font-black uppercase ${((status || "").toString().trim().toLowerCase() === 'done' || (status || "").toString().trim().toLowerCase() === 'yes') ? 'text-green-500' : 'text-[#CE2029]'}`}>{status || '-'}</span></div>
-                                      {delay && (
-                                        <div className={`flex justify-between items-center gap-2 border-t pt-1.5 mt-0.5 ${delay.isDelayed ? 'border-red-100 dark:border-red-900/30' : 'border-green-100 dark:border-green-900/30'}`}>
-                                          <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">Delay</span>
-                                          <span className={`font-black text-[10px] ${delay.isDelayed ? 'text-[#CE2029]' : 'text-green-600'}`}>
-                                            {delay.text}
-                                          </span>
-                                        </div>
+                                <div className="w-px h-8 bg-[#003875]/5 mx-1 hidden sm:block" />
+                                <div className="flex items-center gap-3">
+                                  <UserIcon className="w-4.5 h-4.5 text-[#003875]/40" />
+                                  <div className="flex flex-col">
+                                    <span className="text-[9px] font-black text-gray-400 uppercase">
+                                      Operator
+                                    </span>
+                                    <span className="text-[13px] font-black text-gray-700 dark:text-gray-100 uppercase truncate max-w-[120px]">
+                                      {selectedOrder[0]?.filled_by}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="w-px h-8 bg-[#003875]/5 mx-1 hidden sm:block" />
+                                <div className="flex items-center gap-3">
+                                  <CalendarDaysIcon className="w-4.5 h-4.5 text-[#003875]/40" />
+                                  <div className="flex flex-col">
+                                    <span className="text-[9px] font-black text-gray-400 uppercase">
+                                      Timestamp
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[13px] font-black text-gray-700 dark:text-gray-100">
+                                        {new Date(
+                                          selectedOrder[0]?.created_at,
+                                        ).toLocaleString(undefined, {
+                                          dateStyle: "short",
+                                          timeStyle: "short",
+                                        })}
+                                      </span>
+                                      {isStep1Lockout && (
+                                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800 text-[12px] font-black shadow-sm">
+                                          <ClockIcon className="w-4 h-4 animate-pulse" />
+                                          -
+                                          {lockoutTimeLeft.m
+                                            .toString()
+                                            .padStart(2, "0")}
+                                          :
+                                          {lockoutTimeLeft.s
+                                            .toString()
+                                            .padStart(2, "0")}{" "}
+                                          to enable
+                                        </span>
                                       )}
                                     </div>
+                                  </div>
+                                </div>
+
+                                {selectedOrder[0]?.hold &&
+                                  !selectedOrder[0]?.cancelled && (
+                                    <>
+                                      <div className="w-px h-8 bg-orange-500/10 mx-1 hidden sm:block" />
+                                      <div className="flex items-center gap-3">
+                                        <PauseCircleIcon className="w-4.5 h-4.5 text-orange-500/60" />
+                                        <div className="flex flex-col">
+                                          <span className="text-[9px] font-black text-orange-400 uppercase">
+                                            Held On
+                                          </span>
+                                          <span className="text-[13px] font-black text-orange-500">
+                                            {selectedOrder[0]?.hold &&
+                                              new Date(
+                                                selectedOrder[0]?.hold,
+                                              ).toLocaleString(undefined, {
+                                                dateStyle: "short",
+                                                timeStyle: "short",
+                                              })}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+
+                                {selectedOrder[0]?.cancelled && (
+                                  <>
+                                    <div className="w-px h-8 bg-red-500/10 mx-1 hidden sm:block" />
+                                    <div className="flex items-center gap-3">
+                                      <NoSymbolIcon className="w-4.5 h-4.5 text-red-500/60" />
+                                      <div className="flex flex-col">
+                                        <span className="text-[9px] font-black text-red-400 uppercase">
+                                          Cancelled On
+                                        </span>
+                                        <span className="text-[13px] font-black text-[#CE2029]">
+                                          {selectedOrder[0]?.cancelled &&
+                                            new Date(
+                                              selectedOrder[0]?.cancelled,
+                                            ).toLocaleString(undefined, {
+                                              dateStyle: "short",
+                                              timeStyle: "short",
+                                            })}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="md:col-span-3 flex justify-end">
+                              <div className="relative group w-28 h-28">
+                                <div className="absolute inset-0 bg-[#FFD500] blur-lg opacity-10" />
+                                <div className="relative h-full bg-white dark:bg-black border-4 border-white dark:border-navy-800 rounded-xl overflow-hidden shadow-xl group-hover:scale-105 transition-transform">
+                                  {selectedOrder[0]?.order_screenshot ? (
+                                    <img
+                                      src={getDriveImageUrl(
+                                        selectedOrder[0]?.order_screenshot,
+                                      )}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <PhotoIcon className="w-6 h-6 text-gray-100 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                                  )}
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <a
+                                      href={
+                                        selectedOrder[0]?.order_screenshot
+                                          ? getDriveImageUrl(
+                                              selectedOrder[0]
+                                                ?.order_screenshot,
+                                            )
+                                          : "#"
+                                      }
+                                      target="_blank"
+                                      className="p-2 bg-white rounded-full transition-transform hover:scale-110"
+                                    >
+                                      <EyeIcon className="w-4.5 h-4.5 text-black" />
+                                    </a>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Promotional Deployment - Extra Items for Dispatch */}
+                          {(() => {
+                            const activeParty = fullParties.find(
+                              (p) =>
+                                p.partyName === selectedOrder[0]?.party_name,
+                            );
+                            if (activeParty && activeParty.firstOrderItems) {
+                              // Parse order no from customerType e.g. "NEW (OR-05)"
+                              const match = (
+                                activeParty.customerType || ""
+                              ).match(/NEW\s*\((.+?)\)/i);
+                              const firstOrderNo = match
+                                ? match[1].trim()
+                                : null;
+                              // Only show if this is the specific linked first order
+                              if (
+                                firstOrderNo &&
+                                firstOrderNo === selectedOrder[0]?.order_no
+                              ) {
+                                const promoItems = activeParty.firstOrderItems
+                                  .split(",")
+                                  .map((s: string) => s.trim())
+                                  .filter(Boolean);
+                                if (promoItems.length > 0) {
+                                  // Icon + color map for known promo items
+                                  const promoIconMap: Record<
+                                    string,
+                                    { icon: React.ElementType; color: string }
+                                  > = {
+                                    "T Shirt": {
+                                      icon: TagIcon,
+                                      color: "text-rose-500",
+                                    },
+                                    "Note Pad": {
+                                      icon: DocumentTextIcon,
+                                      color: "text-sky-500",
+                                    },
+                                    Pen: {
+                                      icon: PencilSquareIcon,
+                                      color: "text-violet-500",
+                                    },
+                                    Thele: {
+                                      icon: ShoppingBagIcon,
+                                      color: "text-emerald-500",
+                                    },
+                                    "Tape Roll": {
+                                      icon: ArchiveBoxIcon,
+                                      color: "text-amber-500",
+                                    },
+                                    Posters: {
+                                      icon: PhotoIcon,
+                                      color: "text-pink-500",
+                                    },
+                                    Catalogue: {
+                                      icon: ClipboardDocumentCheckIcon,
+                                      color: "text-teal-500",
+                                    },
+                                  };
+                                  return (
+                                    <div className="bg-gradient-to-r from-amber-50 to-[#FFFBF0] dark:from-navy-800 dark:to-navy-900 rounded-2xl border-2 border-[#FFD500] shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-400 relative">
+                                      <div className="absolute top-0 left-0 w-1.5 h-full bg-[#FFD500]" />
+                                      <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                        <div>
+                                          <h3 className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest flex items-center gap-2">
+                                            <GiftIcon className="w-5 h-5 text-[#FFD500]" />
+                                            PROMOTIONAL DEPLOYMENT
+                                          </h3>
+                                          <p className="text-[10px] font-bold text-gray-500 mt-0.5 ml-7 uppercase tracking-wider">
+                                            Required First Order Extras for
+                                            Dispatch
+                                          </p>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                          {promoItems.map(
+                                            (item: string, idx: number) => {
+                                              const itemMatch = item.match(
+                                                /(.*?)\s*\(Qty:\s*(.*?)\)/,
+                                              );
+                                              const name = itemMatch
+                                                ? itemMatch[1].trim()
+                                                : item;
+                                              const qty = itemMatch
+                                                ? itemMatch[2]
+                                                : "1";
+                                              const promo = promoIconMap[
+                                                name
+                                              ] || {
+                                                icon: GiftIcon,
+                                                color: "text-orange-500",
+                                              };
+                                              const ItemIcon = promo.icon;
+                                              return (
+                                                <div
+                                                  key={idx}
+                                                  className="bg-white dark:bg-black px-3 py-1.5 rounded-lg border border-orange-100 dark:border-navy-700 flex items-center gap-2 shadow-sm"
+                                                >
+                                                  <ItemIcon
+                                                    className={`w-3.5 h-3.5 shrink-0 ${promo.color}`}
+                                                  />
+                                                  <span className="text-[11px] font-black text-gray-800 dark:text-gray-100">
+                                                    {name}
+                                                  </span>
+                                                  <div className="w-px h-3 bg-gray-200 dark:bg-navy-700" />
+                                                  <span className="text-[11px] font-black text-[#003875] dark:text-[#FFD500]">
+                                                    Ã—{qty}
+                                                  </span>
+                                                </div>
+                                              );
+                                            },
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              }
+                            }
+                            return null;
+                          })()}
+
+                          {/* Tactical Inventory - Reverted to Simple 4-Column Table View */}
+                          <div className="bg-white dark:bg-navy-800/50 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-500">
+                            <div className="px-6 py-3 border-b border-gray-100 dark:border-navy-700 flex items-center justify-between bg-white/40 dark:bg-transparent">
+                              <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 items-center">
+                                <div className="w-1 h-3.5 bg-[#003875] rounded-full" />{" "}
+                                Tactical Inventory
+                              </h3>
+                              <div className="text-[12px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter">
+                                TOTAL Value: ₹
+                                {selectedOrder
+                                  .reduce(
+                                    (sum: number, i: O2D) =>
+                                      sum + (parseFloat(i.est_amount) || 0),
+                                    0,
+                                  )
+                                  .toLocaleString()}
+                              </div>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left border-collapse">
+                                <thead>
+                                  <tr className="bg-amber-100 dark:bg-navy-950 text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">
+                                    <th className="px-6 py-3">NOMENCLATURE</th>
+                                    <th className="px-6 py-3">
+                                      ITEM SPECIFICATION
+                                    </th>
+                                    <th className="px-6 py-3 text-center">
+                                      QUANTITY
+                                    </th>
+                                    <th className="px-6 py-3 text-right">
+                                      ESTIMATED AMOUNT
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-navy-800/20">
+                                  {selectedOrder.map((item, idx) => (
+                                    <tr
+                                      key={idx}
+                                      className="text-[12px] font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/[0.02] dark:hover:bg-navy-700/10 transition-colors"
+                                    >
+                                      <td className="px-6 py-4 font-black text-gray-900 dark:text-white uppercase">
+                                        {item.item_name}
+                                      </td>
+                                      <td className="px-6 py-4 text-[11px] font-medium text-gray-500 dark:text-gray-400 italic italic">
+                                        {item.item_specification || "-"}
+                                      </td>
+                                      <td className="px-6 py-4 text-center font-black text-[#003875] dark:text-[#FFD500]">
+                                        {item.item_qty}
+                                      </td>
+                                      <td className="px-6 py-4 text-right font-black text-[#CE2029]">
+                                        ₹
+                                        {(parseFloat(item.est_amount) || 0).toLocaleString()}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot>
+                                  <tr className="bg-amber-100/50 dark:bg-black/20 text-[11px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500]">
+                                    <td
+                                      colSpan={2}
+                                      className="px-6 py-4 italic"
+                                    >
+                                      Aggregate Order Sum
+                                    </td>
+                                    <td className="px-6 py-4 text-center bg-[#003875]/5 dark:bg-[#003875]/10 text-gray-700 dark:text-gray-300">
+                                      {selectedOrder.length} Items
+                                    </td>
+                                    <td className="px-6 py-4 text-right bg-[#003875] text-white">
+                                      ₹
+                                      {selectedOrder
+                                        .reduce(
+                                          (sum: number, i: O2D) =>
+                                            sum +
+                                            (parseFloat(i.est_amount) || 0),
+                                          0,
+                                        )
+                                        .toLocaleString()}
+                                    </td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          </div>
+                          {/* Operational Manifest - Step Specific Details */}
+                          <div className="bg-white dark:bg-navy-800/50 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md overflow-hidden">
+                            <div className="px-6 py-3 border-b border-gray-100 dark:border-navy-700 bg-white/40 dark:bg-transparent">
+                              <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 items-center">
+                                <div className="w-1 h-3.5 bg-[#003875] rounded-full" />{" "}
+                                Operational Manifest
+                              </h3>
+                            </div>
+                            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-8 gap-x-12">
+                              {/* Step 1: SO Details */}
+                              <div className="space-y-4">
+                                <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
+                                  <IdentificationIcon className="w-4 h-4" />{" "}
+                                  Step 1: SO Protocol
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                      SO Number
+                                    </span>
+                                    <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                                      {selectedOrder[0]?.so_number_1 || "-"}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                      Final Amt
+                                    </span>
+                                    <span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">
+                                      ₹
+                                      {(parseFloat(
+                                        selectedOrder[0]?.final_amount_1 || "0",
+                                      ) || 0).toLocaleString()}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                    Merge With
+                                  </span>
+                                  <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                                    {selectedOrder[0]?.merge_order_with_1 ||
+                                      "N/A"}
+                                  </span>
+                                </div>
+                                {selectedOrder[0]?.upload_so_1 && (
+                                  <a
+                                    href={getDriveImageUrl(
+                                      selectedOrder[0]?.upload_so_1,
+                                    )}
+                                    target="_blank"
+                                    className="flex items-center gap-2 px-4 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest mt-1"
+                                  >
+                                    <EyeIcon className="w-4 h-4" /> View SO Doc
+                                  </a>
+                                )}
+                              </div>
+
+                              {/* Step 6: Packing */}
+                              <div className="space-y-4">
+                                <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
+                                  <ArchiveBoxIcon className="w-4 h-4" /> Step 6:
+                                  Packing
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                      Parcels
+                                    </span>
+                                    <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                                      {selectedOrder[0]?.num_of_parcel_6 || "-"}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                      Packed On
+                                    </span>
+                                    <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                                      {selectedOrder[0]
+                                        ?.actual_date_of_order_packed_6
+                                        ? new Date(
+                                            selectedOrder[0]
+                                              ?.actual_date_of_order_packed_6,
+                                          ).toLocaleDateString()
+                                        : "-"}
+                                    </span>
+                                  </div>
+                                </div>
+                                {selectedOrder[0]?.upload_pi_6 && (
+                                  <a
+                                    href={getDriveImageUrl(
+                                      selectedOrder[0]?.upload_pi_6,
+                                    )}
+                                    target="_blank"
+                                    className="flex items-center gap-2 px-4 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest mt-1"
+                                  >
+                                    <EyeIcon className="w-4 h-4" /> View PI Doc
+                                  </a>
+                                )}
+                              </div>
+
+                              {/* Step 7 & 9: Dispatch & Bilty */}
+                              <div className="space-y-8">
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
+                                    <CalendarDaysIcon className="w-4 h-4" />{" "}
+                                    Step 7: Dispatch
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                      Voucher #
+                                    </span>
+                                    <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                                      {selectedOrder[0]?.voucher_num_7 || "-"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
+                                    <HashtagIcon className="w-4 h-4" /> Step 9:
+                                    Bilty
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="flex flex-col">
+                                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                        Parcels
+                                      </span>
+                                      <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                                        {selectedOrder[0]?.num_of_parcel_9 ||
+                                          "-"}
+                                      </span>
+                                    </div>
+                                    {selectedOrder[0]?.attach_bilty_9 && (
+                                      <a
+                                        href={getDriveImageUrl(
+                                          selectedOrder[0]?.attach_bilty_9,
+                                        )}
+                                        target="_blank"
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-[#003875]/5 rounded-lg text-[10px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest self-end mb-1"
+                                      >
+                                        <EyeIcon className="w-3.5 h-3.5" />{" "}
+                                        Bilty
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Step 8: Verification */}
+                              <div className="space-y-4 lg:col-span-2">
+                                <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
+                                  <CalendarDaysIcon className="w-4 h-4" /> Step
+                                  8: Operational Audit
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                      Checked
+                                    </span>
+                                    <span
+                                      className={`text-[14px] font-black ${selectedOrder[0]?.order_details_checked_8 === "Yes" ? "text-green-500" : "text-red-500"}`}
+                                    >
+                                      {selectedOrder[0]
+                                        ?.order_details_checked_8 || "No"}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                      Voucher 51
+                                    </span>
+                                    <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                                      {selectedOrder[0]?.voucher_num_51_8 ||
+                                        "-"}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-col sm:col-span-2">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                                      T. Amount
+                                    </span>
+                                    <span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">
+                                      ₹
+                                      {(parseFloat(
+                                        selectedOrder[0]?.t_amt_8 || "0",
+                                      ) || 0).toLocaleString()}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Dark Blue Decorative Line */}
+                          <div className="h-0.5 bg-gradient-to-r from-transparent via-[#003875]/20 to-transparent" />
+
+                          {/* Compact Remarks - Cream Background */}
+                          {selectedOrder[0]?.remark && (
+                            <div className="bg-[#FEF6DB] dark:bg-navy-800/50 p-5 rounded-2xl border-2 border-orange-100 dark:border-navy-700 relative shadow-md">
+                              <ChatBubbleBottomCenterTextIcon className="absolute top-4 right-4 w-6 h-6 text-[#003875]/10" />
+                              <span className="text-[9px] font-black text-[#003875]/40 uppercase tracking-[0.2em] block mb-1.5 font-bold">
+                                Intelligence Report
+                              </span>
+                              <p className="text-[12px] font-bold text-gray-600 dark:text-gray-400 leading-relaxed italic">
+                                "{selectedOrder[0]?.remark}"
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        /* Pure Simple Table View - Cream Background Theme */
+                        <div className="flex-1 overflow-y-auto overflow-x-auto no-scrollbar p-6 animate-in slide-in-from-bottom-2 duration-200">
+                          <div className="bg-white dark:bg-navy-900 rounded-xl border-2 border-gray-100 dark:border-navy-700 shadow-xl w-max min-w-full overflow-hidden">
+                            <table className="w-full text-left border-collapse whitespace-nowrap">
+                              <thead>
+                                <tr className="bg-amber-100 dark:bg-navy-950 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">
+                                  <th className="px-6 py-4 border-r border-[#003875]/10 sticky left-0 z-10 bg-amber-100 dark:bg-navy-950">
+                                    Nomenclature
+                                  </th>
+                                  <th className="px-6 py-4 border-r border-[#003875]/10">
+                                    Item Specification
+                                  </th>
+                                  <th className="px-6 py-4 text-center border-r border-[#003875]/10">
+                                    Quantity
+                                  </th>
+                                  <th className="px-6 py-4 text-right border-r border-[#003875]/10">
+                                    Estimated Amount
+                                  </th>
+                                  {O2D_STEPS.map((step, idx) => (
+                                    <th
+                                      key={idx}
+                                      className="px-4 py-3 text-center border-r border-[#003875]/10 last:border-r-0 align-top"
+                                      title={step}
+                                    >
+                                      <div className="flex flex-col items-center justify-center gap-0.5 min-w-[120px]">
+                                        <span className="text-[8px] opacity-50 uppercase tracking-[0.2em] font-black">
+                                          Step {idx + 1}
+                                        </span>
+                                        <span className="text-[10px] whitespace-normal leading-tight">
+                                          {O2D_STEP_SHORTS[idx]}
+                                        </span>
+                                      </div>
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#CE2029]/5 dark:divide-navy-800/20">
+                                {selectedOrder.map((item, idx) => (
+                                  <tr
+                                    key={idx}
+                                    className="hover:bg-white/50 dark:hover:bg-white/5 transition-colors text-[13px] font-medium text-gray-700 dark:text-gray-200"
+                                  >
+                                    <td className="px-6 py-3 border-r border-[#CE2029]/5 sticky left-0 z-10 bg-white dark:bg-navy-800">
+                                      {item.item_name}
+                                    </td>
+                                    <td
+                                      className="px-6 py-3 border-r border-[#CE2029]/5 italic text-gray-500 text-[11px] max-w-[250px] truncate"
+                                      title={item.item_specification}
+                                    >
+                                      {item.item_specification || "-"}
+                                    </td>
+                                    <td className="px-6 py-3 text-center border-r border-[#CE2029]/5 bg-[#FFD500]/5 dark:bg-navy-900 font-black">
+                                      {item.item_qty}
+                                    </td>
+                                    <td className="px-6 py-3 text-right font-black text-[#003875] dark:text-[#FFD500] border-r border-[#CE2029]/5">
+                                      ₹
+                                      {parseFloat(
+                                        item.est_amount,
+                                      ).toLocaleString()}
+                                    </td>
+                                    {O2D_STEPS.map((_, stepIdx) => {
+                                      const plannedRaw = item[
+                                        `planned_${stepIdx + 1}` as keyof O2D
+                                      ] as string;
+                                      const actualRaw = item[
+                                        `actual_${stepIdx + 1}` as keyof O2D
+                                      ] as string;
+                                      const status = item[
+                                        `status_${stepIdx + 1}` as keyof O2D
+                                      ] as string;
+
+                                      const planned = formatDate(plannedRaw);
+                                      const actual = formatDate(actualRaw);
+                                      const delay = getTimeDelay(
+                                        plannedRaw,
+                                        actualRaw,
+                                      );
+
+                                      return (
+                                        <td
+                                          key={stepIdx}
+                                          className="px-6 py-2 min-w-[140px] border-r border-[#CE2029]/5 last:border-r-0"
+                                        >
+                                          <div className="flex flex-col gap-1.5 text-[10.5px]">
+                                            <div className="flex justify-between items-center gap-2">
+                                              <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">
+                                                Plan
+                                              </span>{" "}
+                                              <span className="font-bold text-gray-800 dark:text-gray-200">
+                                                {planned}
+                                              </span>
+                                            </div>
+                                            <div className="flex justify-between items-center gap-2">
+                                              <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">
+                                                Actual
+                                              </span>{" "}
+                                              <span className="font-black text-[#003875] dark:text-[#FFD500]">
+                                                {actual}
+                                              </span>
+                                            </div>
+                                            <div className="flex justify-between items-center gap-2">
+                                              <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">
+                                                Status
+                                              </span>{" "}
+                                              <span
+                                                className={`font-black uppercase ${(status || "").toString().trim().toLowerCase() === "done" || (status || "").toString().trim().toLowerCase() === "yes" ? "text-green-500" : "text-[#CE2029]"}`}
+                                              >
+                                                {status || "-"}
+                                              </span>
+                                            </div>
+                                            {delay && (
+                                              <div
+                                                className={`flex justify-between items-center gap-2 border-t pt-1.5 mt-0.5 ${delay.isDelayed ? "border-red-100 dark:border-red-900/30" : "border-green-100 dark:border-green-900/30"}`}
+                                              >
+                                                <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">
+                                                  Delay
+                                                </span>
+                                                <span
+                                                  className={`font-black text-[10px] ${delay.isDelayed ? "text-[#CE2029]" : "text-green-600"}`}
+                                                >
+                                                  {delay.text}
+                                                </span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr className="bg-[#FEF6DB]/80 dark:bg-navy-950 font-black text-[#003875] dark:text-white text-[13px] border-t-2 border-[#003875]/20 shadow-inner">
+                                  <td className="px-6 py-4 border-r border-[#003875]/10 sticky left-0 z-10 bg-[#FEF6DB]/80 dark:bg-navy-950 backdrop-blur-md">
+                                    AGGREGATE SUM
                                   </td>
-                                );
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-[#FEF6DB]/80 dark:bg-navy-950 font-black text-[#003875] dark:text-white text-[13px] border-t-2 border-[#003875]/20 shadow-inner">
-                            <td className="px-6 py-4 border-r border-[#003875]/10 sticky left-0 z-10 bg-[#FEF6DB]/80 dark:bg-navy-950 backdrop-blur-md">AGGREGATE SUM</td>
-                            <td className="px-6 py-4 border-r border-[#003875]/10"></td>
-                            <td className="px-6 py-4 text-center border-r border-[#003875]/10">{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.item_qty) || 0), 0)} Units</td>
-                            <td className="px-6 py-4 text-right text-[#003875] dark:text-[#FFD500] border-r border-[#003875]/10">â‚¹{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}</td>
-                            <td colSpan={O2D_STEPS.length} className="px-6 py-4"></td>
-                          </tr>
-                        </tfoot>
-                      </table>
+                                  <td className="px-6 py-4 border-r border-[#003875]/10"></td>
+                                  <td className="px-6 py-4 text-center border-r border-[#003875]/10">
+                                    {selectedOrder.reduce(
+                                      (sum: number, i: O2D) =>
+                                        sum + (parseFloat(i.item_qty) || 0),
+                                      0,
+                                    )}{" "}
+                                    Units
+                                  </td>
+                                  <td className="px-6 py-4 text-right text-[#003875] dark:text-[#FFD500] border-r border-[#003875]/10">
+                                    ₹
+                                    {selectedOrder
+                                      .reduce(
+                                        (sum: number, i: O2D) =>
+                                          sum + (parseFloat(i.est_amount) || 0),
+                                        0,
+                                      )
+                                      .toLocaleString()}
+                                  </td>
+                                  <td
+                                    colSpan={O2D_STEPS.length}
+                                    className="px-6 py-4"
+                                  ></td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-10 opacity-30">
-                <div className="w-16 h-16 bg-[#003875]/5 rounded-full flex items-center justify-center mb-4"><Squares2X2Icon className="w-8 h-8 text-[#003875]" /></div>
-                <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#003875] italic">Select record to engage</p>
-              </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center p-10 opacity-30">
+                      <div className="w-16 h-16 bg-[#003875]/5 rounded-full flex items-center justify-center mb-4">
+                        <Squares2X2Icon className="w-8 h-8 text-[#003875]" />
+                      </div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#003875] italic">
+                        Select record to engage
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
-        </>
+          {/* end Panels Row */}
+        </div>
+        {/* end Main Container (now inside wrapper) */}
+      </div>
+      {/* end Main Master-Detail View Wrapper */}
+
+      {/* Export Selection Modal */}
+      {isExportModalOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-navy-950/40 backdrop-blur-md"
+            onClick={() => setIsExportModalOpen(false)}
+          />
+          <div className="relative bg-white dark:bg-navy-900 w-full max-w-md rounded-3xl shadow-2xl border border-gray-100 dark:border-navy-700 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-50 dark:border-navy-800 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-black text-[#003875] dark:text-[#FFD500] italic uppercase">
+                  EXPORT SELECTION
+                </h2>
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">
+                  Configure your data payload
+                </p>
+              </div>
+              <button
+                onClick={() => setIsExportModalOpen(false)}
+                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto no-scrollbar">
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-navy-800 cursor-pointer hover:border-[#FFD500] transition-all group">
+                  <input
+                    type="checkbox"
+                    checked={exportIncludeDetails}
+                    onChange={(e) => setExportIncludeDetails(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-300 text-[#003875] focus:ring-[#003875]"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest">
+                      Order Details
+                    </span>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                      No, Party, Item, Qty, Amount, etc.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    Workflow Steps
+                  </h3>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() =>
+                        setExportSelectedSteps(
+                          Array.from({ length: 11 }, (_, i) => i + 1),
+                        )
+                      }
+                      className="text-[9px] font-black text-[#003875] dark:text-[#FFD500] uppercase hover:underline"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={() => setExportSelectedSteps([])}
+                      className="text-[9px] font-black text-red-500 uppercase hover:underline"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {O2D_STEP_SHORTS.map((step, idx) => {
+                    const stepIdx = idx + 1;
+                    const isSelected = exportSelectedSteps.includes(stepIdx);
+                    return (
+                      <button
+                        key={stepIdx}
+                        onClick={() => {
+                          if (isSelected)
+                            setExportSelectedSteps((prev) =>
+                              prev.filter((s) => s !== stepIdx),
+                            );
+                          else
+                            setExportSelectedSteps((prev) => [
+                              ...prev,
+                              stepIdx,
+                            ]);
+                        }}
+                        className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
+                          isSelected
+                            ? "bg-[#003875] border-[#003875] text-[#FFD500] shadow-md"
+                            : "bg-white dark:bg-black/20 border-gray-100 dark:border-navy-800 text-gray-400 hover:border-gray-200"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? "bg-[#FFD500] border-[#FFD500]" : "border-gray-300"}`}
+                        >
+                          {isSelected && (
+                            <div className="w-2 h-2 bg-[#003875] rounded-sm" />
+                          )}
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-widest truncate">
+                          {step}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-50 dark:border-navy-800 bg-gray-50/50 dark:bg-black/10">
+              <button
+                onClick={handleExport}
+                disabled={
+                  !exportIncludeDetails && exportSelectedSteps.length === 0
+                }
+                className="w-full h-14 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black rounded-2xl font-black uppercase tracking-[0.2em] text-[12px] shadow-lg shadow-[#003875]/20 dark:shadow-[#FFD500]/10 disabled:opacity-50 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
+              >
+                <ArrowDownTrayIcon className="w-5 h-5" />
+                Initialize Export
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-    </div>{/* end Panels Row */}
-  </div>{/* end Main Container (now inside wrapper) */}
-</div>{/* end Main Master-Detail View Wrapper */}
 
       <PartyFormModal
         isOpen={isPartyModalOpen}
@@ -2136,53 +3367,138 @@ export default function O2DPage() {
           setParties((prev) => Array.from(new Set([...prev, partyName])));
           if (partyData) {
             setFullParties((prev) => [...prev, partyData]);
+            if (!editingOrderNo) {
+              setNewPartyDraft(partyData);
+            }
           }
           setCommonData((prev) => ({ ...prev, party_name: partyName }));
           setIsPartyModalOpen(false);
         }}
         salePersonName={session?.user?.name || ""}
         linkedOrderNo={commonData.order_no}
+        skipSubmit={!editingOrderNo}
       />
 
       {isModalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-navy-950/40 backdrop-blur-md" onClick={() => setIsModalOpen(false)} />
+          <div
+            className="absolute inset-0 bg-navy-950/40 backdrop-blur-md"
+            onClick={() => setIsModalOpen(false)}
+          />
           <div className="relative bg-white dark:bg-navy-900 w-full max-w-2xl rounded-3xl shadow-[0_32px_64px_-12px_rgba(0,0,0,0.4)] border border-gray-100 dark:border-navy-700 overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
             <div className="p-5 border-b border-orange-100/30 dark:border-navy-700 flex items-center justify-between shrink-0 bg-[#FEF6DB] dark:bg-navy-800">
               <div>
-                <h2 className="text-xl font-black text-[#003875] dark:text-[#FFD500] italic">{editingOrderNo ? `EDIT ORDER: ${editingOrderNo}` : "CREATE NEW ORDER"}</h2>
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mt-0.5">Automated Intelligence Protocol</p>
+                <h2 className="text-xl font-black text-[#003875] dark:text-[#FFD500] italic">
+                  {editingOrderNo
+                    ? `EDIT ORDER: ${editingOrderNo}`
+                    : "CREATE NEW ORDER"}
+                </h2>
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mt-0.5">
+                  Automated Intelligence Protocol
+                </p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-white/5 rounded-2xl transition-all"><XMarkIcon className="w-6 h-6 shrink-0" /></button>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-white/5 rounded-2xl transition-all"
+              >
+                <XMarkIcon className="w-6 h-6 shrink-0" />
+              </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 md:p-7 space-y-5 bg-white/40 dark:bg-navy-900 no-scrollbar">
+            <form
+              onSubmit={handleSubmit}
+              className="flex-1 overflow-y-auto p-5 md:p-7 space-y-5 bg-white/40 dark:bg-navy-900 no-scrollbar"
+            >
               <div className="space-y-6">
                 {/* Common Information */}
                 <div className="bg-white dark:bg-navy-800/60 p-5 rounded-3xl border border-gray-100 dark:border-navy-700 shadow-sm space-y-5">
                   <div className="flex items-center gap-2 -ml-1">
                     <div className="w-1 h-5 bg-[#003875] dark:bg-[#FFD500] rounded-full" />
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-200">MASTER CLASSIFICATION</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-200">
+                      MASTER CLASSIFICATION
+                    </h3>
                   </div>
 
                   <div className="flex flex-wrap items-end gap-5">
                     <div className="relative group">
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2"><PhotoIcon className="w-3 h-3 text-[#FFD500]" />Order Proof</label>
-                      <label className="flex flex-col items-center justify-center w-28 h-28 bg-gray-50/50 dark:bg-navy-900 border-2 border-dashed border-gray-100 dark:border-navy-700 rounded-3xl hover:border-[#FFD500] cursor-pointer transition-all active:scale-95 shadow-inner overflow-hidden relative">
-                        {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <><PhotoIcon className="w-7 h-7 text-gray-200 group-hover:text-[#FFD500] transition-colors" /><span className="text-[8px] font-black text-gray-300 mt-2 tracking-tighter">UPLOAD</span></>}
-                        <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                        <PhotoIcon className="w-3 h-3 text-[#FFD500]" />
+                        Order Proof
                       </label>
-                      {imagePreview && <button type="button" onClick={() => { setScreenshotFile(null); setImagePreview(null); }} className="absolute -top-1 -right-1 p-1.5 bg-red-500 text-white rounded-xl shadow-lg border-2 border-white"><XMarkIcon className="w-3 h-3" /></button>}
+                      <label 
+                        className="flex flex-col items-center justify-center w-28 h-28 bg-gray-50/50 dark:bg-navy-900 border-2 border-dashed border-gray-100 dark:border-navy-700 rounded-3xl hover:border-[#FFD500] cursor-pointer transition-all active:scale-95 shadow-inner overflow-hidden relative"
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const file = e.dataTransfer.files?.[0];
+                          if (file) {
+                            setScreenshotFile(file);
+                            setImagePreview(URL.createObjectURL(file));
+                          }
+                        }}
+                      >
+                        {imagePreview ? (
+                          <img
+                            src={imagePreview}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <>
+                            <PhotoIcon className="w-7 h-7 text-gray-200 group-hover:text-[#FFD500] transition-colors" />
+                            <span className="text-[8px] font-black text-gray-300 mt-2 tracking-tighter">
+                              UPLOAD
+                            </span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                        />
+                      </label>
+                      {imagePreview && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setScreenshotFile(null);
+                            setImagePreview(null);
+                          }}
+                          className="absolute -top-1 -right-1 p-1.5 bg-red-500 text-white rounded-xl shadow-lg border-2 border-white"
+                        >
+                          <XMarkIcon className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
 
                     <div className="flex-1 flex flex-col gap-4">
-                      <div className={!editingOrderNo ? 'hidden' : ''}>
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2"><IdentificationIcon className="w-3 h-3" />Order ID</label>
-                        <input type="text" value={commonData.order_no} readOnly className="w-full h-[36px] bg-gray-50 dark:bg-black border border-transparent dark:border-navy-700 px-3 rounded-xl font-bold text-[11px] text-gray-400 dark:text-gray-500 cursor-not-allowed shadow-inner" />
+                      <div className={!editingOrderNo ? "hidden" : ""}>
+                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                          <IdentificationIcon className="w-3 h-3" />
+                          Order ID
+                        </label>
+                        <input
+                          type="text"
+                          value={commonData.order_no}
+                          readOnly
+                          className="w-full h-[36px] bg-gray-50 dark:bg-black border border-transparent dark:border-navy-700 px-3 rounded-xl font-bold text-[11px] text-gray-400 dark:text-gray-500 cursor-not-allowed shadow-inner"
+                        />
                       </div>
                       <div className="flex gap-2 items-end">
                         <div className="flex-1 min-w-0">
-                          <SearchableDropdown label="Partner Name" icon={BuildingOfficeIcon} value={commonData.party_name} onChange={(val) => setCommonData({ ...commonData, party_name: val })} options={parties} />
+                          <SearchableDropdown
+                            label="Partner Name"
+                            icon={BuildingOfficeIcon}
+                            value={commonData.party_name}
+                            onChange={(val) =>
+                              setCommonData({ ...commonData, party_name: val })
+                            }
+                            options={parties}
+                          />
                         </div>
                         <button
                           type="button"
@@ -2197,8 +3513,18 @@ export default function O2DPage() {
                   </div>
 
                   <div className="mt-2">
-                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2"><ChatBubbleBottomCenterTextIcon className="w-3 h-3" />Remarks</label>
-                    <textarea value={commonData.remark} onChange={(e) => setCommonData({ ...commonData, remark: e.target.value })} className="w-full bg-[#FEF6DB] dark:bg-black p-3 rounded-2xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-gray-100 shadow-sm min-h-[60px] no-scrollbar" placeholder="Order notes..." />
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                      <ChatBubbleBottomCenterTextIcon className="w-3 h-3" />
+                      Remarks
+                    </label>
+                    <textarea
+                      value={commonData.remark}
+                      onChange={(e) =>
+                        setCommonData({ ...commonData, remark: e.target.value })
+                      }
+                      className="w-full bg-[#FEF6DB] dark:bg-black p-3 rounded-2xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-gray-100 shadow-sm min-h-[60px] no-scrollbar"
+                      placeholder="Order notes..."
+                    />
                   </div>
                 </div>
 
@@ -2207,13 +3533,18 @@ export default function O2DPage() {
                   <div className="flex items-center px-1">
                     <div className="flex items-center gap-2">
                       <div className="w-1 h-5 bg-[#CE2029] rounded-full" />
-                      <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-200">ITEMIZED LOGISTICS</h3>
+                      <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-200">
+                        ITEMIZED LOGISTICS
+                      </h3>
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
                     {items.map((item, index) => (
-                      <div key={index} className="p-4 bg-white dark:bg-navy-800/50 rounded-2xl border border-gray-100 dark:border-navy-700 animate-in slide-in-from-right-2 duration-300 shadow-sm space-y-4 relative group">
+                      <div
+                        key={index}
+                        className="p-4 bg-white dark:bg-navy-800/50 rounded-2xl border border-gray-100 dark:border-navy-700 animate-in slide-in-from-right-2 duration-300 shadow-sm space-y-4 relative group"
+                      >
                         {/* Remove Button - Top Right Absolute for Mobile Optimization */}
                         {items.length > 1 && (
                           <button
@@ -2228,23 +3559,66 @@ export default function O2DPage() {
 
                         <div className="grid grid-cols-1 md:grid-cols-11 gap-3 items-end">
                           <div className="md:col-span-6 min-w-0">
-                            <SearchableDropdown label="Nomenclature" icon={ArchiveBoxIcon} value={item.item_name} onChange={(val) => handleItemChange(index, 'item_name', val)} options={dropdownItems.map(i => i.name)} />
+                            <SearchableDropdown
+                              label="Nomenclature"
+                              icon={ArchiveBoxIcon}
+                              value={item.item_name}
+                              onChange={(val) =>
+                                handleItemChange(index, "item_name", val)
+                              }
+                              options={dropdownItems.map((i) => i.name)}
+                            />
                           </div>
                           <div className="md:col-span-2">
-                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5"><HashtagIcon className="w-2.5 h-2.5" />Qty</label>
-                            <input type="number" value={item.item_qty} onChange={(e) => handleItemChange(index, 'item_qty', e.target.value)} className="w-full h-[34px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-gray-100 shadow-sm transition-all" required />
+                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5">
+                              <HashtagIcon className="w-2.5 h-2.5" />
+                              Qty
+                            </label>
+                            <input
+                              type="number"
+                              value={item.item_qty}
+                              onChange={(e) =>
+                                handleItemChange(
+                                  index,
+                                  "item_qty",
+                                  e.target.value,
+                                )
+                              }
+                              className="w-full h-[34px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-gray-100 shadow-sm transition-all"
+                              required
+                            />
                           </div>
                           {/* Total input - temporarily hidden */}
                           <div className="hidden md:col-span-3">
-                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5"><CurrencyRupeeIcon className="w-2.5 h-2.5" />Total</label>
-                            <input type="text" value={item.est_amount} onChange={(e) => handleItemChange(index, 'est_amount', e.target.value)} className="w-full h-[34px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-[#003875] dark:text-[#FFD500] shadow-sm transition-all" />
+                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5">
+                              <CurrencyRupeeIcon className="w-2.5 h-2.5" />
+                              Total
+                            </label>
+                            <input
+                              type="text"
+                              value={item.est_amount}
+                              onChange={(e) =>
+                                handleItemChange(
+                                  index,
+                                  "est_amount",
+                                  e.target.value,
+                                )
+                              }
+                              className="w-full h-[34px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-[#003875] dark:text-[#FFD500] shadow-sm transition-all"
+                            />
                           </div>
                         </div>
                         <div className="pt-2 border-t border-gray-50 dark:border-white/5">
                           <input
                             type="text"
                             value={item.item_specification}
-                            onChange={(e) => handleItemChange(index, 'item_specification', e.target.value)}
+                            onChange={(e) =>
+                              handleItemChange(
+                                index,
+                                "item_specification",
+                                e.target.value,
+                              )
+                            }
                             className="w-full h-[34px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-gray-100 shadow-sm transition-all"
                             placeholder="Item Specification..."
                           />
@@ -2255,14 +3629,33 @@ export default function O2DPage() {
 
                   {/* Add Line Item - bottom */}
                   <div className="flex justify-center pt-1">
-                    <button type="button" onClick={addItemRow} className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] hover:scale-105 transition-all bg-[#003875]/5 dark:bg-[#FFD500]/10 px-4 py-2 rounded-full shadow-sm"><PlusIcon className="w-3.5 h-3.5 stroke-[3]" /> ADD LINE ITEM</button>
+                    <button
+                      type="button"
+                      onClick={addItemRow}
+                      className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] hover:scale-105 transition-all bg-[#003875]/5 dark:bg-[#FFD500]/10 px-4 py-2 rounded-full shadow-sm"
+                    >
+                      <PlusIcon className="w-3.5 h-3.5 stroke-[3]" /> ADD LINE
+                      ITEM
+                    </button>
                   </div>
                 </div>
               </div>
 
               <div className="pt-5 border-t border-orange-100/30 dark:border-navy-700 flex gap-3 shrink-0">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 h-[48px] rounded-2xl font-black text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition-all uppercase tracking-widest text-[10px]">Abandon</button>
-                <button type="submit" className="flex-[2] h-[48px] bg-[#CE2029] hover:bg-[#8E161D] text-white rounded-2xl font-black transition-all shadow-[0_8px_20px_-6px_rgba(206,32,41,0.5)] active:scale-95 uppercase tracking-[0.2em] text-[11px] flex items-center justify-center gap-2 group"><PlusIcon className="w-5 h-5 stroke-[2.5] group-hover:rotate-90 transition-transform duration-300" /> {editingOrderNo ? "PROTOCOL UPDATE" : "EXECUTE ORDER"}</button>
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 h-[48px] rounded-2xl font-black text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition-all uppercase tracking-widest text-[10px]"
+                >
+                  Abandon
+                </button>
+                <button
+                  type="submit"
+                  className="flex-[2] h-[48px] bg-[#CE2029] hover:bg-[#8E161D] text-white rounded-2xl font-black transition-all shadow-[0_8px_20px_-6px_rgba(206,32,41,0.5)] active:scale-95 uppercase tracking-[0.2em] text-[11px] flex items-center justify-center gap-2 group"
+                >
+                  <PlusIcon className="w-5 h-5 stroke-[2.5] group-hover:rotate-90 transition-transform duration-300" />{" "}
+                  {editingOrderNo ? "PROTOCOL UPDATE" : "EXECUTE ORDER"}
+                </button>
               </div>
             </form>
           </div>
@@ -2271,25 +3664,50 @@ export default function O2DPage() {
 
       {isSetupModalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-navy-950/60 backdrop-blur-md" onClick={() => setIsSetupModalOpen(false)} />
+          <div
+            className="absolute inset-0 bg-navy-950/60 backdrop-blur-md"
+            onClick={() => setIsSetupModalOpen(false)}
+          />
           <div className="relative bg-[#FEF6DB] dark:bg-navy-900 w-full max-w-4xl rounded-3xl shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] border border-orange-100 dark:border-navy-700 overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
             <div className="p-5 border-b border-orange-100/50 dark:border-white/5 flex items-center justify-between shrink-0">
               <div>
-                <h2 className="text-xl font-black text-[#003875] dark:text-[#FFD500] italic">SYSTEM CONFIGURATION</h2>
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mt-0.5">Define TAT and Operators</p>
+                <h2 className="text-xl font-black text-[#003875] dark:text-[#FFD500] italic">
+                  SYSTEM CONFIGURATION
+                </h2>
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mt-0.5">
+                  Define TAT and Operators
+                </p>
               </div>
-              <button type="button" onClick={() => setIsSetupModalOpen(false)} className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-white/5 rounded-2xl transition-all"><XMarkIcon className="w-6 h-6 shrink-0" /></button>
+              <button
+                type="button"
+                onClick={() => setIsSetupModalOpen(false)}
+                className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-white/5 rounded-2xl transition-all"
+              >
+                <XMarkIcon className="w-6 h-6 shrink-0" />
+              </button>
             </div>
 
-            <form onSubmit={handleSaveSetup} className="flex-1 overflow-y-auto p-5 md:p-7 space-y-3 no-scrollbar">
+            <form
+              onSubmit={handleSaveSetup}
+              className="flex-1 overflow-y-auto p-5 md:p-7 space-y-3 no-scrollbar"
+            >
               {stepConfigs.map((config, index) => (
-                <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 bg-white dark:bg-navy-800/50 rounded-2xl border border-gray-100 dark:border-navy-700 shadow-sm items-center hover:border-orange-100 dark:hover:border-[#FFD500]/30 transition-colors">
+                <div
+                  key={index}
+                  className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 bg-white dark:bg-navy-800/50 rounded-2xl border border-gray-100 dark:border-navy-700 shadow-sm items-center hover:border-orange-100 dark:hover:border-[#FFD500]/30 transition-colors"
+                >
                   <div className="md:col-span-5 flex flex-col">
-                    <span className="text-[9px] font-black text-[#003875]/50 dark:text-[#FFD500]/50 uppercase tracking-widest mb-1">Step {index + 1}</span>
-                    <span className="text-[12px] font-bold text-gray-800 dark:text-gray-100 leading-tight">{config.step_name}</span>
+                    <span className="text-[9px] font-black text-[#003875]/50 dark:text-[#FFD500]/50 uppercase tracking-widest mb-1">
+                      Step {index + 1}
+                    </span>
+                    <span className="text-[12px] font-bold text-gray-800 dark:text-gray-100 leading-tight">
+                      {config.step_name}
+                    </span>
                   </div>
                   <div className="md:col-span-3">
-                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-1.5"><ClockIcon className="w-3 h-3 text-[#FFD500]" /> TAT</label>
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
+                      <ClockIcon className="w-3 h-3 text-[#FFD500]" /> TAT
+                    </label>
                     <div className="flex h-[38px] bg-[#FEF6DB] dark:bg-navy-950/50 border border-orange-100 dark:border-navy-700 focus-within:border-[#FFD500] rounded-2xl shadow-sm transition-all overflow-hidden items-center p-1">
                       <div className="flex gap-1 bg-white/50 dark:bg-navy-900 p-0.5 rounded-xl border border-gray-100 dark:border-navy-800 shrink-0">
                         <button
@@ -2344,6 +3762,7 @@ export default function O2DPage() {
                       }}
                       options={usersList}
                       placeholder="Assign to..."
+                      isMulti={true}
                     />
                   </div>
                 </div>
@@ -2351,8 +3770,21 @@ export default function O2DPage() {
             </form>
 
             <div className="p-5 border-t border-orange-100/50 dark:border-navy-700 flex gap-3 shrink-0 bg-white/40 dark:bg-transparent">
-              <button type="button" onClick={() => setIsSetupModalOpen(false)} className="flex-1 h-[48px] rounded-2xl font-black text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-orange-50 dark:hover:bg-white/5 transition-all uppercase tracking-widest text-[10px]">Cancel</button>
-              <button type="submit" onClick={handleSaveSetup} className="flex-[2] h-[48px] bg-[#003875] dark:bg-[#FFD500] hover:bg-[#002855] dark:hover:bg-[#E6C000] text-white dark:text-black rounded-2xl font-black transition-all shadow-[0_8px_20px_-6px_rgba(0,56,117,0.5)] dark:shadow-[0_8px_20px_-6px_rgba(255,213,0,0.3)] active:scale-95 uppercase tracking-[0.2em] text-[11px] flex items-center justify-center gap-2"><Cog6ToothIcon className="w-5 h-5 stroke-[2.5]" /> SAVE CONFIGURATION</button>
+              <button
+                type="button"
+                onClick={() => setIsSetupModalOpen(false)}
+                className="flex-1 h-[48px] rounded-2xl font-black text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-orange-50 dark:hover:bg-white/5 transition-all uppercase tracking-widest text-[10px]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                onClick={handleSaveSetup}
+                className="flex-[2] h-[48px] bg-[#003875] dark:bg-[#FFD500] hover:bg-[#002855] dark:hover:bg-[#E6C000] text-white dark:text-black rounded-2xl font-black transition-all shadow-[0_8px_20px_-6px_rgba(0,56,117,0.5)] dark:shadow-[0_8px_20px_-6px_rgba(255,213,0,0.3)] active:scale-95 uppercase tracking-[0.2em] text-[11px] flex items-center justify-center gap-2"
+              >
+                <Cog6ToothIcon className="w-5 h-5 stroke-[2.5]" /> SAVE
+                CONFIGURATION
+              </button>
             </div>
           </div>
         </div>
@@ -2360,32 +3792,63 @@ export default function O2DPage() {
 
       {isStepUpdateModalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-navy-950/40 backdrop-blur-md" onClick={() => setIsStepUpdateModalOpen(false)} />
+          <div
+            className="absolute inset-0 bg-navy-950/40 backdrop-blur-md"
+            onClick={() => setIsStepUpdateModalOpen(false)}
+          />
           <div className="relative bg-white dark:bg-navy-900 w-full max-w-lg rounded-3xl shadow-2xl border border-gray-100 dark:border-navy-700 overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
             <div className="p-5 border-b border-orange-100/30 dark:border-navy-700 flex items-center justify-between shrink-0 bg-[#FEF6DB] dark:bg-navy-800">
               <div>
-                <h2 className="text-lg font-black text-[#CE2029] italic uppercase tracking-tight">Step Update: {O2D_STEP_SHORTS[currentStepToUpdate - 1]}</h2>
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mt-0.5">Execution Protocol {selectedOrderNo}</p>
+                <h2 className="text-lg font-black text-[#CE2029] italic uppercase tracking-tight">
+                  Step Update: {O2D_STEP_SHORTS[currentStepToUpdate - 1]}
+                </h2>
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mt-0.5">
+                  Execution Protocol {selectedOrderNo}
+                </p>
               </div>
-              <button onClick={() => setIsStepUpdateModalOpen(false)} className="p-2 text-gray-400 hover:text-red-500 transition-all"><XMarkIcon className="w-5 h-5" /></button>
+              <button
+                onClick={() => setIsStepUpdateModalOpen(false)}
+                className="p-2 text-gray-400 hover:text-red-500 transition-all"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleStepUpdateSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 no-scrollbar">
+            <form
+              onSubmit={handleStepUpdateSubmit}
+              className="flex-1 overflow-y-auto p-6 space-y-5 no-scrollbar"
+            >
               <div className="space-y-4">
                 {/* Status Toggle */}
                 <YesNoToggle
                   label="Mission Completed?"
                   value={stepUpdateFields.status}
-                  onChange={(val) => setStepUpdateFields({ ...stepUpdateFields, status: val })}
+                  onChange={(val) =>
+                    setStepUpdateFields({ ...stepUpdateFields, status: val })
+                  }
                 />
 
                 {/* Actual Time - Automated */}
                 <div className="hidden">
-                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-1.5"><ClockIcon className="w-3 h-3 text-[#FFD500]" /> Actual Timestamp</label>
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
+                    <ClockIcon className="w-3 h-3 text-[#FFD500]" /> Actual
+                    Timestamp
+                  </label>
                   <input
                     type="datetime-local"
-                    value={stepUpdateFields.actual ? new Date(stepUpdateFields.actual).toISOString().slice(0, 16) : ""}
-                    onChange={(e) => setStepUpdateFields({ ...stepUpdateFields, actual: new Date(e.target.value).toISOString() })}
+                    value={
+                      stepUpdateFields.actual
+                        ? new Date(stepUpdateFields.actual)
+                            .toISOString()
+                            .slice(0, 16)
+                        : ""
+                    }
+                    onChange={(e) =>
+                      setStepUpdateFields({
+                        ...stepUpdateFields,
+                        actual: new Date(e.target.value).toISOString(),
+                      })
+                    }
                     className="w-full h-[38px] bg-[#FEF6DB] dark:bg-black px-4 rounded-xl border border-orange-100 dark:border-navy-700 font-bold text-[11px] outline-none focus:border-[#FFD500]"
                   />
                 </div>
@@ -2395,58 +3858,127 @@ export default function O2DPage() {
                   <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Final Amount</label>
-                        <input type="text" value={stepUpdateFields.final_amount_1} onChange={(e) => setStepUpdateFields({ ...stepUpdateFields, final_amount_1: e.target.value })} className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white" placeholder="Value..." />
+                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
+                          Final Amount
+                        </label>
+                        <input
+                          type="text"
+                          value={stepUpdateFields.final_amount_1}
+                          onChange={(e) =>
+                            setStepUpdateFields({
+                              ...stepUpdateFields,
+                              final_amount_1: e.target.value,
+                            })
+                          }
+                          className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
+                          placeholder="Value..."
+                        />
                       </div>
                       <div>
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">SO Number</label>
-                        <input type="text" value={stepUpdateFields.so_number_1} onChange={(e) => setStepUpdateFields({ ...stepUpdateFields, so_number_1: e.target.value })} className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white" placeholder="SO#..." />
+                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
+                          SO Number
+                        </label>
+                        <input
+                          type="text"
+                          value={stepUpdateFields.so_number_1}
+                          onChange={(e) =>
+                            setStepUpdateFields({
+                              ...stepUpdateFields,
+                              so_number_1: e.target.value,
+                            })
+                          }
+                          className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
+                          placeholder="SO#..."
+                        />
                       </div>
                     </div>
                     <div className="space-y-4">
                       <SearchableDropdown
                         label="Merge Order With"
                         icon={IdentificationIcon}
-                        value={stepUpdateFields.merge_order_with_1 ? (
-                          (() => {
-                            const match = Object.keys(groupedOrders).find(no => no === stepUpdateFields.merge_order_with_1);
-                            return match ? `${match} | ${groupedOrders[match][0]?.party_name || ''}` : stepUpdateFields.merge_order_with_1;
-                          })()
-                        ) : ""}
+                        value={
+                          stepUpdateFields.merge_order_with_1
+                            ? (() => {
+                                const match = Object.keys(groupedOrders).find(
+                                  (no) =>
+                                    no === stepUpdateFields.merge_order_with_1,
+                                );
+                                return match
+                                  ? `${match} | ${groupedOrders[match][0]?.party_name || ""}`
+                                  : stepUpdateFields.merge_order_with_1;
+                              })()
+                            : ""
+                        }
                         onChange={(val) => {
                           const no = val.split(" | ")[0];
-                          setStepUpdateFields({ ...stepUpdateFields, merge_order_with_1: no });
+                          setStepUpdateFields({
+                            ...stepUpdateFields,
+                            merge_order_with_1: no,
+                          });
                         }}
                         options={Object.keys(groupedOrders)
-                          .filter(no => no !== selectedOrderNo)
-                          .map(no => `${no} | ${groupedOrders[no][0]?.party_name || ''}`)
-                        }
+                          .filter((no) => no !== selectedOrderNo)
+                          .map(
+                            (no) =>
+                              `${no} | ${groupedOrders[no][0]?.party_name || ""}`,
+                          )}
                         placeholder="Select Order ID..."
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block flex items-center gap-1.5"><PhotoIcon className="w-3 h-3" /> Upload SO (Attachment)</label>
-                      <label className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative">
-                        {stepAttachmentPreview && stepAttachment?.type.startsWith('image/') ? (
-                          <img src={stepAttachmentPreview} className="w-full h-full object-cover" />
-                        ) : stepAttachment ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <ArchiveBoxIcon className="w-8 h-8 text-[#003875]/40" />
-                            <span className="text-[8px] font-black text-gray-400 max-w-[150px] truncate">{stepAttachment.name}</span>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <PlusIcon className="w-5 h-5 text-gray-300 mx-auto" />
-                            <span className="text-[9px] font-black text-gray-300 tracking-widest uppercase">Select File</span>
-                          </div>
-                        )}
-                        <input type="file" className="hidden" onChange={(e) => {
-                          const file = e.target.files?.[0];
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block flex items-center gap-1.5">
+                        <PhotoIcon className="w-3 h-3" /> Upload SO (Attachment)
+                      </label>
+                      <label 
+                        className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative"
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const file = e.dataTransfer.files?.[0];
                           if (file) {
                             setStepAttachment(file);
                             setStepAttachmentPreview(URL.createObjectURL(file));
                           }
-                        }} />
+                        }}
+                      >
+                        {stepAttachmentPreview &&
+                        stepAttachment?.type.startsWith("image/") ? (
+                          <img
+                            src={stepAttachmentPreview}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : stepAttachment ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <ArchiveBoxIcon className="w-8 h-8 text-[#003875]/40" />
+                            <span className="text-[8px] font-black text-gray-400 max-w-[150px] truncate">
+                              {stepAttachment.name}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <PlusIcon className="w-5 h-5 text-gray-300 mx-auto" />
+                            <span className="text-[9px] font-black text-gray-300 tracking-widest uppercase">
+                              Select File
+                            </span>
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setStepAttachment(file);
+                              setStepAttachmentPreview(
+                                URL.createObjectURL(file),
+                              );
+                            }
+                          }}
+                        />
                       </label>
                     </div>
                   </div>
@@ -2455,36 +3987,102 @@ export default function O2DPage() {
                 {currentStepToUpdate === 6 && (
                   <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
                     <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">Number of Parcel</label>
-                      <input type="text" value={stepUpdateFields.num_of_parcel_6} onChange={(e) => setStepUpdateFields({ ...stepUpdateFields, num_of_parcel_6: e.target.value })} className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white" placeholder="Count..." />
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
+                        Number of Parcel
+                      </label>
+                      <input
+                        type="text"
+                        value={stepUpdateFields.num_of_parcel_6}
+                        onChange={(e) =>
+                          setStepUpdateFields({
+                            ...stepUpdateFields,
+                            num_of_parcel_6: e.target.value,
+                          })
+                        }
+                        className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
+                        placeholder="Count..."
+                      />
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block font-bold">Actual Date of Packing</label>
-                      <input type="date" value={stepUpdateFields.actual_date_of_order_packed_6 ? new Date(stepUpdateFields.actual_date_of_order_packed_6).toISOString().split('T')[0] : ""} onChange={(e) => setStepUpdateFields({ ...stepUpdateFields, actual_date_of_order_packed_6: new Date(e.target.value).toISOString() })} className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white outline-none" />
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block font-bold">
+                        Actual Date of Packing
+                      </label>
+                      <input
+                        type="date"
+                        value={
+                          stepUpdateFields.actual_date_of_order_packed_6
+                            ? new Date(
+                                stepUpdateFields.actual_date_of_order_packed_6,
+                              )
+                                .toISOString()
+                                .split("T")[0]
+                            : ""
+                        }
+                        onChange={(e) =>
+                          setStepUpdateFields({
+                            ...stepUpdateFields,
+                            actual_date_of_order_packed_6: new Date(
+                              e.target.value,
+                            ).toISOString(),
+                          })
+                        }
+                        className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white outline-none"
+                      />
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block flex items-center gap-1.5 font-bold"><PhotoIcon className="w-3 h-3" /> Upload PI (Attachment)</label>
-                      <label className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative mt-1.5">
-                        {stepAttachmentPreview && stepAttachment?.type.startsWith('image/') ? (
-                          <img src={stepAttachmentPreview} className="w-full h-full object-cover" />
-                        ) : stepAttachment ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <ArchiveBoxIcon className="w-8 h-8 text-[#003875]/40" />
-                            <span className="text-[8px] font-black text-gray-400 max-w-[150px] truncate">{stepAttachment.name}</span>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <PlusIcon className="w-5 h-5 text-gray-300 mx-auto" />
-                            <span className="text-[9px] font-black text-gray-300 tracking-widest uppercase">Select PI</span>
-                          </div>
-                        )}
-                        <input type="file" className="hidden" onChange={(e) => {
-                          const file = e.target.files?.[0];
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block flex items-center gap-1.5 font-bold">
+                        <PhotoIcon className="w-3 h-3" /> Upload PI (Attachment)
+                      </label>
+                      <label 
+                        className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative mt-1.5"
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const file = e.dataTransfer.files?.[0];
                           if (file) {
                             setStepAttachment(file);
                             setStepAttachmentPreview(URL.createObjectURL(file));
                           }
-                        }} />
+                        }}
+                      >
+                        {stepAttachmentPreview &&
+                        stepAttachment?.type.startsWith("image/") ? (
+                          <img
+                            src={stepAttachmentPreview}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : stepAttachment ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <ArchiveBoxIcon className="w-8 h-8 text-[#003875]/40" />
+                            <span className="text-[8px] font-black text-gray-400 max-w-[150px] truncate">
+                              {stepAttachment.name}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <PlusIcon className="w-5 h-5 text-gray-300 mx-auto" />
+                            <span className="text-[9px] font-black text-gray-300 tracking-widest uppercase">
+                              Select PI
+                            </span>
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setStepAttachment(file);
+                              setStepAttachmentPreview(
+                                URL.createObjectURL(file),
+                              );
+                            }
+                          }}
+                        />
                       </label>
                     </div>
                   </div>
@@ -2493,8 +4091,21 @@ export default function O2DPage() {
                 {currentStepToUpdate === 7 && (
                   <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
                     <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">Voucher Number</label>
-                      <input type="text" value={stepUpdateFields.voucher_num_7} onChange={(e) => setStepUpdateFields({ ...stepUpdateFields, voucher_num_7: e.target.value })} className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white" placeholder="Voucher#..." />
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
+                        Voucher Number
+                      </label>
+                      <input
+                        type="text"
+                        value={stepUpdateFields.voucher_num_7}
+                        onChange={(e) =>
+                          setStepUpdateFields({
+                            ...stepUpdateFields,
+                            voucher_num_7: e.target.value,
+                          })
+                        }
+                        className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
+                        placeholder="Voucher#..."
+                      />
                     </div>
                   </div>
                 )}
@@ -2504,16 +4115,47 @@ export default function O2DPage() {
                     <YesNoToggle
                       label="Details checked in Sheet?"
                       value={stepUpdateFields.order_details_checked_8}
-                      onChange={(val) => setStepUpdateFields({ ...stepUpdateFields, order_details_checked_8: val })}
+                      onChange={(val) =>
+                        setStepUpdateFields({
+                          ...stepUpdateFields,
+                          order_details_checked_8: val,
+                        })
+                      }
                     />
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">Voucher Num (51)</label>
-                        <input type="text" value={stepUpdateFields.voucher_num_51_8} onChange={(e) => setStepUpdateFields({ ...stepUpdateFields, voucher_num_51_8: e.target.value })} className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white" placeholder="V#51..." />
+                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
+                          Voucher Num (51)
+                        </label>
+                        <input
+                          type="text"
+                          value={stepUpdateFields.voucher_num_51_8}
+                          onChange={(e) =>
+                            setStepUpdateFields({
+                              ...stepUpdateFields,
+                              voucher_num_51_8: e.target.value,
+                            })
+                          }
+                          className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
+                          placeholder="V#51..."
+                        />
                       </div>
                       <div>
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">T. Amount</label>
-                        <input type="text" value={stepUpdateFields.t_amt_8} onChange={(e) => setStepUpdateFields({ ...stepUpdateFields, t_amt_8: e.target.value })} className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-[#003875] dark:text-[#FFD500]" placeholder="Amt..." />
+                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
+                          T. Amount
+                        </label>
+                        <input
+                          type="text"
+                          value={stepUpdateFields.t_amt_8}
+                          onChange={(e) =>
+                            setStepUpdateFields({
+                              ...stepUpdateFields,
+                              t_amt_8: e.target.value,
+                            })
+                          }
+                          className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-[#003875] dark:text-[#FFD500]"
+                          placeholder="Amt..."
+                        />
                       </div>
                     </div>
                   </div>
@@ -2522,32 +4164,77 @@ export default function O2DPage() {
                 {currentStepToUpdate === 9 && (
                   <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
                     <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">Number of Parcel</label>
-                      <input type="text" value={stepUpdateFields.num_of_parcel_9} onChange={(e) => setStepUpdateFields({ ...stepUpdateFields, num_of_parcel_9: e.target.value })} className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white" placeholder="Count..." />
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
+                        Number of Parcel
+                      </label>
+                      <input
+                        type="text"
+                        value={stepUpdateFields.num_of_parcel_9}
+                        onChange={(e) =>
+                          setStepUpdateFields({
+                            ...stepUpdateFields,
+                            num_of_parcel_9: e.target.value,
+                          })
+                        }
+                        className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
+                        placeholder="Count..."
+                      />
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block flex items-center gap-1.5 font-bold font-bold"><PhotoIcon className="w-3 h-3" /> Attach Bilty (Attachment)</label>
-                      <label className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative mt-1.5">
-                        {stepAttachmentPreview && stepAttachment?.type.startsWith('image/') ? (
-                          <img src={stepAttachmentPreview} className="w-full h-full object-cover" />
-                        ) : stepAttachment ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <ArchiveBoxIcon className="w-8 h-8 text-[#003875]/40" />
-                            <span className="text-[8px] font-black text-gray-400 max-w-[150px] truncate">{stepAttachment.name}</span>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <PlusIcon className="w-5 h-5 text-gray-300 mx-auto" />
-                            <span className="text-[9px] font-black text-gray-300 tracking-widest uppercase">Select Bilty</span>
-                          </div>
-                        )}
-                        <input type="file" className="hidden" onChange={(e) => {
-                          const file = e.target.files?.[0];
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block flex items-center gap-1.5 font-bold font-bold">
+                        <PhotoIcon className="w-3 h-3" /> Attach Bilty
+                        (Attachment)
+                      </label>
+                      <label 
+                        className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative mt-1.5"
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const file = e.dataTransfer.files?.[0];
                           if (file) {
                             setStepAttachment(file);
                             setStepAttachmentPreview(URL.createObjectURL(file));
                           }
-                        }} />
+                        }}
+                      >
+                        {stepAttachmentPreview &&
+                        stepAttachment?.type.startsWith("image/") ? (
+                          <img
+                            src={stepAttachmentPreview}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : stepAttachment ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <ArchiveBoxIcon className="w-8 h-8 text-[#003875]/40" />
+                            <span className="text-[8px] font-black text-gray-400 max-w-[150px] truncate">
+                              {stepAttachment.name}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <PlusIcon className="w-5 h-5 text-gray-300 mx-auto" />
+                            <span className="text-[9px] font-black text-gray-300 tracking-widest uppercase">
+                              Select Bilty
+                            </span>
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setStepAttachment(file);
+                              setStepAttachmentPreview(
+                                URL.createObjectURL(file),
+                              );
+                            }
+                          }}
+                        />
                       </label>
                     </div>
                   </div>
@@ -2555,8 +4242,19 @@ export default function O2DPage() {
               </div>
 
               <div className="pt-4 flex gap-3">
-                <button type="button" onClick={() => setIsStepUpdateModalOpen(false)} className="flex-1 h-[44px] rounded-xl font-black text-gray-400 uppercase tracking-widest text-[9px] hover:bg-gray-50 transition-all">Abort</button>
-                <button type="submit" className="flex-[2] h-[44px] bg-[#CE2029] text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-500/20 active:scale-95 transition-all">Deploy Update</button>
+                <button
+                  type="button"
+                  onClick={() => setIsStepUpdateModalOpen(false)}
+                  className="flex-1 h-[44px] rounded-xl font-black text-gray-400 uppercase tracking-widest text-[9px] hover:bg-gray-50 transition-all"
+                >
+                  Abort
+                </button>
+                <button
+                  type="submit"
+                  className="flex-[2] h-[44px] bg-[#CE2029] text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-500/20 active:scale-95 transition-all"
+                >
+                  Deploy Update
+                </button>
               </div>
             </form>
           </div>
@@ -2565,90 +4263,155 @@ export default function O2DPage() {
 
       <ConfirmModal
         isOpen={isConfirmOpen && !!confirmPayload}
-        onClose={() => { setIsConfirmOpen(false); setConfirmPayload(null); }}
+        onClose={() => {
+          setIsConfirmOpen(false);
+          setConfirmPayload(null);
+        }}
         onConfirm={async () => {
           if (!confirmPayload) return;
-          if (confirmPayload.type === 'delete') {
+          if (confirmPayload.type === "delete") {
             await performDelete();
           } else {
-            await handleToggleStatus(confirmPayload.orderNo as string, confirmPayload.type as 'hold' | 'cancelled', confirmPayload.currentValue);
+            await handleToggleStatus(
+              confirmPayload.orderNo as string,
+              confirmPayload.type as "hold" | "cancelled",
+              confirmPayload.currentValue,
+            );
           }
           setIsConfirmOpen(false);
           setConfirmPayload(null);
         }}
         title={
-          confirmPayload?.type === 'delete' ? "Terminate Protocol?" :
-            confirmPayload?.type === 'hold' ? (confirmPayload.currentValue ? "Release Hold?" : "Place on Hold?") :
-              "Cancel Order?"
+          confirmPayload?.type === "delete"
+            ? "Terminate Protocol?"
+            : confirmPayload?.type === "hold"
+              ? confirmPayload.currentValue
+                ? "Release Hold?"
+                : "Place on Hold?"
+              : "Cancel Order?"
         }
         message={
-          confirmPayload?.type === 'delete' ? "This action will permanently purge this record from the grid. Are you sure you want to execute this command?" :
-            confirmPayload?.type === 'hold' ? (confirmPayload.currentValue ? "Do you want to release this order from the hold status?" : "Do you want to place this order on hold?") :
-              "Are you sure you want to cancel this order? This action will mark it as cancelled."
+          confirmPayload?.type === "delete"
+            ? "This action will permanently purge this record from the grid. Are you sure you want to execute this command?"
+            : confirmPayload?.type === "hold"
+              ? confirmPayload.currentValue
+                ? "Do you want to release this order from the hold status?"
+                : "Do you want to place this order on hold?"
+              : "Are you sure you want to cancel this order? This action will mark it as cancelled."
         }
         confirmLabel="Yes, Execute"
         cancelLabel="No, Abort"
-        type={confirmPayload?.type === 'delete' || confirmPayload?.type === 'cancelled' ? 'danger' : 'info'}
+        type={
+          confirmPayload?.type === "delete" ||
+          confirmPayload?.type === "cancelled"
+            ? "danger"
+            : "info"
+        }
       />
-      <ActionStatusModal isOpen={isStatusModalOpen} status={actionStatus} message={actionMessage} />
+      <ActionStatusModal
+        isOpen={isStatusModalOpen}
+        status={actionStatus}
+        message={actionMessage}
+      />
 
       {/* Remove Follow-up Modal */}
       {isRemoveFollowUpModalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-navy-950/40 backdrop-blur-md" onClick={() => setIsRemoveFollowUpModalOpen(false)} />
+          <div
+            className="absolute inset-0 bg-navy-950/40 backdrop-blur-md"
+            onClick={() => setIsRemoveFollowUpModalOpen(false)}
+          />
           <div className="relative bg-white dark:bg-navy-900 w-full max-w-md rounded-3xl shadow-2xl border border-gray-100 dark:border-navy-700 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-gray-100 dark:border-navy-700 flex items-center justify-between bg-gray-50/50 dark:bg-navy-800">
               <div>
-                <h2 className="text-lg font-black text-gray-900 dark:text-white italic uppercase tracking-tight">Revision Protocol</h2>
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mt-0.5">Clear Operational Data: {selectedOrderNo}</p>
+                <h2 className="text-lg font-black text-gray-900 dark:text-white italic uppercase tracking-tight">
+                  Revision Protocol
+                </h2>
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mt-0.5">
+                  Clear Operational Data: {selectedOrderNo}
+                </p>
               </div>
-              <button onClick={() => setIsRemoveFollowUpModalOpen(false)} className="p-2 text-gray-400 hover:text-red-500 transition-all"><XMarkIcon className="w-5 h-5" /></button>
+              <button
+                onClick={() => setIsRemoveFollowUpModalOpen(false)}
+                className="p-2 text-gray-400 hover:text-red-500 transition-all"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
             </div>
 
             <div className="p-6 space-y-6">
               <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2.5 block">Target Step to Clear</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2.5 block">
+                  Target Step to Clear
+                </label>
                 <select
                   value={removeStep}
                   onChange={(e) => setRemoveStep(parseInt(e.target.value))}
                   className="w-full h-[48px] bg-[#FEF6DB] dark:bg-black px-4 rounded-xl border border-orange-100 dark:border-navy-700 font-bold text-[13px] outline-none appearance-none"
                 >
                   {O2D_STEPS.map((step, idx) => (
-                    <option key={idx} value={idx + 1}>Step {idx + 1}: {step}</option>
+                    <option key={idx} value={idx + 1}>
+                      Step {idx + 1}: {step}
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Clearance Scope</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                  Clearance Scope
+                </label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => setRemoveOnwards(false)}
-                    className={`py-3 px-4 rounded-xl border-2 transition-all text-center ${!removeOnwards ? 'border-[#CE2029] bg-[#CE2029]/5 text-[#CE2029]' : 'border-gray-100 dark:border-navy-700 text-gray-400 hover:border-gray-200'}`}
+                    className={`py-3 px-4 rounded-xl border-2 transition-all text-center ${!removeOnwards ? "border-[#CE2029] bg-[#CE2029]/5 text-[#CE2029]" : "border-gray-100 dark:border-navy-700 text-gray-400 hover:border-gray-200"}`}
                   >
-                    <p className="text-[11px] font-black uppercase tracking-tighter">Only Step {removeStep}</p>
-                    <p className="text-[8px] font-bold opacity-60">Surgical Clear</p>
+                    <p className="text-[11px] font-black uppercase tracking-tighter">
+                      Only Step {removeStep}
+                    </p>
+                    <p className="text-[8px] font-bold opacity-60">
+                      Surgical Clear
+                    </p>
                   </button>
                   <button
                     onClick={() => setRemoveOnwards(true)}
-                    className={`py-3 px-4 rounded-xl border-2 transition-all text-center ${removeOnwards ? 'border-[#CE2029] bg-[#CE2029]/5 text-[#CE2029]' : 'border-gray-100 dark:border-navy-700 text-gray-400 hover:border-gray-200'}`}
+                    className={`py-3 px-4 rounded-xl border-2 transition-all text-center ${removeOnwards ? "border-[#CE2029] bg-[#CE2029]/5 text-[#CE2029]" : "border-gray-100 dark:border-navy-700 text-gray-400 hover:border-gray-200"}`}
                   >
-                    <p className="text-[11px] font-black uppercase tracking-tighter">Step {removeStep} Onwards</p>
-                    <p className="text-[8px] font-bold opacity-60">Sequence Reset</p>
+                    <p className="text-[11px] font-black uppercase tracking-tighter">
+                      Step {removeStep} Onwards
+                    </p>
+                    <p className="text-[8px] font-bold opacity-60">
+                      Sequence Reset
+                    </p>
                   </button>
                 </div>
               </div>
 
               <div className="p-4 bg-amber-100 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/30">
                 <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400 leading-relaxed">
-                  <span className="font-black uppercase tracking-widest block mb-1">Impact Analysis:</span>
-                  This will clear Status, Actual Time, and Step-specific data (Vouchers, SO#, etc.). <strong>Planned dates will be preserved</strong> to allow accurate re-entry.
+                  <span className="font-black uppercase tracking-widest block mb-1">
+                    Impact Analysis:
+                  </span>
+                  This will clear Status, Actual Time, and Step-specific data
+                  (Vouchers, SO#, etc.).{" "}
+                  <strong>Planned dates will be preserved</strong> to allow
+                  accurate re-entry.
                 </p>
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button onClick={() => setIsRemoveFollowUpModalOpen(false)} className="flex-1 h-[48px] rounded-xl font-black text-gray-400 uppercase tracking-widest text-[10px] hover:bg-gray-100 transition-all underline decoration-dotted">Abort</button>
-                <button onClick={handleRemoveFollowUp} className="flex-[2] h-[48px] bg-[#CE2029] text-white rounded-xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-red-500/30 hover:scale-[1.02] active:scale-95 transition-all">Confirm Clear</button>
+                <button
+                  onClick={() => setIsRemoveFollowUpModalOpen(false)}
+                  className="flex-1 h-[48px] rounded-xl font-black text-gray-400 uppercase tracking-widest text-[10px] hover:bg-gray-100 transition-all underline decoration-dotted"
+                >
+                  Abort
+                </button>
+                <button
+                  onClick={handleRemoveFollowUp}
+                  className="flex-[2] h-[48px] bg-[#CE2029] text-white rounded-xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-red-500/30 hover:scale-[1.02] active:scale-95 transition-all"
+                >
+                  Confirm Clear
+                </button>
               </div>
             </div>
           </div>
@@ -2665,7 +4428,17 @@ export default function O2DPage() {
   );
 }
 
-function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: boolean, onClose: () => void, groupedOrders: any, fullParties: any[] }) {
+function BusyModal({
+  isOpen,
+  onClose,
+  groupedOrders,
+  fullParties,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  groupedOrders: any;
+  fullParties: any[];
+}) {
   const [selectedNos, setSelectedNos] = useState<string[]>([]);
   const [copyStatus, setCopyStatus] = useState("Copy All for Busy");
   const [selectedBusyDate, setSelectedBusyDate] = useState<string>("");
@@ -2675,49 +4448,67 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
     let filteredOrders = Object.keys(groupedOrders);
 
     if (selectedBusyDate) {
-      filteredOrders = filteredOrders.filter(no => {
+      filteredOrders = filteredOrders.filter((no) => {
         const order = groupedOrders[no][0];
         if (!order || !order.created_at) return false;
-        
+
         const orderDate = new Date(order.created_at);
         const filterDate = new Date(selectedBusyDate);
-        
-        return orderDate.getFullYear() === filterDate.getFullYear() &&
-               orderDate.getMonth() === filterDate.getMonth() &&
-               orderDate.getDate() === filterDate.getDate();
+
+        return (
+          orderDate.getFullYear() === filterDate.getFullYear() &&
+          orderDate.getMonth() === filterDate.getMonth() &&
+          orderDate.getDate() === filterDate.getDate()
+        );
       });
     }
 
     return filteredOrders
-      .map(no => ({
+      .map((no) => ({
         no,
-        party: groupedOrders[no][0]?.party_name || ""
+        party: groupedOrders[no][0]?.party_name || "",
       }))
       .sort((a, b) => b.no.localeCompare(a.no)) // Sort newest first
-      .map(item => `${item.no} | ${item.party}`);
+      .map((item) => `${item.no} | ${item.party}`);
   }, [groupedOrders, selectedBusyDate]);
 
   const results = useMemo(() => {
-    return selectedNos.map(no => {
+    return selectedNos.map((no) => {
       const orders = Object.keys(groupedOrders)
-        .filter(k => k.toLowerCase() === no.toLowerCase())
-        .map(k => groupedOrders[k])[0];
-        
-      if (!orders || orders.length === 0) return { orderNo: no, found: false, partyName: "", items: [], promoItems: [] };
-      
+        .filter((k) => k.toLowerCase() === no.toLowerCase())
+        .map((k) => groupedOrders[k])[0];
+
+      if (!orders || orders.length === 0)
+        return {
+          orderNo: no,
+          found: false,
+          partyName: "",
+          items: [],
+          promoItems: [],
+        };
+
       const first = orders[0];
-      const activeParty = fullParties.find(p => p.partyName === first.party_name);
-      let promoItems: { name: string, qty: string }[] = [];
-      
+      const activeParty = fullParties.find(
+        (p) => p.partyName === first.party_name,
+      );
+      let promoItems: { name: string; qty: string }[] = [];
+
       if (activeParty && activeParty.firstOrderItems) {
-        const match = (activeParty.customerType || '').match(/NEW\s*\((.+?)\)/i);
+        const match = (activeParty.customerType || "").match(
+          /NEW\s*\((.+?)\)/i,
+        );
         const firstOrderNo = match ? match[1].trim() : null;
-        
+
         if (firstOrderNo && firstOrderNo === first.order_no) {
-          promoItems = activeParty.firstOrderItems.split(',').map((s: string) => {
-            const m = s.trim().match(/(.*?)\s*\(Qty:\s*(.*?)\)/);
-            return m ? { name: m[1].trim(), qty: m[2] } : { name: s.trim(), qty: "1" };
-          }).filter((i: { name: string }) => i.name);
+          promoItems = activeParty.firstOrderItems
+            .split(",")
+            .map((s: string) => {
+              const m = s.trim().match(/(.*?)\s*\(Qty:\s*(.*?)\)/);
+              return m
+                ? { name: m[1].trim(), qty: m[2] }
+                : { name: s.trim(), qty: "1" };
+            })
+            .filter((i: { name: string }) => i.name);
         }
       }
 
@@ -2726,7 +4517,7 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
         partyName: first.party_name,
         items: orders.map((o: any) => ({ name: o.item_name, qty: o.item_qty })),
         promoItems,
-        found: true
+        found: true,
       };
     });
   }, [selectedNos, groupedOrders, fullParties]);
@@ -2734,16 +4525,18 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
   const handleCopy = () => {
     // Format as Tab-Separated Values for easy pasting into grids
     let text = "";
-    results.filter(r => r.found).forEach(r => {
-      r.items.forEach((i: any) => {
-        text += `${i.name}\t${i.qty}\n`;
-      });
-      if (r.promoItems && r.promoItems.length > 0) {
-        r.promoItems.forEach((p: any) => {
-          text += `${p.name} (PROMO)\t${p.qty}\n`;
+    results
+      .filter((r) => r.found)
+      .forEach((r) => {
+        r.items.forEach((i: any) => {
+          text += `${i.name}\t${i.qty}\n`;
         });
-      }
-    });
+        if (r.promoItems && r.promoItems.length > 0) {
+          r.promoItems.forEach((p: any) => {
+            text += `${p.name} (PROMO)\t${p.qty}\n`;
+          });
+        }
+      });
 
     navigator.clipboard.writeText(text);
     setCopyStatus("Copied to Clipboard!");
@@ -2753,62 +4546,84 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
   const addOrder = (val: string) => {
     const no = val.split(" | ")[0];
     if (no && !selectedNos.includes(no)) {
-      setSelectedNos(prev => [...prev, no]);
+      setSelectedNos((prev) => [...prev, no]);
     }
   };
 
   const removeOrder = (no: string) => {
-    setSelectedNos(prev => prev.filter(n => n !== no));
+    setSelectedNos((prev) => prev.filter((n) => n !== no));
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-navy-950/40 backdrop-blur-md" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-navy-950/40 backdrop-blur-md"
+        onClick={onClose}
+      />
       <div className="relative bg-white dark:bg-navy-900 w-full max-w-lg rounded-3xl shadow-[0_32px_64px_-12px_rgba(0,0,0,0.4)] border border-gray-100 dark:border-navy-700 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
         <div className="p-5 border-b border-orange-100/30 dark:border-navy-700 flex items-center justify-between shrink-0 bg-[#FEF6DB] dark:bg-navy-800">
           <div>
-            <h2 className="text-xl font-black text-[#003875] dark:text-[#FFD500] italic uppercase">DATA FOR BUSY</h2>
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mt-0.5">Simple Item Logistics</p>
+            <h2 className="text-xl font-black text-[#003875] dark:text-[#FFD500] italic uppercase">
+              DATA FOR BUSY
+            </h2>
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mt-0.5">
+              Simple Item Logistics
+            </p>
           </div>
-          <button onClick={onClose} className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"><XMarkIcon className="w-6 h-6" /></button>
+          <button
+            onClick={onClose}
+            className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+          >
+            <XMarkIcon className="w-6 h-6" />
+          </button>
         </div>
 
         <div className="p-6 overflow-y-auto no-scrollbar space-y-6 bg-white/40 dark:bg-navy-900">
           <div className="space-y-4">
             {/* Date Filter Buttons */}
             <div className="flex flex-wrap items-center gap-2 mb-4">
-              <button 
-                onClick={() => setSelectedBusyDate("")} 
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${!selectedBusyDate ? 'bg-[#003875] text-white shadow-md' : 'bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800'}`}
+              <button
+                onClick={() => setSelectedBusyDate("")}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${!selectedBusyDate ? "bg-[#003875] text-white shadow-md" : "bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800"}`}
               >
                 Show All
               </button>
-              
+
               {(() => {
                 const now = new Date();
-                const today = new Date(now.setHours(0,0,0,0)).toISOString().split('T')[0];
-                const yesterday = new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0];
-                const dayBeforeYesterday = new Date(new Date().setDate(new Date().getDate() - 2)).toISOString().split('T')[0];
+                const today = new Date(now.setHours(0, 0, 0, 0))
+                  .toISOString()
+                  .split("T")[0];
+                const yesterday = new Date(
+                  new Date().setDate(new Date().getDate() - 1),
+                )
+                  .toISOString()
+                  .split("T")[0];
+                const dayBeforeYesterday = new Date(
+                  new Date().setDate(new Date().getDate() - 2),
+                )
+                  .toISOString()
+                  .split("T")[0];
 
                 return (
                   <>
-                    <button 
-                      onClick={() => setSelectedBusyDate(dayBeforeYesterday)} 
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBusyDate === dayBeforeYesterday ? 'bg-[#003875] text-white shadow-md' : 'bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800'}`}
+                    <button
+                      onClick={() => setSelectedBusyDate(dayBeforeYesterday)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBusyDate === dayBeforeYesterday ? "bg-[#003875] text-white shadow-md" : "bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800"}`}
                     >
                       D-B Yesterday
                     </button>
-                    <button 
-                      onClick={() => setSelectedBusyDate(yesterday)} 
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBusyDate === yesterday ? 'bg-[#003875] text-white shadow-md' : 'bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800'}`}
+                    <button
+                      onClick={() => setSelectedBusyDate(yesterday)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBusyDate === yesterday ? "bg-[#003875] text-white shadow-md" : "bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800"}`}
                     >
                       Yesterday
                     </button>
-                    <button 
-                      onClick={() => setSelectedBusyDate(today)} 
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBusyDate === today ? 'bg-[#003875] text-white shadow-md' : 'bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800'}`}
+                    <button
+                      onClick={() => setSelectedBusyDate(today)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBusyDate === today ? "bg-[#003875] text-white shadow-md" : "bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800"}`}
                     >
                       Today
                     </button>
@@ -2817,22 +4632,38 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
               })()}
 
               <div className="relative">
-                <button 
-                  onClick={() => setIsBusyCalendarOpen(!isBusyCalendarOpen)} 
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBusyDate && ![0,1,2].some(d => {
-                    const dt = new Date(); dt.setHours(0,0,0,0); dt.setDate(dt.getDate() - d); return dt.toISOString().split('T')[0] === selectedBusyDate;
-                  }) ? 'bg-[#003875] text-white shadow-md' : 'bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800'}`}
+                <button
+                  onClick={() => setIsBusyCalendarOpen(!isBusyCalendarOpen)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                    selectedBusyDate &&
+                    ![0, 1, 2].some((d) => {
+                      const dt = new Date();
+                      dt.setHours(0, 0, 0, 0);
+                      dt.setDate(dt.getDate() - d);
+                      return (
+                        dt.toISOString().split("T")[0] === selectedBusyDate
+                      );
+                    })
+                      ? "bg-[#003875] text-white shadow-md"
+                      : "bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800"
+                  }`}
                 >
                   <CalendarDaysIcon className="w-3.5 h-3.5" />
-                  {selectedBusyDate && ![0,1,2].some(d => {
-                    const dt = new Date(); dt.setHours(0,0,0,0); dt.setDate(dt.getDate() - d); return dt.toISOString().split('T')[0] === selectedBusyDate;
-                  }) ? new Date(selectedBusyDate).toLocaleDateString('en-GB') : "Calendar"}
+                  {selectedBusyDate &&
+                  ![0, 1, 2].some((d) => {
+                    const dt = new Date();
+                    dt.setHours(0, 0, 0, 0);
+                    dt.setDate(dt.getDate() - d);
+                    return dt.toISOString().split("T")[0] === selectedBusyDate;
+                  })
+                    ? new Date(selectedBusyDate).toLocaleDateString("en-GB")
+                    : "Calendar"}
                 </button>
 
                 {isBusyCalendarOpen && (
                   <div className="absolute top-full left-0 mt-2 z-[9999]">
-                    <PremiumDatePicker 
-                      value={selectedBusyDate} 
+                    <PremiumDatePicker
+                      value={selectedBusyDate}
                       onChange={(date) => {
                         setSelectedBusyDate(date);
                         setIsBusyCalendarOpen(false);
@@ -2849,24 +4680,38 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
               icon={MagnifyingGlassIcon}
               value=""
               onChange={addOrder}
-              options={orderOptions.filter(no => !selectedNos.includes(no))}
+              options={orderOptions.filter((no) => !selectedNos.includes(no))}
               placeholder="Search and select orders..."
               keepOpen={true}
               listPosition="relative"
             />
-            
+
             {selectedNos.length > 0 && (
               <div className="flex flex-wrap gap-2">
-                {selectedNos.map(no => (
-                  <span key={no} className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#003875] text-[#FFD500] rounded-full text-[10px] font-black shadow-sm" title={groupedOrders[no]?.[0]?.party_name}>
+                {selectedNos.map((no) => (
+                  <span
+                    key={no}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#003875] text-[#FFD500] rounded-full text-[10px] font-black shadow-sm"
+                    title={groupedOrders[no]?.[0]?.party_name}
+                  >
                     {no}
                     <span className="opacity-60 font-bold border-l border-[#FFD500]/30 pl-1.5 ml-0.5 truncate max-w-[80px]">
                       {groupedOrders[no]?.[0]?.party_name}
                     </span>
-                    <button onClick={() => removeOrder(no)} className="hover:text-red-400 transition-colors ml-1"><XMarkIcon className="w-3 h-3" /></button>
+                    <button
+                      onClick={() => removeOrder(no)}
+                      className="hover:text-red-400 transition-colors ml-1"
+                    >
+                      <XMarkIcon className="w-3 h-3" />
+                    </button>
                   </span>
                 ))}
-                <button onClick={() => setSelectedNos([])} className="text-[9px] font-black text-red-500 uppercase tracking-widest hover:underline ml-auto">Clear All</button>
+                <button
+                  onClick={() => setSelectedNos([])}
+                  className="text-[9px] font-black text-red-500 uppercase tracking-widest hover:underline ml-auto"
+                >
+                  Clear All
+                </button>
               </div>
             )}
           </div>
@@ -2874,41 +4719,62 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
           <div className="space-y-3">
             {results.length > 0 ? (
               results.map((r, idx) => (
-                <div key={idx} className={`p-4 rounded-2xl border-2 ${r.found ? 'bg-white dark:bg-navy-800/50 border-orange-100/30 dark:border-navy-700 shadow-sm' : 'bg-red-50 border-red-100 text-red-500 opacity-60'}`}>
+                <div
+                  key={idx}
+                  className={`p-4 rounded-2xl border-2 ${r.found ? "bg-white dark:bg-navy-800/50 border-orange-100/30 dark:border-navy-700 shadow-sm" : "bg-red-50 border-red-100 text-red-500 opacity-60"}`}
+                >
                   {!r.found ? (
-                    <p className="text-[10px] font-black italic">Order {r.orderNo} not found</p>
+                    <p className="text-[10px] font-black italic">
+                      Order {r.orderNo} not found
+                    </p>
                   ) : (
                     <div className="space-y-3">
                       <div className="flex flex-col border-b border-gray-50 dark:border-white/5 pb-2">
                         <div className="flex justify-between items-center">
-                          <span className="text-[12px] font-black text-[#003875] dark:text-[#FFD500] italic">{r.orderNo}</span>
-                          <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest truncate max-w-[200px]">{r.partyName}</span>
+                          <span className="text-[12px] font-black text-[#003875] dark:text-[#FFD500] italic">
+                            {r.orderNo}
+                          </span>
+                          <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest truncate max-w-[200px]">
+                            {r.partyName}
+                          </span>
                         </div>
                       </div>
-                      
+
                       <div className="grid grid-cols-12 gap-2">
                         {/* Header */}
-                        <div className="col-span-10 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 dark:border-white/5 pb-1">Item Description</div>
-                        <div className="col-span-2 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 dark:border-white/5 pb-1 text-right">Qty</div>
-                        
+                        <div className="col-span-10 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 dark:border-white/5 pb-1">
+                          Item Description
+                        </div>
+                        <div className="col-span-2 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 dark:border-white/5 pb-1 text-right">
+                          Qty
+                        </div>
+
                         {/* Items */}
                         {r.items.map((i: any, ii: number) => (
                           <React.Fragment key={ii}>
-                            <div className="col-span-10 text-[11px] font-bold text-gray-700 dark:text-gray-200 uppercase truncate py-0.5">{i.name}</div>
-                            <div className="col-span-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] text-right py-0.5">{i.qty}</div>
-                          </React.Fragment>
-                        ))}
-                        
-                        {/* Promos */}
-                        {r.promoItems && r.promoItems.length > 0 && r.promoItems.map((p: any, ii: number) => (
-                          <React.Fragment key={`p-${ii}`}>
-                            <div className="col-span-10 text-[11px] font-bold text-rose-500 uppercase truncate py-0.5 flex items-center gap-1.5 mt-1 border-t border-rose-50 dark:border-rose-900/10 pt-1">
-                              <span className="w-1 h-1 rounded-full bg-rose-400" />
-                              {p.name} (X-TRA)
+                            <div className="col-span-10 text-[11px] font-bold text-gray-700 dark:text-gray-200 uppercase truncate py-0.5">
+                              {i.name}
                             </div>
-                            <div className="col-span-2 text-[11px] font-black text-rose-500 text-right py-0.5 mt-1 border-t border-rose-50 dark:border-rose-900/10 pt-1">{p.qty}</div>
+                            <div className="col-span-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] text-right py-0.5">
+                              {i.qty}
+                            </div>
                           </React.Fragment>
                         ))}
+
+                        {/* Promos */}
+                        {r.promoItems &&
+                          r.promoItems.length > 0 &&
+                          r.promoItems.map((p: any, ii: number) => (
+                            <React.Fragment key={`p-${ii}`}>
+                              <div className="col-span-10 text-[11px] font-bold text-rose-500 uppercase truncate py-0.5 flex items-center gap-1.5 mt-1 border-t border-rose-50 dark:border-rose-900/10 pt-1">
+                                <span className="w-1 h-1 rounded-full bg-rose-400" />
+                                {p.name} (X-TRA)
+                              </div>
+                              <div className="col-span-2 text-[11px] font-black text-rose-500 text-right py-0.5 mt-1 border-t border-rose-50 dark:border-rose-900/10 pt-1">
+                                {p.qty}
+                              </div>
+                            </React.Fragment>
+                          ))}
                       </div>
                     </div>
                   )}
@@ -2917,7 +4783,9 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
             ) : (
               <div className="text-center py-12 opacity-30">
                 <ArchiveBoxIcon className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-                <p className="text-[10px] font-black uppercase tracking-[0.2em]">Ready for extraction</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em]">
+                  Ready for extraction
+                </p>
               </div>
             )}
           </div>
@@ -2926,30 +4794,46 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
         <div className="p-5 border-t border-gray-100 dark:border-navy-700 bg-white/80 dark:bg-navy-800/80 backdrop-blur-md flex flex-col gap-3">
           <button
             onClick={handleCopy}
-            disabled={results.filter(r => r.found).length === 0}
+            disabled={results.filter((r) => r.found).length === 0}
             className="w-full h-[52px] bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg disabled:opacity-50 transition-all active:scale-95 flex items-center justify-center gap-2 group"
           >
-           <ClipboardDocumentCheckIcon className="w-5 h-5" />
-           {copyStatus}
+            <ClipboardDocumentCheckIcon className="w-5 h-5" />
+            {copyStatus}
           </button>
-          <button onClick={onClose} className="w-full h-[40px] rounded-xl font-black text-gray-400 uppercase tracking-widest text-[9px] hover:bg-gray-100 dark:hover:bg-white/5 transition-all">Close Modal</button>
+          <button
+            onClick={onClose}
+            className="w-full h-[40px] rounded-xl font-black text-gray-400 uppercase tracking-widest text-[9px] hover:bg-gray-100 dark:hover:bg-white/5 transition-all"
+          >
+            Close Modal
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-function YesNoToggle({ label, value, onChange }: { label: string, value: string, onChange: (val: string) => void }) {
+function YesNoToggle({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+}) {
   return (
     <div className="flex items-center justify-between p-4 bg-gradient-to-r from-[#FEF6DB] to-white dark:from-navy-800 dark:to-navy-900 rounded-2xl border border-orange-100 dark:border-navy-700 shadow-sm relative overflow-hidden group">
       <div className="absolute top-0 left-0 w-1 h-full bg-[#FFD500]/30" />
-      <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-[0.2em]">{label}</span>
+      <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-[0.2em]">
+        {label}
+      </span>
       <div className="flex bg-gray-100/50 dark:bg-black/40 p-1.5 rounded-full border border-gray-100 dark:border-navy-800 backdrop-blur-sm relative">
         <div
-          className={`absolute top-1.5 bottom-1.5 transition-all duration-300 rounded-full shadow-lg ${value === "Yes"
+          className={`absolute top-1.5 bottom-1.5 transition-all duration-300 rounded-full shadow-lg ${
+            value === "Yes"
               ? "left-1.5 right-[calc(50%+6px)] bg-emerald-500"
               : "left-[calc(50%+6px)] right-1.5 bg-[#CE2029]"
-            }`}
+          }`}
         />
         <button
           type="button"
@@ -2969,4 +4853,3 @@ function YesNoToggle({ label, value, onChange }: { label: string, value: string,
     </div>
   );
 }
-

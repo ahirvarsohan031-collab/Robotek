@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getTicketHistory, addTicketHistory, TicketHistory } from '@/lib/ticket-sheets';
+import { getTicketHistory, addTicketHistory, getTickets, TicketHistory } from '@/lib/ticket-sheets';
 import { uploadFileToDrive } from '@/lib/google-drive';
+import { sendWhatsAppMessage } from '@/lib/maytapi';
+import { getUserByUsernameOrEmail } from '@/lib/google-sheets';
+import { formatDate } from '@/lib/dateUtils';
 
 const TICKET_FOLDER_ID = "1zNEIi62bxuCP2g5KadniAWp4hSNpfVzq";
 
@@ -68,6 +71,36 @@ export async function POST(
     const success = await addTicketHistory(newHistory);
     
     if (success) {
+      // Send WhatsApp Notification for comment/status change
+      try {
+        const allTickets = await getTickets();
+        const ticket = allTickets.find(t => String(t.id) === String(id));
+        if (ticket) {
+          const formattedNow = formatDate(new Date().toISOString());
+          const isStatusChange = newHistory.action_type === 'STATUS_CHANGE';
+          const header = isStatusChange ? '🔄 *Ticket Status Updated*' : '💬 *New Ticket Comment*';
+          const statusLine = isStatusChange
+            ? `📉 *Status Changed:* ${newHistory.old_status} ➡️ ${newHistory.new_status}\n`
+            : '';
+          const commentLine = newHistory.comment_text
+            ? `🗣️ *Comment:* _${newHistory.comment_text}_\n`
+            : '';
+          const message = `${header}\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${ticket.id}\n📌 *Title:* ${ticket.title}\n🏷️ *Category:* ${ticket.category}\n🎯 *Priority:* ${ticket.priority}\n👤 *Raised By:* ${ticket.raised_by}\n👨‍🔧 *Assigned To:* ${ticket.solver_person || 'Unassigned'}\n📊 *Current Status:* ${isStatusChange ? newHistory.new_status : ticket.status}\n${statusLine}${commentLine}👤 *Updated By:* ${newHistory.actor_username}\n⏱️ *Updated At:* ${formattedNow}`;
+
+          const parties = [ticket.raised_by, ticket.solver_person];
+          const uniqueParties = [...new Set(parties)];
+          for (const username of uniqueParties) {
+            if (!username) continue;
+            const user = await getUserByUsernameOrEmail(username);
+            if (user && user.phone) {
+              await sendWhatsAppMessage(user.phone, message);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error sending WhatsApp notification for history:', err);
+      }
+
       return NextResponse.json({ success: true, history: newHistory });
     } else {
       return NextResponse.json({ error: "Failed to add ticket history" }, { status: 500 });

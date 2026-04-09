@@ -127,12 +127,13 @@ export default function PartyManagementPage() {
 
   // ─── Export ───────────────────────────────────────────────────────────────────
   const handleExport = () => {
-    const headers = ["ID", "Timestamp", "Customer Type", "Party Name", "Party Type", "Sales Funnel Unique Num", "Sale Person Name", "Add following items with First order :", "Details and Instructions :", "Remarks", "Filled By"];
+    const headers = ["ID", "Timestamp", "Customer Type", "Party Name", "Date of Birth", "Party Type", "Sales Funnel Unique Num", "Sale Person Name", "Add following items with First order :", "Details and Instructions :", "Remarks", "Filled By"];
     const rows = sortedParties.map((p) => [
       p.id, 
       p.timestamp ? new Date(p.timestamp).toLocaleString("en-GB", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : "",
       p.customerType, 
       p.partyName, 
+      p.dateOfBirth,
       p.partyType, 
       p.salesFunnelUniqueNum, 
       p.salePersonName, 
@@ -258,6 +259,7 @@ export default function PartyManagementPage() {
             <thead>
               <tr className="bg-[#003875] dark:bg-navy-950 text-white dark:text-slate-200">
                 <th onClick={() => handleSort("partyName")} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors"><div className="flex items-center">Party Name <SortIcon column="partyName" /></div></th>
+                <th onClick={() => handleSort("dateOfBirth")} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors"><div className="flex items-center">DOB <SortIcon column="dateOfBirth" /></div></th>
                 <th onClick={() => handleSort("customerType")} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden sm:table-cell"><div className="flex items-center">Customer Type <SortIcon column="customerType" /></div></th>
                 <th onClick={() => handleSort("partyType")} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden md:table-cell"><div className="flex items-center">Party Type <SortIcon column="partyType" /></div></th>
                 <th onClick={() => handleSort("salePersonName")} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden lg:table-cell"><div className="flex items-center">Sales Person <SortIcon column="salePersonName" /></div></th>
@@ -281,6 +283,9 @@ export default function PartyManagementPage() {
                       <div className="min-w-0">
                         <p className="font-black text-[11px] md:text-xs text-gray-900 dark:text-white leading-tight truncate">{party.partyName || "Unnamed Party"}</p>
                       </div>
+                    </td>
+                    <td className="px-3 md:px-4 py-3 text-[11px] md:text-xs font-bold text-gray-600 dark:text-slate-300">
+                      {party.dateOfBirth || "—"}
                     </td>
                     <td className="px-3 md:px-4 py-3 hidden sm:table-cell">
                       <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 bg-orange-50 dark:bg-[#FFD500]/10 text-[#CE2029] dark:text-[#FFD500] text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-md border border-orange-100 dark:border-[#FFD500]/20">{party.customerType || "—"}</span>

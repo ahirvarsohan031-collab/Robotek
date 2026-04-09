@@ -31,7 +31,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         const assignedUser = await getUserByUsernameOrEmail(checklistData.assigned_to || "");
         if (assignedUser && assignedUser.phone) {
           const formattedDueDate = formatDate(checklistData.due_date || "");
-          const message = `📝 *Checklist - Task Updated*\n\n*Task:* ${checklistData.task}\n*Priority:* ${checklistData.priority}\n*Due Date:* ${formattedDueDate}\n*Assigned By:* ${checklistData.assigned_by}\n\n*Department:* ${checklistData.department}`;
+          const message = `📝 *Checklist Updated*\n━━━━━━━━━━━━━━━━━\n📌 *Task:* ${checklistData.task}\n🎯 *Priority:* ${checklistData.priority}\n🏢 *Department:* ${checklistData.department}\n⏳ *Due Date:* ${formattedDueDate}\n👨‍💼 *Assigned By:* ${checklistData.assigned_by}`;
           await sendWhatsAppMessage(assignedUser.phone, message);
         }
       } catch (err) {
@@ -77,7 +77,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         try {
           const assignedUser = await getUserByUsernameOrEmail(current.assigned_to || "");
           if (assignedUser && assignedUser.phone) {
-            const message = `🗑️ *Checklist - Task Deleted*\n\n*Task:* ${current.task}\n*Assigned To:* ${current.assigned_to}\n\nThe checklist task has been removed.`;
+            const message = `🗑️ *Checklist Deleted*\n━━━━━━━━━━━━━━━━━\n📌 *Task:* ${current.task}\n👤 *Assigned To:* ${current.assigned_to}\n\n_This checklist has been removed._`;
             await sendWhatsAppMessage(assignedUser.phone, message);
           }
         } catch (err) {

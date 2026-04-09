@@ -6,6 +6,8 @@ interface TrendPoint {
   label: string;
   score: number;
   onTime: number;
+  total?: number;
+  completed?: number;
 }
 
 type Granularity = 'day' | 'week' | 'month' | 'quarterly' | 'yearly';
@@ -164,7 +166,7 @@ export default function ScoreTrendChart({ data, granularity, onGranularityChange
                 textAnchor="middle"
                 className="text-[7.5px] font-black fill-[#003875] dark:fill-[#FFD500]"
               >
-                {getDisplayVal(d.score)}%
+                {d.total === 0 ? "—" : `${getDisplayVal(d.score)}%`}
               </text>
 
               {/* Permanent Label for On-Time */}
@@ -173,7 +175,7 @@ export default function ScoreTrendChart({ data, granularity, onGranularityChange
                 textAnchor="middle"
                 className="text-[7.5px] font-black fill-[#10b981]"
               >
-                {getDisplayVal(d.onTime)}%
+                {d.completed === 0 ? "—" : `${getDisplayVal(d.onTime)}%`}
               </text>
 
               {/* On-Time dot */}
@@ -206,7 +208,7 @@ export default function ScoreTrendChart({ data, granularity, onGranularityChange
                     textAnchor="middle"
                     className="text-[7px] font-bold fill-white"
                   >
-                    Score: {getDisplayVal(d.score)}% | OT: {getDisplayVal(d.onTime)}%
+                    {d.total === 0 ? "No Tasks in Period" : `Score: ${getDisplayVal(d.score)}% | OT: ${d.completed === 0 ? "—" : getDisplayVal(d.onTime) + "%"}`}
                   </text>
                 </g>
               )}

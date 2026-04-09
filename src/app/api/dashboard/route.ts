@@ -6,6 +6,7 @@ import { getDelegations } from "@/lib/delegation-sheets";
 import { getChecklists } from "@/lib/checklist-sheets";
 import { getMeetings } from "@/lib/meeting-sheets";
 import { getO2Ds, getO2DStepConfig } from "@/lib/o2d-sheets";
+import { getParties } from "@/lib/party-management-sheets";
 import { auth } from "@/auth";
 
 export const dynamic = 'force-dynamic';
@@ -116,7 +117,7 @@ export async function GET(req: NextRequest) {
     // End of current month
     const to = new Date(istYear, istMonth, 0, 23, 59, 59, 999);
 
-    const [users, attendance, leaves, tickets, delegations, checklists, o2ds, stepConfigs, meetings] = await Promise.all([
+    const [users, attendance, leaves, tickets, delegations, checklists, o2ds, stepConfigs, meetings, parties] = await Promise.all([
       getUsers(),
       getAttendanceRecords(),
       getLeaveRequests(),
@@ -125,7 +126,8 @@ export async function GET(req: NextRequest) {
       getChecklists(),
       getO2Ds(),
       getO2DStepConfig(),
-      getMeetings()
+      getMeetings(),
+      getParties()
     ]);
 
     const attendanceToday = attendance.filter((r: any) => normalizeDateStr(r.date) === todayStrRaw);
@@ -152,6 +154,30 @@ export async function GET(req: NextRequest) {
       const [y, m, d] = normalized.split('-');
       return m === tMM && d === tDD;
     });
+
+    console.log('[Dashboard] Party count:', parties.length, '| Sample DOBs:', parties.slice(0, 3).map((p: any) => p.dateOfBirth));
+    console.log('[Dashboard] Today tMM:', tMM, 'tDD:', tDD);
+    const partyBirthdays = parties.filter((p: any) => {
+      if (!p.dateOfBirth) return false;
+      const raw = String(p.dateOfBirth).trim();
+      // Try normalization first
+      const normalized = normalizeDateStr(raw);
+      if (normalized) {
+        const parts = normalized.split('-');
+        if (parts.length === 3 && parts[1] === tMM && parts[2] === tDD) return true;
+      }
+      // Fallback: try to parse as Date object and compare month/day
+      try {
+        const parsed = new Date(raw);
+        if (!isNaN(parsed.getTime())) {
+          const pm = String(parsed.getMonth() + 1).padStart(2, '0');
+          const pd = String(parsed.getDate()).padStart(2, '0');
+          if (pm === tMM && pd === tDD) return true;
+        }
+      } catch { /* ignore */ }
+      return false;
+    });
+    console.log('[Dashboard] Party Birthdays found:', partyBirthdays.length);
 
     // 4. Persistence: Non-resolved tickets
     const openTickets = tickets
@@ -239,6 +265,7 @@ export async function GET(req: NextRequest) {
       },
       leaveDates: Array.from(new Set(leaveDates)),
       birthdays: birthdays.map((u: any) => ({ username: u.username, role: u.role_name, image: u.image_url })),
+      partyBirthdays: partyBirthdays.map((p: any) => ({ partyName: p.partyName, partyType: p.partyType })),
       openTickets: (isAdmin ? openTickets : openTickets.filter((t: any) => t.raised_by === username || t.solver_person === username)).slice(0, 15),
       recentLeaves: (isAdmin ? leaves : leaves.filter((l: any) => l.userName === username)).slice(0, 5),
       upcomingMeetings,

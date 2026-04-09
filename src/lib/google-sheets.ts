@@ -31,7 +31,7 @@ export async function getUsers(): Promise<User[]> {
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${SHEET_NAME}!A:J`,
+      range: `${SHEET_NAME}!A:M`,
     });
 
     const rows = response.data.values;
@@ -47,7 +47,10 @@ export async function getUsers(): Promise<User[]> {
       late_long: row[6] || "",
       image_url: row[7] || "",
       dob: row[8] || "",
-      last_active: row[9] || "",
+      office: row[9] || "",
+      designation: row[10] || "",
+      department: row[11] || "",
+      last_active: row[12] || "",
     }));
   } catch (error) {
     console.error("Error fetching users from Google Sheets:", error);
@@ -60,7 +63,7 @@ export async function addUser(user: User): Promise<boolean> {
     const sheets = await getSheetsClient();
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${SHEET_NAME}!A:J`,
+      range: `${SHEET_NAME}!A:M`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[
@@ -73,6 +76,9 @@ export async function addUser(user: User): Promise<boolean> {
           user.late_long,
           user.image_url,
           user.dob,
+          user.office || "",
+          user.designation || "",
+          user.department || "",
           (user as any).last_active || ""
         ]],
       },
@@ -100,7 +106,7 @@ export async function updateUser(id: string, user: User): Promise<boolean> {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${SHEET_NAME}!A${rowIndex + 1}:J${rowIndex + 1}`,
+      range: `${SHEET_NAME}!A${rowIndex + 1}:M${rowIndex + 1}`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[
@@ -113,6 +119,9 @@ export async function updateUser(id: string, user: User): Promise<boolean> {
           user.late_long,
           user.image_url,
           user.dob,
+          user.office || "",
+          user.designation || "",
+          user.department || "",
           (user as any).last_active || ""
         ]],
       },
@@ -375,7 +384,10 @@ export async function getUserByUsernameOrEmail(identifier: string): Promise<User
       late_long: userRow[6],
       image_url: userRow[7],
       dob: userRow[8],
-      last_active: userRow[9] || "",
+      office: userRow[9],
+      designation: userRow[10],
+      department: userRow[11],
+      last_active: userRow[12] || "",
     } as any;
 
     // Fetch and attach permissions for this user
@@ -391,5 +403,46 @@ export async function getUserByUsernameOrEmail(identifier: string): Promise<User
   } catch (error) {
     console.error("Error fetching user from Google Sheets:", error);
     return null;
+  }
+}
+
+const DROPDOWN_SHEET_NAME = "Dropdown";
+
+export async function getDropdownData(): Promise<{ departments: string[], designations: string[] }> {
+  try {
+    const sheets = await getSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      range: `${DROPDOWN_SHEET_NAME}!A2:B`,
+    });
+
+    const rows = response.data.values || [];
+    const departments = rows.map(row => row[0]).filter(Boolean);
+    const designations = rows.map(row => row[1]).filter(Boolean);
+
+    return { departments, designations };
+  } catch (error) {
+    console.error("Error fetching dropdown data:", error);
+    return { departments: [], designations: [] };
+  }
+}
+
+export async function addDropdownOption(type: 'department' | 'designation', value: string): Promise<boolean> {
+  try {
+    const sheets = await getSheetsClient();
+    const column = type === 'department' ? 'A' : 'B';
+    
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      range: `${DROPDOWN_SHEET_NAME}!${column}:${column}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [[value]],
+      },
+    });
+    return true;
+  } catch (error) {
+    console.error(`Error adding ${type} option:`, error);
+    return false;
   }
 }
