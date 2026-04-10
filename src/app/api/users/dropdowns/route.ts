@@ -13,6 +13,12 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const { type, value } = await req.json();
+    const logData = `[${new Date().toISOString()}] type: "${type}", value: "${value}"\n`;
+    try {
+      const fs = require('fs');
+      fs.appendFileSync('dropdown_logs.txt', logData);
+    } catch (e) {}
+    
     if (!type || !value) {
       return NextResponse.json({ error: "Missing type or value" }, { status: 400 });
     }

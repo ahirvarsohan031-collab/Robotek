@@ -27,6 +27,7 @@ import PremiumDateRangePicker from '@/components/PremiumDateRangePicker';
 import ScoreTrendChart from "@/components/ScoreTrendChart";
 import SemiCircleGauge from "@/components/SemiCircleGauge";
 import { jsPDF } from "jspdf";
+import autoTable from 'jspdf-autotable';
 import * as htmlToImage from 'html-to-image';
 import { useSession } from "next-auth/react";
 
@@ -1371,6 +1372,111 @@ function ScorePageContent() {
     }
   };
 
+  const handleExportTablePDF = async () => {
+    if (!users.length) return;
+    setIsGeneratingPDF(true);
+    // @ts-ignore
+    const toastId = (window as any).toast?.loading?.("Generating Performance Table Report...");
+
+    try {
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      
+      // Branding Header
+      doc.setFillColor(0, 56, 117); // #003875
+      doc.rect(0, 0, pageWidth, 40, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(24);
+      doc.setFont("helvetica", "bold");
+      doc.text("ROBOTEK", 20, 20);
+      
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text("Weekly MIS Performance Report", 20, 28);
+      
+      const formatDateStr = (d: string) => d.split('-').reverse().join('-');
+      
+      doc.setFontSize(10);
+      doc.text(`Range: ${formatDateStr(dateRange.from)} to ${formatDateStr(dateRange.to)}`, pageWidth - 20, 20, { align: 'right' });
+      doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')}`, pageWidth - 20, 28, { align: 'right' });
+
+      // Table Data Preparation
+      const tableData = users.map((item: any, index: number) => {
+        const score = isNegativeMode ? item.score - 100 : item.score;
+        const onTime = isNegativeMode ? item.onTimeRate - 100 : item.onTimeRate;
+        
+        // Status Logic
+        let status = "Mid";
+        if (item.score >= 80) {
+          status = "Great";
+        } else if (item.score < 50) {
+          status = "Down";
+        }
+
+        return [
+          index + 1,
+          item.user.username,
+          item.user.id,
+          item.user.office || '—',
+          item.user.designation || '—',
+          `${score}%`,
+          `${onTime}%`,
+          status,
+          "" // Empty Remark for manual entry
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 50,
+        head: [['Sr. no.', 'Name', 'Emp. Code', 'Office', 'Designation', 'Score %', 'On Time %', 'Status', 'Remark']],
+        body: tableData,
+        theme: 'striped',
+        headStyles: { 
+          fillColor: [0, 56, 117], 
+          textColor: [255, 213, 0], // #FFD500
+          fontSize: 8,
+          fontStyle: 'bold',
+          halign: 'center'
+        },
+        bodyStyles: { 
+          fontSize: 8,
+          valign: 'middle'
+        },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 12 },
+          1: { cellWidth: 30 },
+          2: { halign: 'center', cellWidth: 15 },
+          3: { cellWidth: 20 },
+          4: { cellWidth: 25 },
+          5: { halign: 'center', cellWidth: 15 },
+          6: { halign: 'center', cellWidth: 15 },
+          7: { halign: 'center', fontStyle: 'bold', cellWidth: 15 },
+          8: { cellWidth: 35 } // Space for Remark
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.column.index === 7) {
+            const val = data.cell.raw as string;
+            if (val === 'Great') data.cell.styles.textColor = [40, 167, 69] as any;
+            else if (val === 'Down') data.cell.styles.textColor = [220, 53, 69] as any;
+            else if (val === 'Mid') data.cell.styles.textColor = [255, 193, 7] as any;
+          }
+        }
+      });
+
+      doc.save(`Robotek_Performance_Table_${dateRange.from}_to_${dateRange.to}.pdf`);
+      // @ts-ignore
+      (window as any).toast?.success?.("Table Report generated successfully!");
+    } catch (error: any) {
+      console.error("PDF Generation Error:", error);
+      // @ts-ignore
+      (window as any).toast?.error?.(`Report generation failed: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setIsGeneratingPDF(false);
+      if (toastId) (window as any).toast?.dismiss?.(toastId);
+    }
+  };
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1851,22 +1957,40 @@ function ScorePageContent() {
              </div>
            )}
 
-            {selectedUserId && (
-             <div className="flex items-center">
-                <button 
-                  onClick={handleDownloadPDF}
-                  disabled={isGeneratingPDF}
-                  title={isGeneratingPDF ? "Generating Report..." : "Download MIS Report (PDF)"}
-                  style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
-                  className={`w-10 h-10 rounded-xl border-2 shadow-sm flex items-center justify-center text-[#003875] dark:text-[#FFD500] hover:bg-gray-50 dark:hover:bg-white/5 hover:scale-105 transition-all group active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {isGeneratingPDF ? (
-                    <ArrowPathIcon className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <ArrowDownTrayIcon className="w-5 h-5 stroke-[2.5] group-hover:animate-bounce" />
-                  )}
-                </button>
-             </div>
+             {selectedUserId && (
+              <div className="flex items-center">
+                 <button 
+                   onClick={handleDownloadPDF}
+                   disabled={isGeneratingPDF}
+                   title={isGeneratingPDF ? "Generating Report..." : "Download MIS Report (PDF)"}
+                   style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                   className={`w-10 h-10 rounded-xl border-2 shadow-sm flex items-center justify-center text-[#003875] dark:text-[#FFD500] hover:bg-gray-50 dark:hover:bg-white/5 hover:scale-105 transition-all group active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
+                 >
+                   {isGeneratingPDF ? (
+                     <ArrowPathIcon className="w-5 h-5 animate-spin" />
+                   ) : (
+                     <ArrowDownTrayIcon className="w-5 h-5 stroke-[2.5] group-hover:animate-bounce" />
+                   )}
+                 </button>
+              </div>
+             )}
+
+            {isPrivileged && (
+              <div className="flex items-center">
+                 <button 
+                   onClick={handleExportTablePDF}
+                   disabled={isGeneratingPDF}
+                   title={isGeneratingPDF ? "Generating Report..." : "Export Performance Table (PDF)"}
+                   style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                   className={`w-10 h-10 rounded-full border-2 shadow-sm flex items-center justify-center text-[#003875] dark:text-[#FFD500] hover:bg-gray-50 dark:hover:bg-white/5 hover:scale-105 transition-all group active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
+                 >
+                   {isGeneratingPDF ? (
+                     <ArrowPathIcon className="w-5 h-5 animate-spin" />
+                   ) : (
+                     <DocumentTextIcon className="w-5 h-5 stroke-[2.5]" />
+                   )}
+                 </button>
+              </div>
             )}
         </div>
       </div>

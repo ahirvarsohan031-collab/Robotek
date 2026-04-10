@@ -136,6 +136,11 @@ export interface LeaveRequest {
   endDate: string;
   reason: string;
   status: string;
+  responsibility1?: string;
+  responsibility2?: string;
+  responsibility3?: string;
+  acceptedBy?: string;
+  updatedAt?: string;
 }
 
 export async function getLeaveRequests(): Promise<LeaveRequest[]> {
@@ -143,7 +148,7 @@ export async function getLeaveRequests(): Promise<LeaveRequest[]> {
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
-      range: "Leave!A:G",
+      range: "Leave!A:L",
     });
 
     const rows = response.data.values;
@@ -157,6 +162,11 @@ export async function getLeaveRequests(): Promise<LeaveRequest[]> {
       endDate: row[4] || "",
       reason: row[5] || "",
       status: row[6] || "",
+      responsibility1: row[7] || "",
+      responsibility2: row[8] || "",
+      responsibility3: row[9] || "",
+      acceptedBy: row[10] || "",
+      updatedAt: row[11] || "",
     }));
   } catch (error) {
     console.error("Error fetching leave requests:", error);
@@ -169,7 +179,7 @@ export async function addLeaveRequest(req: LeaveRequest): Promise<boolean> {
     const sheets = await getSheetsClient();
     await sheets.spreadsheets.values.append({
       spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
-      range: "Leave!A:G",
+      range: "Leave!A:L",
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[
@@ -180,6 +190,11 @@ export async function addLeaveRequest(req: LeaveRequest): Promise<boolean> {
           req.endDate,
           req.reason,
           req.status,
+          req.responsibility1 || "",
+          req.responsibility2 || "",
+          req.responsibility3 || "",
+          req.acceptedBy || "",
+          req.updatedAt || new Date().toISOString(),
         ]],
       },
     });
@@ -190,7 +205,7 @@ export async function addLeaveRequest(req: LeaveRequest): Promise<boolean> {
   }
 }
 
-export async function updateLeaveStatus(id: string, status: string): Promise<boolean> {
+export async function updateLeaveStatus(id: string, status: string, acceptedBy?: string): Promise<boolean> {
   try {
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
@@ -204,17 +219,135 @@ export async function updateLeaveStatus(id: string, status: string): Promise<boo
     const rowIndex = rows.findIndex(row => row[0] === id);
     if (rowIndex === -1) return false;
 
+    const range = acceptedBy 
+      ? `Leave!G${rowIndex + 1}:K${rowIndex + 1}` 
+      : `Leave!G${rowIndex + 1}`;
+    
+    const values = acceptedBy 
+      ? [[status, "", "", "", acceptedBy]] // Just to reach K, we keep H, I, J as they are if we use specific range
+      // Wait, update range to only G and K separately if needed, or update the whole row segment.
+      // Better to update specifically.
+      : [[status]];
+
+    if (acceptedBy) {
+        // Update Status (G) and AcceptedBy (K)
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+            range: `Leave!G${rowIndex + 1}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[status]] },
+        });
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+            range: `Leave!K${rowIndex + 1}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[acceptedBy]] },
+        });
+    } else {
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+            range: `Leave!G${rowIndex + 1}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[status]] },
+        });
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error updating leave status:", error);
+    return false;
+  }
+}
+
+export async function updateLeaveRequest(id: string, req: Partial<LeaveRequest>): Promise<boolean> {
+  try {
+    const sheets = await getSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+      range: "Leave!A:A",
+    });
+
+    const rows = response.data.values;
+    if (!rows) return false;
+
+    const rowIndex = rows.findIndex(row => row[0] === id);
+    if (rowIndex === -1) return false;
+
+    // Get existing row to merge
+    const fullRowRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+        range: `Leave!A${rowIndex + 1}:L${rowIndex + 1}`,
+    });
+    const existing = fullRowRes.data.values?.[0] || [];
+
+    const updatedRow = [
+      existing[0], // id
+      existing[1], // userId
+      existing[2], // userName
+      req.startDate || existing[3],
+      req.endDate || existing[4],
+      req.reason || existing[5],
+      req.status || existing[6],
+      req.responsibility1 !== undefined ? req.responsibility1 : existing[7],
+      req.responsibility2 !== undefined ? req.responsibility2 : existing[8],
+      req.responsibility3 !== undefined ? req.responsibility3 : existing[9],
+      req.acceptedBy !== undefined ? req.acceptedBy : existing[10],
+      new Date().toISOString(),
+    ];
+
     await sheets.spreadsheets.values.update({
       spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
-      range: `Leave!G${rowIndex + 1}`,
+      range: `Leave!A${rowIndex + 1}:L${rowIndex + 1}`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: [[status]],
+        values: [updatedRow],
       },
     });
     return true;
   } catch (error) {
-    console.error("Error updating leave status:", error);
+    console.error("Error updating leave request:", error);
+    return false;
+  }
+}
+
+export async function deleteLeaveRequest(id: string): Promise<boolean> {
+  try {
+    const sheets = await getSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+      range: "Leave!A:A",
+    });
+
+    const rows = response.data.values;
+    if (!rows) return false;
+
+    const rowIndex = rows.findIndex(row => row[0] === id);
+    if (rowIndex === -1) return false;
+
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: ATTENDANCE_SPREADSHEET_ID });
+    const sheetId = spreadsheet.data.sheets?.find(s => s.properties?.title === "Leave")?.properties?.sheetId;
+
+    if (sheetId === undefined) return false;
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: sheetId,
+              dimension: "ROWS",
+              startIndex: rowIndex,
+              endIndex: rowIndex + 1
+            }
+          }
+        }]
+      }
+    });
+
+    return true;
+  } catch (error) {
+    console.error("Error deleting leave request:", error);
     return false;
   }
 }
@@ -275,4 +408,49 @@ export async function addLeaveRemark(remark: LeaveRemark): Promise<boolean> {
     console.error("Error adding leave remark:", error);
     return false;
   }
+}
+export async function deleteLeaveRemarks(leaveId: string): Promise<boolean> {
+    try {
+        const sheets = await getSheetsClient();
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+            range: "leave_remark!B:B",
+        });
+
+        const rows = response.data.values;
+        if (!rows) return true;
+
+        const indicesToDelete = rows
+            .map((row, index) => row[0] === leaveId ? index : -1)
+            .filter(index => index !== -1)
+            .reverse(); // Delete from bottom to top to preserve indices
+
+        if (indicesToDelete.length === 0) return true;
+
+        const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: ATTENDANCE_SPREADSHEET_ID });
+        const sheetId = spreadsheet.data.sheets?.find(s => s.properties?.title === "leave_remark")?.properties?.sheetId;
+
+        if (sheetId === undefined) return false;
+
+        const requests = indicesToDelete.map(index => ({
+            deleteDimension: {
+                range: {
+                    sheetId: sheetId,
+                    dimension: "ROWS",
+                    startIndex: index,
+                    endIndex: index + 1
+                }
+            }
+        }));
+
+        await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+            requestBody: { requests }
+        });
+
+        return true;
+    } catch (error) {
+        console.error("Error deleting leave remarks:", error);
+        return false;
+    }
 }

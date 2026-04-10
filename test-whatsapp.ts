@@ -1,10 +1,8 @@
 import { sendWhatsAppMessage } from "./src/lib/maytapi";
 import { formatDate } from "./src/lib/dateUtils";
 import path from "path";
-import dotenv from "dotenv";
-
-// Load environment variables from .env.local
-dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+// import dotenv from "dotenv";
+// dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
 async function test() {
   const testNumber = "7217685179";

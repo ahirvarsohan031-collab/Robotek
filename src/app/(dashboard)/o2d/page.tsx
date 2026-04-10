@@ -57,6 +57,7 @@ import {
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
 import PartyFormModal from "@/components/PartyFormModal";
+import ItemFormModal from "@/components/ItemFormModal";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import { getDriveImageUrl } from "@/lib/drive-utils";
 
@@ -323,6 +324,8 @@ export default function O2DPage() {
 
   // Modals
   const [isPartyModalOpen, setIsPartyModalOpen] = useState(false);
+  const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+  const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
   const [actionStatus, setActionStatus] = useState<
     "loading" | "success" | "error"
   >("loading");
@@ -1486,7 +1489,7 @@ export default function O2DPage() {
     // Initialize fields with current values
     const first = selectedOrder[0];
     const fields: any = {
-      status: (first as any)[`status_${stepIdx}`] || "No",
+      status: (first as any)[`status_${stepIdx}`] || "Yes",
       actual: (first as any)[`actual_${stepIdx}`] || new Date().toISOString(),
     };
 
@@ -3559,15 +3562,40 @@ export default function O2DPage() {
 
                         <div className="grid grid-cols-1 md:grid-cols-11 gap-3 items-end">
                           <div className="md:col-span-6 min-w-0">
-                            <SearchableDropdown
-                              label="Nomenclature"
-                              icon={ArchiveBoxIcon}
-                              value={item.item_name}
-                              onChange={(val) =>
-                                handleItemChange(index, "item_name", val)
-                              }
-                              options={dropdownItems.map((i) => i.name)}
-                            />
+                            <div className="flex gap-2 items-end">
+                              <div className="flex-1 min-w-0">
+                                <SearchableDropdown
+                                  label="Nomenclature"
+                                  icon={ArchiveBoxIcon}
+                                  value={item.item_name}
+                                  onChange={(val) => {
+                                    handleItemChange(index, "item_name", val);
+                                    const matchingItem = dropdownItems.find(
+                                      (di) => di.name === val,
+                                    );
+                                    if (matchingItem?.amount) {
+                                      handleItemChange(
+                                        index,
+                                        "est_amount",
+                                        matchingItem.amount,
+                                      );
+                                    }
+                                  }}
+                                  options={dropdownItems.map((i) => i.name)}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveItemIndex(index);
+                                  setIsItemModalOpen(true);
+                                }}
+                                className="w-[34px] h-[34px] shrink-0 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black rounded-lg flex items-center justify-center shadow-sm hover:scale-105 transition-all mb-0.5 border border-[#003875]/20 dark:border-[#FFD500]/20"
+                                title="Add New Item"
+                              >
+                                <PlusIcon className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
                           <div className="md:col-span-2">
                             <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5">
@@ -3588,8 +3616,7 @@ export default function O2DPage() {
                               required
                             />
                           </div>
-                          {/* Total input - temporarily hidden */}
-                          <div className="hidden md:col-span-3">
+                          <div className="md:col-span-3">
                             <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5">
                               <CurrencyRupeeIcon className="w-2.5 h-2.5" />
                               Total
@@ -4312,6 +4339,23 @@ export default function O2DPage() {
         isOpen={isStatusModalOpen}
         status={actionStatus}
         message={actionMessage}
+      />
+      
+      <ItemFormModal
+        isOpen={isItemModalOpen}
+        onClose={() => {
+          setIsItemModalOpen(false);
+          setActiveItemIndex(null);
+        }}
+        onSuccess={(name, price) => {
+          fetchDetails();
+          if (activeItemIndex !== null) {
+            handleItemChange(activeItemIndex, "item_name", name);
+            if (price) {
+              handleItemChange(activeItemIndex, "est_amount", price);
+            }
+          }
+        }}
       />
 
       {/* Remove Follow-up Modal */}

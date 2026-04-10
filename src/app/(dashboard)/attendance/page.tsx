@@ -4,7 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { ensureSessionId } from '@/utils/session';
 import { useToast } from '@/components/ToastProvider';
 import CustomDateTimePicker from '@/components/CustomDateTimePicker';
-import { getIstDateString } from '@/lib/dateUtils';
+import SearchableSelect from '@/components/SearchableSelect';
+import ConfirmModal from '@/components/ConfirmModal';
+import { getIstDateString, formatDateMMM } from '@/lib/dateUtils';
 import { calculateDistance, calculateBearing, getCompassDirection, parseLatLong, getShortestDistance } from '@/lib/locationUtils';
 import { 
     CalendarIcon as CalendarBtnIcon, 
@@ -17,7 +19,9 @@ import {
     ClockIcon,
     MapPinIcon,
     ArrowPathIcon,
-    ArrowRightCircleIcon
+    ArrowRightCircleIcon,
+    PencilSquareIcon,
+    TrashIcon
 } from '@heroicons/react/24/outline';
 
 interface Leave {
@@ -29,6 +33,11 @@ interface Leave {
     endDate: string;
     reason: string;
     status: string;
+    responsibility1?: string;
+    responsibility2?: string;
+    responsibility3?: string;
+    acceptedBy?: string;
+    updatedAt?: string;
 }
 
 interface Remark {
@@ -43,7 +52,7 @@ interface Remark {
 const StatusIcon = ({ status }: { status: string }) => {
     if (status === 'Approved') return <CheckCircleIcon className="w-4 h-4 text-green-500" />;
     if (status === 'Rejected') return <XCircleIcon className="w-4 h-4 text-red-500" />;
-    return <ClockIcon className="w-4 h-4 text-yellow-500 text-amber-500" />;
+    return <ClockIcon className="w-4 h-4 text-amber-500" />;
 };
 
 export default function AttendancePage() {
@@ -67,7 +76,15 @@ export default function AttendancePage() {
 
     // Leave State
     const [leaves, setLeaves] = useState<Leave[]>([]);
-    const [leaveForm, setLeaveForm] = useState({ startDate: '', endDate: '', reason: '' });
+    const [leaveForm, setLeaveForm] = useState({ 
+        startDate: '', 
+        endDate: '', 
+        reason: '',
+        responsibility1: '',
+        responsibility2: '',
+        responsibility3: ''
+    });
+    const [editingLeave, setEditingLeave] = useState<Leave | null>(null);
 
     // Admin State
     const [selectedLeave, setSelectedLeave] = useState<Leave | null>(null);
@@ -325,36 +342,93 @@ export default function AttendancePage() {
 
     const handleLeaveSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Unique person check
+        const selected = [leaveForm.responsibility1, leaveForm.responsibility2, leaveForm.responsibility3].filter(Boolean);
+        if (new Set(selected).size !== selected.length) {
+            error("Please select different persons for each responsibility slot");
+            return;
+        }
+
         setIsPageLoading(true);
         try {
+            const method = editingLeave ? 'PUT' : 'POST';
+            const body = editingLeave 
+                ? { leaveId: editingLeave.id, ...leaveForm }
+                : { userId: user.id, userName: user.username, ...leaveForm };
+
             const res = await fetch('/api/leave', {
-                method: 'POST',
-                body: JSON.stringify({ userId: user.id, userName: user.username, ...leaveForm })
+                method,
+                body: JSON.stringify(body)
             });
             if (!res.ok) throw new Error('Failed');
 
-            setLeaveForm({ startDate: '', endDate: '', reason: '' });
+            setLeaveForm({ startDate: '', endDate: '', reason: '', responsibility1: '', responsibility2: '', responsibility3: '' });
+            setEditingLeave(null);
             await fetchLeaves(user.id, user.role);
-            success('Leave request submitted!');
+            success(editingLeave ? 'Leave updated!' : 'Leave request submitted!');
         } catch (e) {
-            error('Failed to submit leave');
+            error('Failed to process leave');
         } finally {
             setIsPageLoading(false);
         }
     };
 
-    const handleStatusUpdate = async (status: 'Approved' | 'Rejected') => {
-        if (!selectedLeave) return;
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+    const handleLeaveDelete = async (leaveId: string) => {
+        setPendingDeleteId(leaveId);
+        setIsConfirmOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!pendingDeleteId) return;
+        setIsPageLoading(true);
+        try {
+            const res = await fetch(`/api/leave?leaveId=${pendingDeleteId}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Failed');
+            await fetchLeaves(user.id, user.role);
+            success('Leave deleted successfully');
+        } catch (e) {
+            error('Failed to delete leave');
+        } finally {
+            setIsPageLoading(false);
+            setPendingDeleteId(null);
+            setIsConfirmOpen(false);
+        }
+    };
+
+    const handleAcceptResponsibility = async (leaveId: string) => {
         setIsPageLoading(true);
         try {
             const res = await fetch('/api/leave', {
                 method: 'POST',
-                body: JSON.stringify({ action: 'UPDATE_STATUS', leaveId: selectedLeave.id, status })
+                body: JSON.stringify({ action: 'ACCEPT_RESPONSIBILITY', leaveId, acceptedBy: user.username })
+            });
+            if (!res.ok) throw new Error('Failed');
+            await fetchLeaves(user.id, user.role);
+            success('You have accepted responsibility for this leave');
+        } catch (e) {
+            error('Failed to accept responsibility');
+        } finally {
+            setIsPageLoading(false);
+        }
+    };
+
+    const handleStatusUpdate = async (status: 'Approved' | 'Rejected', leaveId?: string) => {
+        const targetId = leaveId || selectedLeave?.id;
+        if (!targetId) return;
+        setIsPageLoading(true);
+        try {
+            const res = await fetch('/api/leave', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'UPDATE_STATUS', leaveId: targetId, status })
             });
             if (!res.ok) throw new Error('Failed');
 
             await fetchLeaves(user.id, user.role);
-            setSelectedLeave(null);
+            if (selectedLeave) setSelectedLeave(null);
             success(`Leave request ${status}`);
         } catch (e) {
             error('Failed to update status');
@@ -702,49 +776,191 @@ export default function AttendancePage() {
                         style={{ backgroundColor: 'var(--panel-card)' }}
                         className="rounded-[32px] p-8 shadow-xl border border-white/10 h-fit"
                      >
-                        <h3 className="text-xl font-black text-[#003875] dark:text-[#FFD500] mb-8 uppercase tracking-tighter">Submit Leave Request</h3>
-                        <form onSubmit={handleLeaveSubmit} className="space-y-6">
-                            <CustomDateTimePicker label="From Date" dateOnly value={leaveForm.startDate} onChange={v => setLeaveForm({...leaveForm, startDate: v})} required />
-                            <CustomDateTimePicker label="To Date" dateOnly value={leaveForm.endDate} onChange={v => setLeaveForm({...leaveForm, endDate: v})} required />
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-medium text-gray-500 uppercase tracking-widest pl-1">Detailed Reason</label>
+                        <div className="flex justify-between items-center mb-8">
+                            <h3 className="text-xl font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter">
+                                {editingLeave ? 'Edit Leave Request' : 'Submit Leave Request'}
+                            </h3>
+                            {editingLeave && (
+                                <button 
+                                    onClick={() => { setEditingLeave(null); setLeaveForm({ startDate: '', endDate: '', reason: '', responsibility1: '', responsibility2: '', responsibility3: '' }); }}
+                                    className="text-[10px] font-black uppercase text-red-500 hover:underline"
+                                >
+                                    Cancel Edit
+                                </button>
+                            )}
+                        </div>
+                        <form onSubmit={handleLeaveSubmit} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <CustomDateTimePicker label="From Date" dateOnly value={leaveForm.startDate} onChange={v => setLeaveForm({...leaveForm, startDate: v})} required />
+                                <CustomDateTimePicker label="To Date" dateOnly value={leaveForm.endDate} onChange={v => setLeaveForm({...leaveForm, endDate: v})} required />
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Responsibility Selection</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {[1, 2, 3].map(num => (
+                                        <div key={num} className={num === 3 ? "sm:col-span-2" : ""}>
+                                            <SearchableSelect
+                                                options={masterData?.users
+                                                    .filter(u => String(u.id) !== String(user.id))
+                                                    .map(u => ({ id: u.id, label: u.full_name || u.username })) || []}
+                                                value={(leaveForm as any)[`responsibility${num}`]}
+                                                onChange={v => setLeaveForm({...leaveForm, [`responsibility${num}`]: v})}
+                                                placeholder={num === 1 ? 'Primary Resp.' : num === 2 ? 'Secondary Resp.' : 'Tertiary Resp.'}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Reason</label>
                                 <textarea 
-                                    className="w-full h-32 p-4 rounded-2xl bg-gray-50 dark:bg-slate-900 border-2 border-[#003875]/5 dark:border-white/5 focus:border-[#003875] dark:focus:border-[#FFD500] outline-none text-sm font-medium transition-all"
+                                    className="w-full h-24 p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-100 dark:border-white/5 focus:border-[#FFD500] outline-none text-xs font-medium transition-all"
                                     value={leaveForm.reason}
                                     onChange={e => setLeaveForm({...leaveForm, reason: e.target.value})}
                                     required
+                                    placeholder="Enter detailed reason here..."
                                 />
                             </div>
-                            <button type="submit" className="w-full py-4 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black font-black rounded-2xl text-xs uppercase tracking-widest shadow-lg shadow-[#003875]/20 hover:-translate-y-1 transition-all">Submit for Review</button>
+                            <button type="submit" className="w-full py-4 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg shadow-[#003875]/10 hover:-translate-y-1 transition-all">
+                                {editingLeave ? 'Update Leave Request' : 'Submit Application'}
+                            </button>
                         </form>
                      </div>
 
                      {/* Leave History */}
                      <div className="lg:col-span-2 space-y-4">
-                        {leaves.map(lv => (
-                            <div 
-                                key={lv.id} 
-                                onClick={() => { setSelectedLeave(lv); fetchRemarks(lv.id); }} 
-                                style={{ backgroundColor: 'var(--panel-card)' }}
-                                className="p-6 rounded-[28px] border border-white/10 hover:border-[#003875]/30 cursor-pointer group transition-all shadow-sm"
-                            >
-                                <div className="flex justify-between items-center mb-4">
-                                     <div className="flex items-center gap-3">
-                                         <div className="w-10 h-10 bg-[#003875]/5 rounded-xl flex items-center justify-center font-black text-[#003875] dark:text-[#FFD500]">
-                                             {lv.userName.charAt(0)}
+                         {leaves.map(lv => {
+                            const isRequester = String(lv.userId) === String(user.id);
+                            const isListedColleague = [lv.responsibility1, lv.responsibility2, lv.responsibility3].some(id => String(id) === String(user.id));
+                            const hasAccepted = lv.acceptedBy && lv.acceptedBy.trim() !== "";
+                            const amIAcceptor = lv.acceptedBy === user.username;
+
+                            return (
+                                <div 
+                                    key={lv.id} 
+                                    style={{ backgroundColor: 'var(--panel-card)' }}
+                                    className="p-4 rounded-[20px] border border-white/10 hover:border-[#FFD500]/30 group transition-all shadow-sm relative overflow-hidden"
+                                >
+                                    <div className="flex justify-between items-start mb-3">
+                                         <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setSelectedLeave(lv); fetchRemarks(lv.id); }}>
+                                             <div className="w-9 h-9 bg-gray-100 dark:bg-slate-800 rounded-xl flex items-center justify-center font-black text-gray-500 text-xs">
+                                                 {lv.userName.charAt(0)}
+                                             </div>
+                                             <div>
+                                                 <div className="text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-tighter">{lv.userName}</div>
+                                                 <div className="text-[9px] font-bold text-gray-400 uppercase">{formatDateMMM(lv.startDate)} - {formatDateMMM(lv.endDate)}</div>
+                                             </div>
                                          </div>
-                                         <div>
-                                             <div className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">{lv.userName}</div>
-                                             <div className="text-[10px] font-bold text-gray-500 uppercase">{formatDateIST(lv.startDate)} - {formatDateIST(lv.endDate)}</div>
+                                         <div className="flex items-center gap-2">
+                                            <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm ${
+                                                lv.status === 'Approved' ? 'bg-green-500 text-white' : 
+                                                lv.status === 'Rejected' ? 'bg-red-500 text-white' : 
+                                                'bg-[#FFD500] text-black shadow-[#FFD500]/20'
+                                            }`}>
+                                                {lv.status}
+                                            </div>
+
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setSelectedLeave(lv); fetchRemarks(lv.id); }}
+                                                className="p-1.5 bg-purple-50 dark:bg-purple-500/10 hover:bg-purple-100 text-purple-600 rounded-lg transition-all relative flex items-center justify-center border border-purple-100 dark:border-purple-500/20 shadow-sm"
+                                                title="View Discussion"
+                                            >
+                                                <CommentBtnIcon className="w-3.5 h-3.5" />
+                                                <span className="ml-1 text-[8px] font-black">{remarks.filter(r => r.leaveId === lv.id).length || 0}</span>
+                                            </button>
+
+                                            {isRequester && lv.status === 'Pending' && (
+                                                <div className="flex items-center gap-1.5">
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEditingLeave(lv);
+                                                            setLeaveForm({
+                                                                startDate: lv.startDate,
+                                                                endDate: lv.endDate,
+                                                                reason: lv.reason,
+                                                                responsibility1: lv.responsibility1 || '',
+                                                                responsibility2: lv.responsibility2 || '',
+                                                                responsibility3: lv.responsibility3 || ''
+                                                            });
+                                                        }}
+                                                        className="p-1.5 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 text-blue-500 rounded-lg transition-all border border-blue-100 dark:border-blue-500/20"
+                                                        title="Edit Leave"
+                                                    >
+                                                        <PencilSquareIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); handleLeaveDelete(lv.id); }}
+                                                        className="p-1.5 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 text-red-500 rounded-lg transition-all border border-red-100 dark:border-red-500/20"
+                                                        title="Delete Leave"
+                                                    >
+                                                        <TrashIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            )}
                                          </div>
-                                     </div>
-                                     <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${lv.status === 'Approved' ? 'bg-green-500 text-white' : lv.status === 'Rejected' ? 'bg-red-500 text-white' : 'bg-amber-400 text-white'}`}>
-                                         {lv.status}
-                                     </div>
+                                    </div>
+                                    
+                                    <div className="mb-3 pl-1">
+                                        <p className="text-[10px] text-gray-500 dark:text-gray-400 italic opacity-80 line-clamp-1">"{lv.reason}"</p>
+                                    </div>
+
+                                    {/* Responsibility Section */}
+                                    <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex flex-wrap items-center gap-2">
+                                        {[lv.responsibility1, lv.responsibility2, lv.responsibility3].filter(Boolean).map((rid, idx) => {
+                                            const rUser = masterData?.users.find(u => String(u.id) === String(rid));
+                                            const colors = ['bg-purple-50 text-purple-600 border-purple-100', 'bg-blue-50 text-blue-600 border-blue-100', 'bg-orange-50 text-orange-600 border-orange-100'];
+                                            return (
+                                                <div key={idx} className={`px-3 py-1 border rounded-full text-[8px] font-black uppercase ${colors[idx % colors.length]}`}>
+                                                    RESPONSIBILITY: {rUser?.full_name || rUser?.username || 'USER'}
+                                                </div>
+                                            );
+                                        })}
+                                        
+                                        <div className="flex-1"></div>
+
+                                         {/* Admin Quick Actions */}
+                                         {user.role === 'Admin' && lv.status === 'Pending' && (
+                                             <div className="flex items-center gap-2 mr-2">
+                                                 <button 
+                                                     onClick={(e) => { e.stopPropagation(); handleStatusUpdate('Approved', lv.id); }}
+                                                     className="px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-green-500/10 transition-all active:scale-95"
+                                                 >
+                                                     Authorize
+                                                 </button>
+                                                 <button 
+                                                     onClick={(e) => { e.stopPropagation(); handleStatusUpdate('Rejected', lv.id); }}
+                                                     className="px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-red-500/10 transition-all active:scale-95"
+                                                 >
+                                                     Decline
+                                                 </button>
+                                             </div>
+                                         )}
+
+                                         {isListedColleague && !hasAccepted && (
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); handleAcceptResponsibility(lv.id); }}
+                                                className="px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-green-500/10 transition-all active:scale-95"
+                                            >
+                                                I'll take responsibility
+                                            </button>
+                                        )}
+                                        {hasAccepted && (
+                                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-full">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                                                <span className="text-[8px] font-black uppercase text-blue-600">Handled by {lv.acceptedBy}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+
+                                    {/* Glass Decor */}
+                                    <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#FFD500]/5 rounded-full blur-xl group-hover:bg-[#FFD500]/10 transition-colors"></div>
                                 </div>
-                                <p className="text-xs text-gray-500 italic line-clamp-1 opacity-70">"{lv.reason}"</p>
-                            </div>
-                        ))}
+                            );
+                        })}
                      </div>
                 </div>
             )}
@@ -1254,6 +1470,16 @@ export default function AttendancePage() {
                     </div>
                 </div>
             )}
+
+            <ConfirmModal 
+                isOpen={isConfirmOpen}
+                onClose={() => setIsConfirmOpen(false)}
+                onConfirm={confirmDelete}
+                title="Delete Leave Request"
+                message="Are you sure you want to delete this leave request? This action will also remove all associated remarks and cannot be undone."
+                confirmLabel="Delete Request"
+                type="danger"
+            />
         </div>
     );
 }

@@ -601,11 +601,20 @@ export default function UsersPage() {
                 <th onClick={() => handleSort('phone')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden md:table-cell">
                   <div className="flex items-center">Contact <SortIcon column="phone" /></div>
                 </th>
+                <th onClick={() => handleSort('office')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden lg:table-cell">
+                  <div className="flex items-center">Office <SortIcon column="office" /></div>
+                </th>
                 <th onClick={() => handleSort('role_name')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden lg:table-cell">
                   <div className="flex items-center">Role <SortIcon column="role_name" /></div>
                 </th>
                 <th onClick={() => handleSort('department')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden xl:table-cell">
                   <div className="flex items-center">Dept/Desig <SortIcon column="department" /></div>
+                </th>
+                <th onClick={() => handleSort('dob')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden lg:table-cell">
+                  <div className="flex items-center">DOB <SortIcon column="dob" /></div>
+                </th>
+                <th onClick={() => handleSort('late_long')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden xl:table-cell">
+                  <div className="flex items-center">Site Locations <SortIcon column="late_long" /></div>
                 </th>
                 <th className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-right">Actions</th>
               </tr>
@@ -613,14 +622,14 @@ export default function UsersPage() {
           <tbody className="divide-y divide-orange-50/30">
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center">
+                <td colSpan={9} className="px-4 py-10 text-center">
                   <div className="w-6 h-6 border-2 border-gray-100 border-t-[#FFD500] rounded-full animate-spin mx-auto mb-2" />
                   <p className="text-gray-400 font-bold uppercase tracking-widest text-[8px]">Syncing...</p>
                 </td>
               </tr>
             ) : paginatedUsers.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center">
+                <td colSpan={9} className="px-4 py-10 text-center">
                   <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No entries found</p>
                 </td>
               </tr>
@@ -657,6 +666,11 @@ export default function UsersPage() {
                   </td>
                   <td className="px-3 md:px-4 py-3 hidden md:table-cell">
                     <p className="text-[11px] md:text-xs font-bold text-gray-600 dark:text-slate-300">{user.phone || "—"}</p>
+                  </td>
+                  <td className="px-3 md:px-4 py-3 hidden lg:table-cell">
+                    <span className="px-1.5 md:px-2 py-0.5 bg-[#003875]/5 dark:bg-[#FFD500]/10 text-[#003875] dark:text-[#FFD500] text-[8px] md:text-[9px] font-black rounded uppercase tracking-widest border border-orange-100/50 dark:border-[#FFD500]/20">
+                      {user.office || "—"}
+                    </span>
                   </td>
                   <td className="px-3 md:px-4 py-3 hidden lg:table-cell">
                     <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 bg-orange-50 dark:bg-[#FFD500]/10 text-[#CE2029] dark:text-[#FFD500] text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-md border border-orange-100 dark:border-[#FFD500]/20">
@@ -847,133 +861,145 @@ export default function UsersPage() {
                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-3">Click Avatar to Update Photo</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Basic Info */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Employee Code</label>
-                    <input
-                      type="text"
-                      value={formData.id}
-                      onChange={(e) => setFormData({ ...formData, id: e.target.value })}
-                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                      placeholder="Enter Unique Emp Code"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Username</label>
-                    <input
-                      type="text"
-                      value={formData.username}
-                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Password</label>
-                      <input
-                        type="text"
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Office</label>
-                      <select
-                        value={formData.office}
-                        onChange={(e) => setFormData({ ...formData, office: e.target.value })}
-                        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                      >
-                        <option value="">Select Office</option>
-                        <option value="GTK">GTK</option>
-                        <option value="Kundli">Kundli</option>
-                        <option value="KB">KB</option>
-                      </select>
-                    </div>
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                {/* Section: basic Info */}
+                <div className="md:col-span-2">
+                  <p className="text-[10px] font-black text-[#FFD500] uppercase tracking-[0.2em] mb-1">Basic Information</p>
+                  <div className="h-0.5 w-10 bg-[#FFD500] rounded-full mb-4"></div>
                 </div>
 
-                {/* Additional Info */}
-                <div className="space-y-4">
-                  <p className="text-[10px] font-black text-[#FFD500] uppercase tracking-[0.2em]">Professional Details</p>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 flex items-center justify-between">
-                      Department
-                      <button type="button" onClick={() => setIsAddingOption({ type: 'department', isOpen: true })} className="p-1 hover:bg-[#003875]/10 rounded-full transition-colors"><PlusIcon className="w-3 h-3 text-[#003875] dark:text-[#FFD500]" /></button>
-                    </label>
-                    <select
-                      value={formData.department}
-                      onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                    >
-                      <option value="">Select Department</option>
-                      {dropdowns.departments.map((dept, i) => (
-                        <option key={i} value={dept}>{dept}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 flex items-center justify-between">
-                      Designation
-                      <button type="button" onClick={() => setIsAddingOption({ type: 'designation', isOpen: true })} className="p-1 hover:bg-[#003875]/10 rounded-full transition-colors"><PlusIcon className="w-3 h-3 text-[#003875] dark:text-[#FFD500]" /></button>
-                    </label>
-                    <select
-                      value={formData.designation}
-                      onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                    >
-                      <option value="">Select Designation</option>
-                      {dropdowns.designations.map((desig, i) => (
-                        <option key={i} value={desig}>{desig}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Email</label>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Phone</label>
-                      <input
-                        type="text"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Role Name</label>
-                      <select
-                        value={formData.role_name}
-                        onChange={(e) => setFormData({ ...formData, role_name: e.target.value })}
-                        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                      >
-                        <option value="">Select Role</option>
-                        <option value="ADMIN">Admin</option>
-                        <option value="USER">User</option>
-                        <option value="EA">EA</option>
-                      </select>
-                    </div>
-                    <PremiumDatePicker 
-                      label="Date of Birth"
-                      value={formData.dob || ""}
-                      onChange={(val) => setFormData({ ...formData, dob: val })}
-                    />
-                  </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Employee Code</label>
+                  <input
+                    type="text"
+                    value={formData.id}
+                    onChange={(e) => setFormData({ ...formData, id: e.target.value })}
+                    className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                    placeholder="Enter Unique Emp Code"
+                    required
+                  />
                 </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Username</label>
+                  <input
+                    type="text"
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                    placeholder="Enter Username"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Email Address</label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                    placeholder="example@domain.com"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Password</label>
+                  <input
+                    type="text"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                    placeholder="••••••••"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Phone Number</label>
+                  <input
+                    type="text"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                    placeholder="+91-0000000000"
+                  />
+                </div>
+
+                <PremiumDatePicker 
+                  label="Date of Birth"
+                  value={formData.dob || ""}
+                  onChange={(val) => setFormData({ ...formData, dob: val })}
+                />
+
+                {/* Section: Professional Details */}
+                <div className="md:col-span-2 mt-2">
+                  <p className="text-[10px] font-black text-[#FFD500] uppercase tracking-[0.2em] mb-1">Professional Details</p>
+                  <div className="h-0.5 w-10 bg-[#FFD500] rounded-full mb-4"></div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Office Branch</label>
+                  <select
+                    value={formData.office}
+                    onChange={(e) => setFormData({ ...formData, office: e.target.value })}
+                    className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                  >
+                    <option value="">Select Office</option>
+                    <option value="GTK">GTK</option>
+                    <option value="Kundli">Kundli</option>
+                    <option value="KB">KB</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Role Name</label>
+                  <select
+                    value={formData.role_name}
+                    onChange={(e) => setFormData({ ...formData, role_name: e.target.value })}
+                    className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                  >
+                    <option value="">Select Role</option>
+                    <option value="ADMIN">Admin</option>
+                    <option value="USER">User</option>
+                    <option value="EA">EA</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 flex items-center justify-between">
+                    Department
+                    <button type="button" onClick={() => setIsAddingOption({ type: 'department', isOpen: true })} className="p-1 hover:bg-[#003875]/10 rounded-full transition-colors"><PlusIcon className="w-3 h-3 text-[#003875] dark:text-[#FFD500]" /></button>
+                  </label>
+                  <select
+                    value={formData.department}
+                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                    className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                  >
+                    <option value="">Select Department</option>
+                    {dropdowns.departments.map((dept, i) => (
+                      <option key={i} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 flex items-center justify-between">
+                    Designation
+                    <button type="button" onClick={() => setIsAddingOption({ type: 'designation', isOpen: true })} className="p-1 hover:bg-[#003875]/10 rounded-full transition-colors"><PlusIcon className="w-3 h-3 text-[#003875] dark:text-[#FFD500]" /></button>
+                  </label>
+                  <select
+                    value={formData.designation}
+                    onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                    className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                  >
+                    <option value="">Select Designation</option>
+                    {dropdowns.designations.map((desig, i) => (
+                      <option key={i} value={desig}>{desig}</option>
+                    ))}
+                  </select>
+                </div>
+
 
                 {/* Full Width Fields: Multiple Locations */}
                 <div className="md:col-span-2 space-y-4">
@@ -990,27 +1016,27 @@ export default function UsersPage() {
 
                   <div className="space-y-3">
                     {(formData.locations || []).map((loc, index) => (
-                      <div key={index} className="p-3 bg-gray-50 dark:bg-navy-950/50 rounded-xl border border-gray-100 dark:border-navy-800/50 space-y-3">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                          <div className="md:col-span-1">
-                            <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest block mb-1">Site Name</label>
+                      <div key={index} className="p-3 bg-gray-50 dark:bg-navy-950/50 rounded-xl border border-gray-100 dark:border-navy-800/50">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                          <div className="md:col-span-4">
+                            <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Site Name</label>
                             <input
                               type="text"
                               value={loc.name}
                               onChange={(e) => updateLocation(index, 'name', e.target.value)}
                               placeholder="e.g. Work, Site A"
-                              className="w-full bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-zinc-100 transition-all"
+                              className="w-full bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
                             />
                           </div>
-                          <div className="md:col-span-2">
-                            <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest block mb-1">Coordinates</label>
-                            <div className="flex gap-2">
-                              <div className="relative flex-1">
+                          <div className="md:col-span-8 flex gap-2">
+                            <div className="flex-1">
+                              <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Coordinates</label>
+                              <div className="relative">
                                 <input
                                   type="text"
                                   value={loc.coords}
                                   onChange={(e) => updateLocation(index, 'coords', e.target.value)}
-                                  className="w-full bg-white dark:bg-zinc-900 pl-3 pr-8 py-1.5 rounded-lg border border-gray-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-zinc-100 transition-all"
+                                  className="w-full bg-white dark:bg-zinc-900 pl-3 pr-8 py-1.5 rounded-lg border border-gray-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
                                   placeholder="e.g., 28.6139, 77.2090"
                                 />
                                 <button
@@ -1021,10 +1047,12 @@ export default function UsersPage() {
                                   <GlobeAmericasIcon className="w-4 h-4" />
                                 </button>
                               </div>
+                            </div>
+                            <div className="flex gap-1.5 pt-4">
                               <button
                                 type="button"
                                 onClick={() => handleFetchLocation(index)}
-                                className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all"
+                                className="p-2 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all"
                                 title="Auto Fetch"
                               >
                                 <MapPinIcon className="w-4 h-4" />
@@ -1032,7 +1060,7 @@ export default function UsersPage() {
                               <button
                                 type="button"
                                 onClick={() => removeLocation(index)}
-                                className="p-1.5 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all"
+                                className="p-2 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all"
                                 title="Remove Site"
                               >
                                 <TrashIcon className="w-4 h-4" />

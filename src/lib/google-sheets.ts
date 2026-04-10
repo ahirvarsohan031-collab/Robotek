@@ -413,12 +413,19 @@ export async function getDropdownData(): Promise<{ departments: string[], design
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${DROPDOWN_SHEET_NAME}!A2:B`,
+      range: `${DROPDOWN_SHEET_NAME}!A1:Z`,
     });
 
     const rows = response.data.values || [];
-    const departments = rows.map(row => row[0]).filter(Boolean);
-    const designations = rows.map(row => row[1]).filter(Boolean);
+    if (rows.length === 0) return { departments: [], designations: [] };
+
+    const headers = (rows[0] || []).map((h: any) => String(h).toLowerCase().trim());
+    const deptIndex = headers.indexOf("department");
+    const desigIndex = headers.indexOf("designation");
+
+    const dataRows = rows.slice(1);
+    const departments = deptIndex !== -1 ? dataRows.map(row => row[deptIndex]).filter(Boolean) : [];
+    const designations = desigIndex !== -1 ? dataRows.map(row => row[desigIndex]).filter(Boolean) : [];
 
     return { departments, designations };
   } catch (error) {
@@ -430,16 +437,49 @@ export async function getDropdownData(): Promise<{ departments: string[], design
 export async function addDropdownOption(type: 'department' | 'designation', value: string): Promise<boolean> {
   try {
     const sheets = await getSheetsClient();
-    const column = type === 'department' ? 'A' : 'B';
     
-    await sheets.spreadsheets.values.append({
+    // 1. Fetch current dropdown sheet content to find headers and next empty row
+    const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${DROPDOWN_SHEET_NAME}!${column}:${column}`,
+      range: `${DROPDOWN_SHEET_NAME}!A1:Z100`, // Scan enough rows
+    });
+
+    const rows = response.data.values || [];
+    if (rows.length === 0) {
+      console.error("Dropdown sheet is empty or headers missing.");
+      return false;
+    }
+
+    const headers = (rows[0] || []).map((h: any) => String(h).toLowerCase().trim());
+    const index = headers.indexOf(type.toLowerCase());
+    
+    if (index === -1) {
+      console.error(`Header "${type}" not found. Available headers: ${headers.join(", ")}`);
+      return false;
+    }
+
+    // 2. Determine the first empty row in the specific target column
+    let lastUsedRowIndex = 0; // Row index 0 is headers
+    for (let i = 0; i < rows.length; i++) {
+      const cellValue = rows[i][index];
+      if (cellValue !== undefined && String(cellValue).trim() !== "") {
+        lastUsedRowIndex = i;
+      }
+    }
+    const targetRowNumber = lastUsedRowIndex + 2; // Next row (1-based + 1)
+    const columnLetter = getColumnLetter(index + 1);
+    const targetRange = `${DROPDOWN_SHEET_NAME}!${columnLetter}${targetRowNumber}`;
+
+    // 3. Write specifically to that cell
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      range: targetRange,
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[value]],
       },
     });
+
     return true;
   } catch (error) {
     console.error(`Error adding ${type} option:`, error);

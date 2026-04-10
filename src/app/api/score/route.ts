@@ -202,7 +202,15 @@ export async function GET(request: Request) {
       });
 
       return {
-        user: { id: u.id, username: u.username, roleName: u.role_name || u.role, image_url: u.image_url },
+        user: { 
+          id: u.id, 
+          username: u.username, 
+          roleName: u.role_name || u.role, 
+          image_url: u.image_url,
+          office: u.office,
+          designation: u.designation,
+          department: u.department
+        },
         ...metrics,
         delegationStats: { ...delegation, items: userTasks.filter(t => t.category === 'delegation' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))) },
         checklistStats: { ...checklist, items: userTasks.filter(t => t.category === 'checklist' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))) },

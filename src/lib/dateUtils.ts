@@ -40,3 +40,14 @@ export function formatDate(dateStr: string | null): string {
         minute: '2-digit'
     });
 }
+
+export function formatDateMMM(dateStr: string | null): string {
+    if (!dateStr) return "—";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+    });
+}

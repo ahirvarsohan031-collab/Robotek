@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-import { getO2Ds, addO2D, addO2Ds, getO2DDetails } from "@/lib/o2d-sheets";
+import { getO2Ds, addO2D, addO2Ds, getO2DDetails, addItem } from "@/lib/o2d-sheets";
 import { uploadFileToDrive } from "@/lib/google-drive";
 import { O2D } from "@/types/o2d";
 
@@ -23,6 +23,19 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url);
+    const type = searchParams.get("type");
+
+    if (type === "item") {
+      const { name, price } = await req.json();
+      const success = await addItem(name, price);
+      if (success) {
+        return NextResponse.json({ message: "Item added successfully" });
+      } else {
+        return NextResponse.json({ error: "Failed to add item" }, { status: 500 });
+      }
+    }
+
     const contentType = req.headers.get("content-type") || "";
     
     if (contentType.includes("multipart/form-data")) {

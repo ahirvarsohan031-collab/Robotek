@@ -448,6 +448,25 @@ class O2DService extends BaseSheetsService<O2D> {
     }
   }
 
+  async addItem(name: string, price: string): Promise<boolean> {
+    try {
+      const sheets = await this.getSheetsClient();
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: `Details!A:C`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [["", name, price]],
+        },
+      });
+      globalCache.delete(`${this.spreadsheetId}_details`);
+      return true;
+    } catch (error) {
+      console.error("Error adding item:", error);
+      return false;
+    }
+  }
+
   async deleteOrderByNo(orderNo: string): Promise<boolean> {
     try {
       const sheets = await this.getSheetsClient();
@@ -517,6 +536,7 @@ export async function updateOrderToggleStatus(oNo: string, act: 'hold' | 'cancel
 export async function removeFollowUp(oNo: string, sS: number, oTS: boolean) { return o2dService.removeFollowUp(oNo, sS, oTS); }
 export async function getO2DStepConfig() { return o2dService.getStepConfig(); }
 export async function getO2DDetails() { return o2dService.getDetails(); }
+export async function addItem(name: string, price: string) { return o2dService.addItem(name, price); }
 
 export async function updateO2DStepConfig(configs: O2DStepConfig[]): Promise<boolean> {
   try {
