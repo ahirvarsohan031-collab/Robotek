@@ -84,7 +84,7 @@ export const O2D_STEPS = [
   "PACK ITEM",
   "GENERATE INVOICE BILL AND DISPATCHED GOODS",
   "BILL UPDATE In 51",
-  "SEND BILLTY TO CRM",
+  "SEND BILTY TO CRM",
   "DELIVERY DOCUMENT",
   "Clear Payment"
 ];
@@ -98,7 +98,7 @@ export const O2D_STEP_SHORTS = [
   "Pack Item",
   "Invoice & Disp.",
   "Bill Update",
-  "Send Bilty",
+  "Send Bilty to CRM",
   "Delivery Doc",
   "Clear Pay."
 ];

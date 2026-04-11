@@ -2962,7 +2962,7 @@ export default function O2DPage() {
                                 <div className="space-y-3">
                                   <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
                                     <HashtagIcon className="w-4 h-4" /> Step 9:
-                                    Bilty
+                                    Send Bilty to CRM
                                   </div>
                                   <div className="grid grid-cols-2 gap-4">
                                     <div className="flex flex-col">
@@ -4209,7 +4209,7 @@ export default function O2DPage() {
                     </div>
                     <div>
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block flex items-center gap-1.5 font-bold font-bold">
-                        <PhotoIcon className="w-3 h-3" /> Attach Bilty
+                        <PhotoIcon className="w-3 h-3" /> Attach Bilty to CRM
                         (Attachment)
                       </label>
                       <label 
@@ -4245,7 +4245,7 @@ export default function O2DPage() {
                           <div className="text-center">
                             <PlusIcon className="w-5 h-5 text-gray-300 mx-auto" />
                             <span className="text-[9px] font-black text-gray-300 tracking-widest uppercase">
-                              Select Bilty
+                              Select Bilty to CRM
                             </span>
                           </div>
                         )}

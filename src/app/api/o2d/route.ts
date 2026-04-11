@@ -27,8 +27,8 @@ export async function POST(req: NextRequest) {
     const type = searchParams.get("type");
 
     if (type === "item") {
-      const { name, price } = await req.json();
-      const success = await addItem(name, price);
+      const { name, price, gst, finalPrice } = await req.json();
+      const success = await addItem(name, price, gst, finalPrice);
       if (success) {
         return NextResponse.json({ message: "Item added successfully" });
       } else {

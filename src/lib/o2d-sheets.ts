@@ -434,11 +434,11 @@ class O2DService extends BaseSheetsService<O2D> {
       const sheets = await this.getSheetsClient();
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `Details!A2:C`,
+        range: `Details!A2:D`,
       });
       const rows = response.data.values || [];
-      const parties = Array.from(new Set(rows.map(row => row[0]).filter(Boolean)));
-      const items = rows.map(row => ({ name: row[1] || "", amount: row[2] || "" })).filter(item => item.name);
+      const parties: string[] = []; // Parties are now managed in party-management-sheets
+      const items = rows.map(row => ({ name: row[0] || "", amount: row[3] || row[1] || "" })).filter(item => item.name);
       const data = { parties, items };
       
       globalCache.set(cacheKey, data, 30 * 60 * 1000); // 30 mins TTL
@@ -448,15 +448,15 @@ class O2DService extends BaseSheetsService<O2D> {
     }
   }
 
-  async addItem(name: string, price: string): Promise<boolean> {
+  async addItem(name: string, price: string, gst: string = "", finalPrice: string = ""): Promise<boolean> {
     try {
       const sheets = await this.getSheetsClient();
       await sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
-        range: `Details!A:C`,
+        range: `Details!A:D`,
         valueInputOption: "USER_ENTERED",
         requestBody: {
-          values: [["", name, price]],
+          values: [[name, price, gst, finalPrice]],
         },
       });
       globalCache.delete(`${this.spreadsheetId}_details`);
@@ -536,7 +536,9 @@ export async function updateOrderToggleStatus(oNo: string, act: 'hold' | 'cancel
 export async function removeFollowUp(oNo: string, sS: number, oTS: boolean) { return o2dService.removeFollowUp(oNo, sS, oTS); }
 export async function getO2DStepConfig() { return o2dService.getStepConfig(); }
 export async function getO2DDetails() { return o2dService.getDetails(); }
-export async function addItem(name: string, price: string) { return o2dService.addItem(name, price); }
+export async function addItem(name: string, price: string, gst?: string, finalPrice?: string) { 
+  return o2dService.addItem(name, price, gst, finalPrice); 
+}
 
 export async function updateO2DStepConfig(configs: O2DStepConfig[]): Promise<boolean> {
   try {

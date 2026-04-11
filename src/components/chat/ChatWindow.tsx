@@ -5,8 +5,10 @@ import useSWR from "swr";
 import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
 import ForwardModal from "./ForwardModal";
+import ConfirmModal from "../ConfirmModal";
+import SearchableSelect from "../SearchableSelect";
 import { UserCircleIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
-import { XMarkIcon, ArrowDownTrayIcon, DocumentDuplicateIcon, CheckIcon } from "@heroicons/react/24/outline";
+import { XMarkIcon, ArrowDownTrayIcon, DocumentDuplicateIcon, CheckIcon, UserGroupIcon, PlusSmallIcon, TrashIcon, PencilIcon } from "@heroicons/react/24/outline";
 import { getDriveImageUrl } from "@/lib/drive-utils";
 
 interface ChatMessage {
@@ -17,6 +19,15 @@ interface ChatMessage {
   type: "text" | "image" | "file" | "audio";
   media_url: string;
   read_by?: string;
+  created_at: string;
+}
+
+interface ChatGroup {
+  id: string;
+  name: string;
+  participants: string;
+  admins: string;
+  created_by: string;
   created_at: string;
 }
 
@@ -56,8 +67,31 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
 
   // Fetch messages between current user and the partner (chatId)
   const { data: messages, mutate } = useSWR<ChatMessage[]>(`/api/chat/messages?chatId=${chatId}`, fetcher, {
-    refreshInterval: 3000, // Faster refresh for simple messenger
+    refreshInterval: 3000, 
   });
+
+  const isGroup = chatId.startsWith("group_");
+  const { data: groupInfo, mutate: mutateGroupInfo } = useSWR<ChatGroup>(
+    isGroup ? `/api/chat/groups/${chatId}` : null,
+    fetcher
+  );
+
+  const { data: allUsers } = useSWR<any[]>(isGroup ? "/api/chat/users" : null, fetcher);
+  
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [newParticipant, setNewParticipant] = useState("");
+  const [isUpdatingGroup, setIsUpdatingGroup] = useState(false);
+  const [isEditingGroupName, setIsEditingGroupName] = useState(false);
+  const [editedGroupName, setEditedGroupName] = useState("");
+
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'info';
+    confirmLabel?: string;
+  }>({ isOpen: false, title: "", message: "", onConfirm: () => {} });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -66,10 +100,10 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
   useEffect(() => {
     scrollToBottom();
 
-    // Mark messages as read if there are any unread messages from partner
+    // Mark messages as read
     if (messages && messages.length > 0) {
       const hasUnread = messages.some(
-        (m) => m.sender_id === chatId && m.receiver_id === currentUsername && !(m.read_by || "").includes(currentUsername)
+        (m) => m.sender_id !== currentUsername && !(m.read_by || "").includes(currentUsername)
       );
 
       if (hasUnread) {
@@ -179,7 +213,7 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
     <div className="flex-1 flex flex-col h-full bg-gradient-to-br from-[#FEF5E7] via-[#fdfaf5] to-[#FCE4EC] md:rounded-br-[24px] transition-colors duration-500">
       
       {/* Header */}
-      <div className="p-4 flex justify-between items-center bg-[#001F3F] shadow-sm sticky top-0 z-10 transition-colors">
+      <div className="p-4 flex justify-between items-center bg-[#001F3F] shadow-sm sticky top-0 z-50 transition-colors">
         <div className="flex items-center gap-3">
           {onBack && (
             <button 
@@ -191,17 +225,219 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
               </svg>
             </button>
           )}
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm border border-white/20 shadow-sm bg-gradient-to-br ${getAvatarGradient(chatId)}`}>
-            {chatId.charAt(0).toUpperCase()}
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm border border-white/20 shadow-sm bg-gradient-to-br ${getAvatarGradient(isGroup ? (groupInfo?.name || chatId) : chatId)}`}>
+            {isGroup ? <UserGroupIcon className="w-5 h-5" /> : chatId.charAt(0).toUpperCase()}
           </div>
           <div>
-            <h3 className="font-bold text-white tracking-wide">{chatId}</h3>
+            {isGroup && isEditingGroupName ? (
+              <div className="flex items-center gap-2">
+                <input 
+                  autoFocus
+                  value={editedGroupName}
+                  onChange={e => setEditedGroupName(e.target.value)}
+                  onKeyDown={async e => {
+                    if (e.key === 'Enter') {
+                      setIsEditingGroupName(false);
+                      if (editedGroupName.trim() && editedGroupName !== groupInfo?.name) {
+                        await fetch(`/api/chat/groups/${chatId}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ name: editedGroupName.trim() })
+                        });
+                        mutateGroupInfo();
+                      }
+                    } else if (e.key === 'Escape') {
+                      setIsEditingGroupName(false);
+                    }
+                  }}
+                  onBlur={() => setIsEditingGroupName(false)}
+                  className="bg-white/10 border border-white/30 text-white rounded px-2 py-0.5 outline-none font-bold text-sm w-40 focus:ring-1 focus:ring-white/50"
+                  placeholder="Group Name"
+                />
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <h3 className="font-bold text-white tracking-wide">
+                  {isGroup ? groupInfo?.name : chatId}
+                </h3>
+                {isGroup && groupInfo && (groupInfo.admins || "").split(",").map(a=>a.trim()).includes(currentUsername) && (
+                  <button 
+                    onClick={() => {
+                      setEditedGroupName(groupInfo.name);
+                      setIsEditingGroupName(true);
+                    }}
+                    className="text-white/40 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                    title="Rename Group"
+                  >
+                    <PencilIcon className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            )}
+            {isGroup && (
+              <p className="text-[10px] font-bold text-white/60 tracking-wider">
+                {(groupInfo?.participants || "").split(",").filter(Boolean).length} Members
+              </p>
+            )}
           </div>
         </div>
-        <button className="p-2 text-white/60 hover:text-white rounded-full hover:bg-white/10 transition-colors">
-          <InformationCircleIcon className="w-6 h-6" />
-        </button>
+        {isGroup && (
+          <button 
+            onClick={() => setShowGroupInfo(!showGroupInfo)}
+            className={`p-2 rounded-full transition-colors ${showGroupInfo ? "bg-white/20 text-white" : "text-white/60 hover:text-white hover:bg-white/10"}`}
+          >
+            <InformationCircleIcon className="w-6 h-6" />
+          </button>
+        )}
       </div>
+
+      {/* Group Info panel */}
+      {showGroupInfo && isGroup && groupInfo && (
+        <div className="absolute top-[72px] right-4 w-72 bg-white dark:bg-[#001F3F] rounded-2xl shadow-2xl border border-white/10 z-[100] p-4 animate-in slide-in-from-top-2 duration-200">
+           <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100 dark:border-white/5">
+              <h4 className="font-black text-xs text-[#003875] dark:text-white uppercase tracking-widest">Group Members</h4>
+              <button onClick={() => setShowGroupInfo(false)} className="text-gray-400 hover:text-red-500">
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+           </div>
+           
+           <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar mb-4">
+              {(groupInfo.participants || "").split(",").map(p => p.trim()).filter(Boolean).map(username => {
+                const isAdmin = (groupInfo.admins || "").split(",").map(a => a.trim()).includes(username);
+                const currentUserIsAdmin = (groupInfo.admins || "").split(",").map(a => a.trim()).includes(currentUsername);
+
+                return (
+                  <div key={username} className="flex justify-between items-center p-2 rounded-lg bg-gray-50 dark:bg-white/5">
+                    <div className="flex items-center gap-2">
+                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-bold bg-gradient-to-br ${getAvatarGradient(username)}`}>
+                          {username.charAt(0).toUpperCase()}
+                       </div>
+                       <span className="text-xs font-bold text-foreground">{username}</span>
+                       {isAdmin && <span className="text-[8px] bg-red-500 text-white px-1 rounded uppercase font-black">Admin</span>}
+                    </div>
+                    {currentUserIsAdmin && username !== currentUsername && (
+                      <div className="flex items-center gap-2">
+                        {!isAdmin ? (
+                          <button 
+                            onClick={() => {
+                               setConfirmModal({
+                                 isOpen: true,
+                                 title: "Make Admin",
+                                 message: `Are you sure you want to make ${username} an admin?`,
+                                 type: "info",
+                                 confirmLabel: "Make Admin",
+                                 onConfirm: async () => {
+                                   const newAdmins = `${groupInfo.admins},${username}`;
+                                   await fetch(`/api/chat/groups/${chatId}`, {
+                                     method: "PATCH",
+                                     headers: { "Content-Type": "application/json" },
+                                     body: JSON.stringify({ admins: newAdmins })
+                                   });
+                                   mutateGroupInfo();
+                                 }
+                               });
+                            }}
+                            className="text-[10px] uppercase font-bold text-blue-500 hover:underline tracking-wider"
+                          >
+                            Make Admin
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => {
+                               setConfirmModal({
+                                 isOpen: true,
+                                 title: "Remove Admin",
+                                 message: `Are you sure you want to remove admin rights from ${username}?`,
+                                 type: "danger",
+                                 confirmLabel: "Remove",
+                                 onConfirm: async () => {
+                                   const newAdmins = (groupInfo.admins || "").split(",").map(a=>a.trim()).filter(a => a !== username).join(",");
+                                   await fetch(`/api/chat/groups/${chatId}`, {
+                                     method: "PATCH",
+                                     headers: { "Content-Type": "application/json" },
+                                     body: JSON.stringify({ admins: newAdmins })
+                                   });
+                                   mutateGroupInfo();
+                                 }
+                               });
+                            }}
+                            className="text-[10px] uppercase font-bold text-orange-500 hover:underline tracking-wider"
+                          >
+                            Remove Admin
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => {
+                             setConfirmModal({
+                               isOpen: true,
+                               title: "Remove Participant",
+                               message: `Are you sure you want to remove ${username} from the group?`,
+                               type: "danger",
+                               confirmLabel: "Remove",
+                               onConfirm: async () => {
+                                 const newParticipants = (groupInfo.participants || "").split(",").map(p=>p.trim()).filter(p => p !== username).join(",");
+                                 const newAdmins = (groupInfo.admins || "").split(",").map(a=>a.trim()).filter(a => a !== username).join(",");
+                                 await fetch(`/api/chat/groups/${chatId}`, {
+                                   method: "PATCH",
+                                   headers: { "Content-Type": "application/json" },
+                                   body: JSON.stringify({ participants: newParticipants, admins: newAdmins })
+                                 });
+                                 mutateGroupInfo();
+                               }
+                             });
+                          }}
+                          className="text-gray-400 hover:text-red-500 p-1"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+           </div>
+
+           {(groupInfo.admins || "").split(",").map(a => a.trim()).includes(currentUsername) && (
+              <div className="pt-2 border-t border-gray-100 dark:border-white/5">
+                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Add Member</p>
+                  <div className="flex gap-2 relative">
+                    <div className="flex-1">
+                      <SearchableSelect
+                        value={newParticipant}
+                        onChange={(val) => setNewParticipant(val)}
+                        placeholder="Select User..."
+                        options={(allUsers || [])
+                          .filter(u => {
+                            const participantList = (groupInfo.participants || "").split(",").map(p => p.trim());
+                            return !participantList.includes(u.username);
+                          })
+                          .map(u => ({ id: u.username, label: u.username }))}
+                      />
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        if (!newParticipant) return;
+                        setIsUpdatingGroup(true);
+                        const newParticipants = `${groupInfo.participants},${newParticipant}`;
+                        await fetch(`/api/chat/groups/${chatId}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ participants: newParticipants })
+                        });
+                        setNewParticipant("");
+                        mutateGroupInfo();
+                        setIsUpdatingGroup(false);
+                      }}
+                      disabled={isUpdatingGroup || !newParticipant}
+                      className="bg-[#003875] text-white px-3 rounded-xl hover:bg-[#002855] disabled:opacity-50 flex items-center justify-center transition-colors active:scale-95 shadow-sm"
+                    >
+                      <PlusSmallIcon className="w-5 h-5" />
+                    </button>
+                 </div>
+              </div>
+           )}
+        </div>
+      )}
 
       {/* Messages Area Container */}
       <div className="flex-1 relative flex flex-col overflow-hidden z-0">
@@ -333,6 +569,17 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
           onForward={handleForwardMessage}
         />
       )}
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        confirmLabel={confirmModal.confirmLabel}
+      />
 
       {/* Input Area */}
       <ChatInput onSendMessage={handleSendMessage} isSending={isSending} />

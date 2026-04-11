@@ -19,10 +19,16 @@ export async function POST(req: Request) {
 
     const messages = await getMessages(currentUsername, partnerId);
     
-    // We only care about messages SENT BY partnerId TO currentUsername
-    const unreadMessages = messages.filter(
-      (m) => m.sender_id === partnerId && m.receiver_id === currentUsername && !(m.read_by || "").includes(currentUsername)
-    );
+    // In group chat, anyone except the sender can mark as read for themselves
+    const isGroup = partnerId.startsWith("group_");
+    
+    const unreadMessages = messages.filter((m) => {
+      const isActuallyUnread = !(m.read_by || "").includes(currentUsername);
+      if (isGroup) {
+        return m.sender_id !== currentUsername && isActuallyUnread;
+      }
+      return m.sender_id === partnerId && m.receiver_id === currentUsername && isActuallyUnread;
+    });
 
     let updatedCount = 0;
     for (const msg of unreadMessages) {
