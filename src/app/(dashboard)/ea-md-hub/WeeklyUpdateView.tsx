@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { PlusIcon, XMarkIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, XMarkIcon, PencilIcon, CalendarDaysIcon } from '@heroicons/react/24/outline';
 import Portal from '@/components/Portal';
 import ConfirmModal from '@/components/ConfirmModal';
 import { useToast } from '@/components/ToastProvider';
@@ -416,8 +416,11 @@ export default function WeeklyUpdateView() {
               <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Week Of</label>
-                  <input type="date" value={weekOf} onChange={e => setWeekOf(e.target.value)}
-                    className="w-full border border-gray-200 dark:border-navy-600 rounded-md px-3 py-2.5 outline-none focus:border-[#003875] text-sm dark:bg-navy-900 dark:text-white transition-colors" />
+                  <div className="relative group/date">
+                    <CalendarDaysIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none group-focus-within/date:text-[#003875]" />
+                    <input type="date" value={weekOf} onChange={e => setWeekOf(e.target.value)}
+                      className="w-full border border-gray-200 dark:border-navy-600 rounded-md pr-10 pl-3 py-2.5 outline-none focus:border-[#003875] text-sm dark:bg-navy-900 dark:text-white transition-colors" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Prepared By</label>
@@ -520,8 +523,11 @@ export default function WeeklyUpdateView() {
                   (editingItem?.categoryType === 'in-progress' || editingItem?.categoryType === 'pending' || editingItem?.categoryType === 'deadline')) && (
                   <div>
                     <label className="block text-[11px] font-black text-gray-700 dark:text-slate-300 uppercase tracking-widest mb-1.5 px-1">Date / Deadline</label>
-                    <input type="date" value={modalDate} onChange={e => setModalDate(e.target.value)}
-                      className="w-full bg-white dark:bg-navy-800 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-navy-600 focus:border-[#003875] outline-none text-sm text-gray-900 dark:text-white transition-all shadow-sm" />
+                    <div className="relative group/date">
+                      <CalendarDaysIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none group-focus-within/date:text-[#003875]" />
+                      <input type="date" value={modalDate} onChange={e => setModalDate(e.target.value)}
+                        className="w-full bg-white dark:bg-navy-800 pr-10 pl-3 py-2.5 rounded-lg border border-gray-200 dark:border-navy-600 focus:border-[#003875] outline-none text-sm text-gray-900 dark:text-white transition-all shadow-sm" />
+                    </div>
                   </div>
                 )}
 

@@ -1862,19 +1862,25 @@ export default function O2DPage() {
                   <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
                     Date Range:
                   </span>
-                  <input
-                    type="date"
-                    value={filterStartDate}
-                    onChange={(e) => setFilterStartDate(e.target.value)}
-                    className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500]"
-                  />
-                  <span className="text-gray-300">-</span>
-                  <input
-                    type="date"
-                    value={filterEndDate}
-                    onChange={(e) => setFilterEndDate(e.target.value)}
-                    className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500]"
-                  />
+                  <div className="relative group/date flex items-center bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-2 h-[34px] focus-within:border-[#FFD500] transition-all shadow-sm">
+                    <CalendarDaysIcon className="w-3.5 h-3.5 text-gray-400 group-focus-within/date:text-[#FFD500] shrink-0" />
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="bg-transparent border-none outline-none pl-1.5 text-[10px] font-bold text-gray-700 dark:text-zinc-100 min-w-[100px]"
+                    />
+                  </div>
+                  <span className="text-gray-300 font-bold">-</span>
+                  <div className="relative group/date flex items-center bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-2 h-[34px] focus-within:border-[#FFD500] transition-all shadow-sm">
+                    <CalendarDaysIcon className="w-3.5 h-3.5 text-gray-400 group-focus-within/date:text-[#FFD500] shrink-0" />
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="bg-transparent border-none outline-none pl-1.5 text-[10px] font-bold text-gray-700 dark:text-zinc-100 min-w-[100px]"
+                    />
+                  </div>
                 </div>
                 <div className="h-4 w-[1px] bg-gray-200 dark:bg-navy-700" />
                 <div className="flex items-center gap-2">

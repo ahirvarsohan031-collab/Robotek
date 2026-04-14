@@ -217,9 +217,10 @@ export default function SyncMeetingView() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-1.5">
             <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest px-1">Date</label>
-            <div className="relative group">
+            <div className="relative group/date">
+              <CalendarDaysIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none group-focus-within/date:text-[#1e40af]" />
               <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-navy-900 px-4 py-2.5 rounded-xl border border-gray-100 dark:border-navy-700 outline-none text-[12px] font-bold text-gray-800 dark:text-white transition-all focus:ring-2 focus:ring-[#1e40af]/20" />
+                className="w-full bg-gray-50 dark:bg-navy-900 pr-12 pl-4 py-2.5 rounded-xl border border-gray-100 dark:border-navy-700 outline-none text-[12px] font-bold text-gray-800 dark:text-white transition-all focus:ring-2 focus:ring-[#1e40af]/20" />
             </div>
           </div>
           <div className="space-y-1.5">

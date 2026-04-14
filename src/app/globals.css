@@ -75,13 +75,22 @@ p, span, td, th, div {
 /* Custom Date Picker Styling */
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-  display: none;
-  -webkit-appearance: none;
+  /* display: none; */
+  /* -webkit-appearance: none; */
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 .dark input[type="date"]::-webkit-calendar-picker-indicator {
-  display: none;
-  -webkit-appearance: none;
+  /* display: none; */
+  /* -webkit-appearance: none; */
+  filter: invert(1);
 }
 
 ::-webkit-datetime-edit-fields-wrapper {

@@ -2047,12 +2047,15 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
                   {/* Due Date & Time */}
                   <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Due Date &amp; Time</label>
+                  <div className="relative group/date">
+                    <CalendarDaysIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none group-focus-within/date:text-[#FFD500]" />
                     <input
                       type="datetime-local"
                       value={formData.due_date}
                       onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm cursor-pointer"
+                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 pr-10 pl-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm cursor-pointer"
                     />
+                  </div>
                   </div>
                 </div>
 
@@ -2229,21 +2232,27 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Start Date</span>
-                      <input 
-                        type="date"
-                        value={filterStartDate}
-                        onChange={(e) => setFilterStartDate(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-[#FFFBF0] dark:bg-zinc-900 border-2 border-orange-50 dark:border-zinc-800 rounded-xl text-xs font-bold text-gray-700 dark:text-zinc-100 outline-none focus:border-[#FFD500] transition-all"
-                      />
+                      <div className="relative group/date">
+                        <CalendarDaysIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none group-focus-within/date:text-[#FFD500]" />
+                        <input 
+                          type="date"
+                          value={filterStartDate}
+                          onChange={(e) => setFilterStartDate(e.target.value)}
+                          className="w-full pl-4 pr-10 py-2.5 bg-[#FFFBF0] dark:bg-zinc-900 border-2 border-orange-50 dark:border-zinc-800 rounded-xl text-xs font-bold text-gray-700 dark:text-zinc-100 outline-none focus:border-[#FFD500] transition-all"
+                        />
+                      </div>
                     </div>
                     <div className="space-y-1.5">
                       <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">End Date</span>
-                      <input 
-                        type="date"
-                        value={filterEndDate}
-                        onChange={(e) => setFilterEndDate(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-[#FFFBF0] dark:bg-zinc-900 border-2 border-orange-50 dark:border-zinc-800 rounded-xl text-xs font-bold text-gray-700 dark:text-zinc-100 outline-none focus:border-[#FFD500] transition-all"
-                      />
+                      <div className="relative group/date">
+                        <CalendarDaysIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none group-focus-within/date:text-[#FFD500]" />
+                        <input 
+                          type="date"
+                          value={filterEndDate}
+                          onChange={(e) => setFilterEndDate(e.target.value)}
+                          className="w-full pl-4 pr-10 py-2.5 bg-[#FFFBF0] dark:bg-zinc-900 border-2 border-orange-50 dark:border-zinc-800 rounded-xl text-xs font-bold text-gray-700 dark:text-zinc-100 outline-none focus:border-[#FFD500] transition-all"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

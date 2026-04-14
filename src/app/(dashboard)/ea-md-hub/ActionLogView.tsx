@@ -10,7 +10,8 @@ import {
   CheckCircleIcon,
   ClockIcon,
   ExclamationCircleIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  CalendarDaysIcon
 } from '@heroicons/react/24/outline';
 import Portal from '@/components/Portal';
 import ConfirmModal from '@/components/ConfirmModal';
@@ -395,8 +396,11 @@ export default function ActionLogView() {
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1 block">
                       Due Date *
                     </label>
-                    <input required type="date" value={formDue} onChange={e => setFormDue(e.target.value)}
-                      className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700/50 focus:border-[#003875] dark:focus:border-[#FFD500] outline-none text-sm font-bold text-gray-800 dark:text-white transition-all shadow-sm" />
+                    <div className="relative group/date">
+                      <CalendarDaysIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none group-focus-within/date:text-[#003875] dark:group-focus-within/date:text-[#FFD500]" />
+                      <input required type="date" value={formDue} onChange={e => setFormDue(e.target.value)}
+                        className="w-full bg-[#FFFBF0] dark:bg-navy-900 pr-12 pl-4 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700/50 focus:border-[#003875] dark:focus:border-[#FFD500] outline-none text-sm font-bold text-gray-800 dark:text-white transition-all shadow-sm" />
+                    </div>
                   </div>
                 </div>
 

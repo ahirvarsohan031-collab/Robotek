@@ -2037,17 +2037,23 @@ export default function ChecklistsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">Start Date</span>
-                    <input 
-                      type="date" value={modalStartDate} onChange={(e) => setModalStartDate(e.target.value)}
-                      className="w-full bg-[#FFFBF0] dark:bg-navy-900 border-2 border-orange-50 dark:border-navy-700 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-colors"
-                    />
+                    <div className="relative group/date">
+                      <CalendarDaysIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none group-focus-within/date:text-[#003875] dark:group-focus-within/date:text-[#FFD500]" />
+                      <input 
+                        type="date" value={modalStartDate} onChange={(e) => setModalStartDate(e.target.value)}
+                        className="w-full bg-[#FFFBF0] dark:bg-navy-900 border-2 border-orange-50 dark:border-navy-700 rounded-xl pl-3 pr-10 py-2 text-xs font-bold outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-colors"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">End Date</span>
-                    <input 
-                      type="date" value={modalEndDate} onChange={(e) => setModalEndDate(e.target.value)}
-                      className="w-full bg-[#FFFBF0] dark:bg-navy-900 border-2 border-orange-50 dark:border-navy-700 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-colors"
-                    />
+                    <div className="relative group/date">
+                      <CalendarDaysIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none group-focus-within/date:text-[#003875] dark:group-focus-within/date:text-[#FFD500]" />
+                      <input 
+                        type="date" value={modalEndDate} onChange={(e) => setModalEndDate(e.target.value)}
+                        className="w-full bg-[#FFFBF0] dark:bg-navy-900 border-2 border-orange-50 dark:border-navy-700 rounded-xl pl-3 pr-10 py-2 text-xs font-bold outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-colors"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
