@@ -580,14 +580,14 @@ export default function AttendancePage() {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as any)}
                                 className={`
-                                    flex items-center gap-2 px-6 py-2 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap
+                                    flex items-center gap-2 px-3 md:px-6 py-2 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap
                                     ${activeTab === tab.id 
                                         ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-sm' 
                                         : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5'}
                                 `}
                             >
                                 <tab.icon className="w-4 h-4 stroke-2" />
-                                {tab.label}
+                                <span className="hidden md:block">{tab.label}</span>
                             </button>
                         ))}
                     </div>
@@ -790,7 +790,7 @@ export default function AttendancePage() {
                             )}
                         </div>
                         <form onSubmit={handleLeaveSubmit} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <CustomDateTimePicker label="From Date" dateOnly value={leaveForm.startDate} onChange={v => setLeaveForm({...leaveForm, startDate: v})} required />
                                 <CustomDateTimePicker label="To Date" dateOnly value={leaveForm.endDate} onChange={v => setLeaveForm({...leaveForm, endDate: v})} required />
                             </div>

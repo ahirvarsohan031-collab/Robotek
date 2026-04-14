@@ -23,7 +23,7 @@ export default function DashboardLayout({
 
         {/* Content panel — cream background */}
         <div style={{ backgroundColor: 'var(--panel-bg)' }} className="flex-1 flex flex-col min-h-0 transition-all duration-500 panel-transition">
-          <main className="flex-1 p-2 md:p-4 overflow-y-auto w-full min-w-0 custom-scrollbar">
+          <main className="flex-1 p-1 md:p-2 overflow-y-auto w-full min-w-0 custom-scrollbar">
             <div className="w-full max-w-full mx-auto">
               <AccessGuard>
                 {children}

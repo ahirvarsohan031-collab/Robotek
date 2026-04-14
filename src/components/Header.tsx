@@ -4,8 +4,8 @@ import { useSession, signOut } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
 import useSWR from "swr";
-import { 
-  BellIcon, 
+import {
+  BellIcon,
   MagnifyingGlassIcon,
   ChevronDownIcon,
   ArrowRightOnRectangleIcon,
@@ -36,13 +36,13 @@ export default function Header({ onMenuClick }: HeaderProps) {
   };
 
   const { data: chatData } = useSWR<any[]>('/api/chat/users', fetcher, {
-    refreshInterval: 120000, 
+    refreshInterval: 120000,
   });
   const chatUnreadCount = Array.isArray(chatData) ? chatData.reduce((acc, user) => acc + (user.unreadCount || 0), 0) : 0;
 
   return (
-    <header 
-      style={{ 
+    <header
+      style={{
         backgroundColor: '#003875',
         borderBottom: 'none'
       }}
@@ -56,7 +56,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
         >
           <Bars3Icon className="w-6 h-6" />
         </button>
-        
+
         <div className="flex flex-col hidden md:flex">
           <h1 className="text-2xl font-bold text-white leading-none">
             HI, {(session?.user as any)?.username?.toUpperCase() || session?.user?.name?.toUpperCase() || session?.user?.email?.split("@")[0].toUpperCase() || "USER"}
@@ -75,9 +75,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
         {/* Search Input - Hidden on mobile */}
         <div className="relative group hidden lg:block flex-shrink-1">
           <MagnifyingGlassIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-white/50 group-focus-within:text-white transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Search..." 
+          <input
+            suppressHydrationWarning
+            type="text"
+            placeholder="Search..."
             className="w-32 lg:w-52 pl-11 pr-4 py-1.5 bg-white/10 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/50 focus:bg-white/20 transition-all text-xs font-bold placeholder:text-white/40 text-white"
           />
         </div>
@@ -86,8 +87,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
         <ThemeToggle />
 
         {/* Chat Notification Icon */}
-        <Link 
-          href="/chat" 
+        <Link
+          href="/chat"
           className="relative p-2 text-white/70 hover:text-white hover:bg-white/10 dark:hover:bg-navy-800 rounded-lg transition-colors ml-0.5 md:ml-1"
           title="Chat Messages"
         >
@@ -105,9 +106,9 @@ export default function Header({ onMenuClick }: HeaderProps) {
         <div className="flex items-center gap-1 flex-shrink-0">
           <div className="w-7 h-7 md:w-8.5 md:h-8.5 rounded-xl overflow-hidden shadow-sm border border-orange-100 ring-2 ring-[#FFD500]/20 flex-shrink-0">
             {session?.user?.image ? (
-              <img 
-                src={getNormalizedImageUrl(session.user.image)} 
-                alt="Profile" 
+              <img
+                src={getNormalizedImageUrl(session.user.image)}
+                alt="Profile"
                 className="object-cover w-full h-full"
                 referrerPolicy="no-referrer"
               />
@@ -118,7 +119,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
             )}
           </div>
 
-          <button 
+          <button
+            suppressHydrationWarning
             onClick={() => signOut()}
             className="p-1 text-white/60 hover:text-white hover:bg-white/10 rounded-lg md:rounded-xl transition-all group"
             title="Sign Out"

@@ -33,32 +33,28 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
     const fetchCounts = async () => {
       try {
-        const [delRes, checkRes, tickRes, o2dRes, configRes, chatRes] = await Promise.all([
-          fetch('/api/delegations'),
-          fetch('/api/checklists'),
-          fetch('/api/tickets'),
-          fetch('/api/o2d'),
-          fetch('/api/o2d/config'),
-          fetch('/api/chat/users')
+        const safeFetch = async (url: string) => {
+          try {
+            const res = await fetch(url);
+            if (res.ok) return await res.json();
+          } catch (e) {
+            console.error(`Sidebar fetch failed for ${url}:`, e);
+          }
+          return null;
+        };
+
+        const [delData, checkData, tickData, o2dData, configData, chatData] = await Promise.all([
+          safeFetch('/api/delegations'),
+          safeFetch('/api/checklists'),
+          safeFetch('/api/tickets'),
+          safeFetch('/api/o2d'),
+          safeFetch('/api/o2d/config'),
+          safeFetch('/api/chat/users')
         ]);
         
-        let delData = [];
-        let checkData = [];
-        let tickData = [];
-        if (delRes.ok) delData = await delRes.json();
-        if (checkRes.ok) checkData = await checkRes.json();
-        if (tickRes.ok) tickData = await tickRes.json();
-
-        let o2dData = [];
-        let configData: any = { configs: [] };
-        let chatData: any[] = [];
-        if (o2dRes.ok) o2dData = await o2dRes.json();
-        if (configRes.ok) configData = await configRes.json();
-        if (chatRes.ok) chatData = await chatRes.json();
-
         // Filter for USER role
-        const baseDel = userRole === 'USER' ? delData.filter((d: any) => d.assigned_to === currentUser) : delData;
-        const baseCheck = userRole === 'USER' ? checkData.filter((c: any) => c.assigned_to === currentUser) : checkData;
+        const baseDel = (delData || []).length > 0 && userRole === 'USER' ? delData.filter((d: any) => d.assigned_to === currentUser) : (delData || []);
+        const baseCheck = (checkData || []).length > 0 && userRole === 'USER' ? checkData.filter((c: any) => c.assigned_to === currentUser) : (checkData || []);
 
         // Common helper
         const getEarliestDate = (dateString?: string) => {

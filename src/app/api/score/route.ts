@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDelegations } from "@/lib/delegation-sheets";
 import { getChecklists } from "@/lib/checklist-sheets";
 import { getO2Ds, getO2DStepConfig } from "@/lib/o2d-sheets";
+import { getFollowUpData } from "@/lib/scot-sheets";
 import { getUsers } from "@/lib/google-sheets";
 import { auth } from "@/auth";
 
@@ -50,6 +51,26 @@ function calculateMetrics(tasks: any[], from: Date, to: Date) {
   };
 }
 
+const getNextWorkingDay = (dateStr: string) => {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  if (date.getDay() === 0) { // Sunday
+    date.setDate(date.getDate() + 1);
+  }
+  return date.toISOString().split('T')[0];
+};
+
+const getEffectiveFollowUpDate = (record: any) => {
+  if (record.latestNextDate) return record.latestNextDate;
+  if (record.lastOrderDate) {
+    const freq = parseInt(record.frequencyOfCallingAfterOrderPlaced) || 30;
+    const date = new Date(new Date(record.lastOrderDate).getTime() + freq * 24 * 60 * 60 * 1000);
+    return getNextWorkingDay(date.toISOString().split('T')[0]);
+  }
+  return "";
+};
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const fromStr = searchParams.get("from");
@@ -68,14 +89,18 @@ export async function GET(request: Request) {
   const isPrivileged = userRole === "ADMIN" || userRole === "EA";
 
   try {
-    const [delegations, checklists, o2ds, stepConfigs, users] = await Promise.all([
+    const baseUrl = new URL(request.url).origin;
+    const [delegations, checklists, o2ds, stepConfigs, users, followUps, scotRes] = await Promise.all([
       getDelegations(),
       getChecklists(),
       getO2Ds(),
       getO2DStepConfig(),
-      getUsers()
+      getUsers(),
+      getFollowUpData(),
+      fetch(`${baseUrl}/api/scot?tab=calls`, { headers: { cookie: request.headers.get('cookie') || '' } })
     ]);
 
+    const scotCalls = await scotRes.json();
     const allTasks: any[] = [];
 
     // Process Delegations
@@ -143,6 +168,65 @@ export async function GET(request: Request) {
       }
     });
 
+    // Process Scot Follow Ops Completed Tracking
+    followUps.forEach(f => {
+      if (f.lastFollowUpDate && f.createdAt) {
+        const party = scotCalls.find((c: any) => c.partyName.trim().toLowerCase() === f.partyName.trim().toLowerCase());
+        
+        let assignedUsers: string[] = [];
+        if (party) {
+           if (party.salesCoordinator && party.salesCoordinator.trim() !== "") assignedUsers.push(party.salesCoordinator.trim());
+        }
+        if (assignedUsers.length === 0) return;
+
+        const planned = parseDate(f.lastFollowUpDate);
+        const actual = parseDate(f.createdAt);
+        
+        // Treat as late if completed strictly after the planned day
+        const isLate = (planned && actual) ? actual.toISOString().split('T')[0] > planned.toISOString().split('T')[0] : false;
+
+        allTasks.push({
+          category: "scot",
+          user: assignedUsers.join(","),
+          plannedDate: planned,
+          actualDate: actual,
+          isCompleted: true,
+          isLate: isLate,
+          title: `Follow Up: ${f.partyName}`,
+          id: `FUP-${Date.now()}-${Math.random()}`,
+          status: f.status
+        });
+      }
+    });
+
+    // Process Scot Pending Tracking
+    const nowDayStart = new Date(now);
+    nowDayStart.setHours(0, 0, 0, 0);
+    
+    scotCalls.forEach((call: any) => {
+      let assignedUsers: string[] = [];
+      if (call.salesCoordinator && call.salesCoordinator.trim() !== "") assignedUsers.push(call.salesCoordinator.trim());
+      if (assignedUsers.length === 0) return;
+
+      const pendingDateStr = getEffectiveFollowUpDate(call);
+      if (pendingDateStr) {
+        const planned = parseDate(pendingDateStr);
+        if (planned) {
+          allTasks.push({
+            category: "scot",
+            user: assignedUsers.join(","),
+            plannedDate: planned,
+            actualDate: null,
+            isCompleted: false,
+            isLate: planned < nowDayStart,
+            title: `Follow Up: ${call.partyName}`,
+            id: `PEND-${call.partyName}`,
+            status: "Pending"
+          });
+        }
+      }
+    });
+
     // Trend Periods
     const periods: { from: Date; to: Date; label: string }[] = [];
     if (filterType === 'week') {
@@ -185,7 +269,7 @@ export async function GET(request: Request) {
 
     const userResult = users.map((u: any) => {
       const userTasks = allTasks.filter(t => {
-        if (t.category === 'o2d') {
+        if (t.category === 'o2d' || t.category === 'scot') {
           return t.user.split(",").map((s: string) => s.trim()).includes(u.username);
         }
         return t.user === u.username;
@@ -195,6 +279,7 @@ export async function GET(request: Request) {
       const delegation = calculateMetrics(userTasks.filter(t => t.category === 'delegation'), from, to);
       const checklist = calculateMetrics(userTasks.filter(t => t.category === 'checklist'), from, to);
       const o2d = calculateMetrics(userTasks.filter(t => t.category === 'o2d'), from, to);
+      const scot = calculateMetrics(userTasks.filter(t => t.category === 'scot'), from, to);
 
       const trendData = periods.map(p => {
         const pMetrics = calculateMetrics(userTasks, p.from, p.to);
@@ -215,6 +300,7 @@ export async function GET(request: Request) {
         delegationStats: { ...delegation, items: userTasks.filter(t => t.category === 'delegation' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))) },
         checklistStats: { ...checklist, items: userTasks.filter(t => t.category === 'checklist' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))) },
         o2dStats: { ...o2d, items: userTasks.filter(t => t.category === 'o2d' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))) },
+        scotStats: { ...scot, items: userTasks.filter(t => t.category === 'scot' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))) },
         trendData
       };
     });

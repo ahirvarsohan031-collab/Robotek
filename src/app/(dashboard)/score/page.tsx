@@ -20,7 +20,8 @@ import {
   ArrowPathIcon,
   ChevronLeftIcon,
   ArrowDownTrayIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  PhoneIcon
 } from "@heroicons/react/24/outline";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import PremiumDateRangePicker from '@/components/PremiumDateRangePicker';
@@ -591,7 +592,8 @@ const PDFHiddenReport = ({ user, dateRange, userTrendData, isNegativeMode, calcu
                 {[
                   { label: 'Delegations', stats: user.delegationStats, color: 'text-orange-500', icon: DocumentTextIcon },
                   { label: 'Checklists', stats: user.checklistStats, color: 'text-emerald-500', icon: ClipboardDocumentListIcon },
-                  { label: 'O2D FMS Jobs', stats: user.o2dStats, color: 'text-blue-500', icon: ShoppingBagIcon }
+                  { label: 'O2D FMS Jobs', stats: user.o2dStats, color: 'text-blue-500', icon: ShoppingBagIcon },
+                  { label: 'Scot Tracking', stats: user.scotStats, color: 'text-purple-500', icon: PhoneIcon }
                 ].map((cat, i) => (
                   <div key={i} className="flex flex-col items-center gap-1">
                      <div className="flex items-center gap-1.5">
@@ -634,6 +636,12 @@ const PDFHiddenReport = ({ user, dateRange, userTrendData, isNegativeMode, calcu
         <PDFReportHeader user={user} dateRange={dateRange} />
         <PDFTaskGrid tasks={user.o2dStats?.items || []} title="O2D FMS Jobs Snapshot" colorClass="text-blue-600" />
       </div>
+
+      {/* Page 5: Scot Tracking - Using 3 Column Grid */}
+      <div ref={pageRefs.page5} ref-id="pdf-page-5" style={{ backgroundColor: '#ffffff' }} className="w-[794px] h-[1123px] p-4 flex flex-col overflow-hidden">
+        <PDFReportHeader user={user} dateRange={dateRange} />
+        <PDFTaskGrid tasks={user.scotStats?.items || []} title="Scot Tracking Snapshot" colorClass="text-purple-600" />
+      </div>
     </div>
   );
 };
@@ -645,6 +653,7 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
       ...(user.delegationStats?.items || []),
       ...(user.checklistStats?.items || []),
       ...(user.o2dStats?.items || []),
+      ...(user.scotStats?.items || []),
     ];
   }, [user]);
 
@@ -653,6 +662,7 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
   const page2Ref = useRef<HTMLDivElement>(null);
   const page3Ref = useRef<HTMLDivElement>(null);
   const page4Ref = useRef<HTMLDivElement>(null);
+  const page5Ref = useRef<HTMLDivElement>(null);
 
   if (!user) return null;
 
@@ -688,12 +698,14 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
     const delData = generateTrendData(user.delegationStats?.items || [], rangeObj, chartGranularity);
     const chkData = generateTrendData(user.checklistStats?.items || [], rangeObj, chartGranularity);
     const o2dData = generateTrendData(user.o2dStats?.items || [], rangeObj, chartGranularity);
+    const scotData = generateTrendData(user.scotStats?.items || [], rangeObj, chartGranularity);
     // All three share the same time buckets; zip them together with score + onTime per category
     return delData.map((d, i) => ({
       label: d.label,
       delegation: { score: d.score, onTime: d.onTime, total: d.total, completed: d.completed },
       checklist: { score: chkData[i]?.score ?? 0, onTime: chkData[i]?.onTime ?? 0, total: chkData[i]?.total ?? 0, completed: chkData[i]?.completed ?? 0 },
       o2d: { score: o2dData[i]?.score ?? 0, onTime: o2dData[i]?.onTime ?? 0, total: o2dData[i]?.total ?? 0, completed: o2dData[i]?.completed ?? 0 },
+      scot: { score: scotData[i]?.score ?? 0, onTime: scotData[i]?.onTime ?? 0, total: scotData[i]?.total ?? 0, completed: scotData[i]?.completed ?? 0 },
     }));
   }, [user, dateRange.to, chartGranularity]);
 
@@ -715,7 +727,7 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
         userTrendData={userTrendData} 
         isNegativeMode={isNegativeMode} 
         calculateDelayHours={calculateDelayHours}
-        pageRefs={{ page1: page1Ref, page2: page2Ref, page3: page3Ref, page4: page4Ref }}
+        pageRefs={{ page1: page1Ref, page2: page2Ref, page3: page3Ref, page4: page4Ref, page5: page5Ref }}
       />
 
       {/* Profile Header Card */}
@@ -839,33 +851,41 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
                     className="divide-y text-xs md:text-sm font-bold text-gray-700 dark:text-gray-300"
                   >
                     <tr>
-                      <td className="py-4 flex items-center gap-2 font-black text-xs uppercase text-gray-900 dark:text-white"><DocumentTextIcon className="w-5 h-5 text-orange-500 shrink-0"/> Delegations</td>
-                      <td className={`py-4 text-center font-black ${user.delegationStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                      <td className="py-2.5 flex items-center gap-2 font-black text-[10px] sm:text-xs uppercase text-gray-900 dark:text-white"><DocumentTextIcon className="w-5 h-5 text-orange-500 shrink-0"/> Delegations</td>
+                      <td className={`py-2.5 text-center font-black ${user.delegationStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
                         {user.delegationStats?.total === 0 ? "—" : (isNegativeMode ? user.delegationStats?.score - 100 : user.delegationStats?.score || 0) + "%"}
                       </td>
-                      <td className={`py-4 text-center font-black ${user.delegationStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                      <td className={`py-2.5 text-center font-black ${user.delegationStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
                         {user.delegationStats?.completed === 0 ? "—" : (isNegativeMode ? user.delegationStats?.onTimeRate - 100 : user.delegationStats?.onTimeRate || 0) + "%"}
                       </td>
                     </tr>
                     <tr>
-                      <td className="py-4 flex items-center gap-2 font-black text-xs uppercase text-gray-900 dark:text-white"><ClipboardDocumentListIcon className="w-5 h-5 text-emerald-500 shrink-0"/> Checklists</td>
-                      <td className={`py-4 text-center font-black ${user.checklistStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                      <td className="py-2.5 flex items-center gap-2 font-black text-[10px] sm:text-xs uppercase text-gray-900 dark:text-white"><ClipboardDocumentListIcon className="w-5 h-5 text-emerald-500 shrink-0"/> Checklists</td>
+                      <td className={`py-2.5 text-center font-black ${user.checklistStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
                         {user.checklistStats?.total === 0 ? "—" : (isNegativeMode ? user.checklistStats?.score - 100 : user.checklistStats?.score || 0) + "%"}
                       </td>
-                      <td className={`py-4 text-center font-black ${user.checklistStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                      <td className={`py-2.5 text-center font-black ${user.checklistStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
                         {user.checklistStats?.completed === 0 ? "—" : (isNegativeMode ? user.checklistStats?.onTimeRate - 100 : user.checklistStats?.onTimeRate || 0) + "%"}
                       </td>
                     </tr>
                     <tr>
-                      <td className="py-4 flex items-center gap-2 font-black text-xs uppercase text-gray-900 dark:text-white"><ShoppingBagIcon className="w-5 h-5 text-blue-500 shrink-0"/> O2D FMS Jobs</td>
-                      <td className={`py-4 text-center font-black ${user.o2dStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                      <td className="py-2.5 flex items-center gap-2 font-black text-[10px] sm:text-xs uppercase text-gray-900 dark:text-white"><ShoppingBagIcon className="w-5 h-5 text-blue-500 shrink-0"/> O2D FMS Jobs</td>
+                      <td className={`py-2.5 text-center font-black ${user.o2dStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
                         {user.o2dStats?.total === 0 ? "—" : (isNegativeMode ? user.o2dStats?.score - 100 : user.o2dStats?.score || 0) + "%"}
                       </td>
-                      <td className={`py-4 text-center font-black ${user.o2dStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                      <td className={`py-2.5 text-center font-black ${user.o2dStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
                         {user.o2dStats?.completed === 0 ? "—" : (isNegativeMode ? user.o2dStats?.onTimeRate - 100 : user.o2dStats?.onTimeRate || 0) + "%"}
                       </td>
                     </tr>
-
+                    <tr>
+                      <td className="py-2.5 flex items-center gap-2 font-black text-[10px] sm:text-xs uppercase text-gray-900 dark:text-white"><PhoneIcon className="w-5 h-5 text-purple-500 shrink-0"/> Scot Tracking</td>
+                      <td className={`py-2.5 text-center font-black ${user.scotStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {user.scotStats?.total === 0 ? "—" : (isNegativeMode ? user.scotStats?.score - 100 : user.scotStats?.score || 0) + "%"}
+                      </td>
+                      <td className={`py-2.5 text-center font-black ${user.scotStats?.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {user.scotStats?.completed === 0 ? "—" : (isNegativeMode ? user.scotStats?.onTimeRate - 100 : user.scotStats?.onTimeRate || 0) + "%"}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
              </div>
@@ -885,11 +905,12 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
          </div>
        </div>
 
-        {/* 3 Separate Category Score Tables */}
+        {/* 4 Separate Category Score Tables */}
         {([
           { catKey: 'delegation' as const, label: 'Delegations', Icon: DocumentTextIcon, accentColor: 'text-orange-500', headerBg: 'bg-orange-50/60 dark:bg-orange-950/20', headerBorder: 'border-orange-100 dark:border-orange-900/30', rowEven: 'bg-orange-50/20 dark:bg-orange-950/10', dot: 'bg-orange-400' },
           { catKey: 'checklist' as const, label: 'Checklists', Icon: ClipboardDocumentListIcon, accentColor: 'text-emerald-500', headerBg: 'bg-emerald-50/60 dark:bg-emerald-950/20', headerBorder: 'border-emerald-100 dark:border-emerald-900/30', rowEven: 'bg-emerald-50/20 dark:bg-emerald-950/10', dot: 'bg-emerald-400' },
           { catKey: 'o2d' as const, label: 'O2D FMS Jobs', Icon: ShoppingBagIcon, accentColor: 'text-blue-500', headerBg: 'bg-blue-50/60 dark:bg-blue-950/20', headerBorder: 'border-blue-100 dark:border-blue-900/30', rowEven: 'bg-blue-50/20 dark:bg-blue-950/10', dot: 'bg-blue-400' },
+          { catKey: 'scot' as const, label: 'Scot Tracking', Icon: PhoneIcon, accentColor: 'text-purple-500', headerBg: 'bg-purple-50/60 dark:bg-purple-950/20', headerBorder: 'border-purple-100 dark:border-purple-900/30', rowEven: 'bg-purple-50/20 dark:bg-purple-950/10', dot: 'bg-purple-400' },
         ] as const).map((cat) => {
           const periodLabel = chartGranularity === 'day' ? 'Days' : chartGranularity === 'week' ? 'Weeks' : chartGranularity === 'month' ? 'Months' : chartGranularity === 'quarterly' ? 'Quarters' : 'Years';
           return (
@@ -1039,6 +1060,15 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
               "O2D FMS Jobs History", 
               ShoppingBagIcon, 
               "text-blue-600"
+            )}
+          </div>
+
+          <div data-pdf-section="history-scot">
+            {renderCategoryStatusSections(
+              user.scotStats?.items || [], 
+              "Scot Tracking History", 
+              PhoneIcon, 
+              "text-purple-600"
             )}
           </div>
        </div>
@@ -1357,6 +1387,7 @@ function ScorePageContent() {
       await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-2"]') }, 2);
       await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-3"]') }, 3);
       await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-4"]') }, 4);
+      await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-5"]') }, 5);
 
       pdf.save(`Robotek_MIS_${userToPrint.user.username}.pdf`);
       

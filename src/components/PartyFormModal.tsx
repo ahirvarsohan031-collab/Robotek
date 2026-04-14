@@ -15,6 +15,7 @@ import {
   ChevronDownIcon
 } from "@heroicons/react/24/outline";
 import ActionStatusModal from "@/components/ActionStatusModal";
+import PremiumDatePicker from "@/components/PremiumDatePicker";
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 export const CUSTOMER_TYPES = ["NEW", "OLD", "Factory Customer"] as const;
@@ -329,6 +330,7 @@ export default function PartyFormModal({
   skipSubmit = false,
 }: PartyFormModalProps) {
   const [usernames, setUsernames] = useState<string[]>([]);
+  const [allPartyNames, setAllPartyNames] = useState<string[]>([]);
 
   // Form UI state
   const [selectedCustomerType, setSelectedCustomerType] = useState<CustomerTypeValue>("NEW");
@@ -389,8 +391,22 @@ export default function PartyFormModal({
         setSelectedDetailsInstructions(new Set());
       }
       fetchUsers();
+      fetchParties();
     }
   }, [isOpen, editingParty, salePersonName]);
+
+  const fetchParties = async () => {
+    try {
+      const res = await fetch("/api/party-management");
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const names = data.map((p: any) => p.partyName).filter(Boolean);
+        setAllPartyNames(names);
+      }
+    } catch (error) {
+      console.error("Failed to fetch parties:", error);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -404,6 +420,12 @@ export default function PartyFormModal({
   };
 
   const isNewCustomer = selectedCustomerType === "NEW";
+
+  const isDuplicateName = !!formData.partyName && 
+    allPartyNames.some(name => 
+      name.toLowerCase().trim() === formData.partyName?.toLowerCase().trim() && 
+      (!editingParty || name.toLowerCase().trim() !== editingParty.partyName?.toLowerCase().trim())
+    );
 
   const buildSubmitPayload = (): Partial<PartyManagement> => {
     // If this is a NEW party created from O2D, embed the order number in customerType
@@ -508,23 +530,25 @@ export default function PartyFormModal({
               type="text" 
               value={formData.partyName || ""} 
               onChange={(e) => setFormData({ ...formData, partyName: e.target.value })}
-              style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--panel-border)' }}
-              className="w-full px-3 py-1.5 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm" 
+              style={{ backgroundColor: 'var(--input-bg)', borderColor: isDuplicateName ? '#CE2029' : 'var(--panel-border)' }}
+              className={`w-full px-3 py-1.5 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm ${isDuplicateName ? 'ring-1 ring-red-500' : ''}`} 
               required 
             />
+            {isDuplicateName && (
+              <p className="mt-1.5 text-[10px] font-black text-[#CE2029] uppercase tracking-wider animate-pulse flex items-center gap-1">
+                <XMarkIcon className="w-3 h-3" />
+                This party name is already registered. Please use a different name.
+              </p>
+            )}
           </div>
 
           <div>
-            <label className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-              <IdentificationIcon className="w-3.5 h-3.5 text-[#FFFBF0]" />
-              Date of Birth
-            </label>
-            <input 
-              type="date" 
+            <PremiumDatePicker 
+              label="Date of Birth"
               value={formData.dateOfBirth || ""} 
-              onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-              style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--panel-border)' }}
-              className="w-full px-3 py-1.5 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm" 
+              onChange={(val) => setFormData({ ...formData, dateOfBirth: val })}
+              allowPast={true}
+              allowSundays={true}
             />
           </div>
 
@@ -625,7 +649,11 @@ export default function PartyFormModal({
 
           <div className="pt-2 border-t border-orange-100/50 dark:border-zinc-800 flex gap-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-xl font-black text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all uppercase tracking-widest text-[10px]">Cancel</button>
-            <button type="submit" className="flex-1 bg-[#CE2029] hover:bg-[#8E161D] text-white px-4 py-2 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px]">
+            <button 
+              type="submit" 
+              disabled={isDuplicateName}
+              className={`flex-1 bg-[#CE2029] hover:bg-[#8E161D] text-white px-4 py-2 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px] ${isDuplicateName ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+            >
               {editingParty ? "Save changes" : skipSubmit ? "Add to Order" : "Create party"}
             </button>
           </div>

@@ -8,11 +8,14 @@ import {
   UserGroupIcon,
   ChartBarIcon,
   ChatBubbleLeftRightIcon,
-  CalendarIcon
+  CalendarIcon,
+  BriefcaseIcon,
+  PhoneIcon
 } from "@heroicons/react/24/outline";
 
 export const navigation = [
   { name: 'Dashboard', id: 'dashboard', href: '/', icon: Squares2X2Icon },
+  { name: 'EA-MD Hub', id: 'ea-md-hub', href: '/ea-md-hub', icon: BriefcaseIcon },
   { name: 'Users', id: 'users', href: '/users', icon: UsersIcon },
   { name: 'Delegations', id: 'delegations', href: '/delegations', icon: DocumentTextIcon },
   { name: 'Checklists', id: 'checklists', href: '/checklists', icon: ClipboardDocumentListIcon },
@@ -23,4 +26,5 @@ export const navigation = [
   { name: 'Score', id: 'score', href: '/score', icon: ChartBarIcon },
   { name: 'Chat', id: 'chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
   { name: 'Scheduler', id: 'scheduler', href: '/scheduler', icon: CalendarIcon },
+  { name: 'Scot', id: 'scot', href: '/scot', icon: PhoneIcon },
 ];
