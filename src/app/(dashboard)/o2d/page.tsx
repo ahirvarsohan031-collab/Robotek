@@ -905,17 +905,23 @@ export default function O2DPage() {
               const prevActual = (updated as any)[`actual_${i}`];
               const prevStatus = (updated as any)[`status_${i}`];
 
-              // Skip logic: if Step 4 is Yes, skip Step 5 and go to Step 6
-              if (stepIdx === 5 && prevStatus === "Yes" && i === 4) {
-                (updated as any)[pKey] = ""; // Skip Step 5
+              // Skip logic: if Step 3 is Yes, skip Step 4 and go to Step 5
+              if (stepIdx === 4 && prevStatus === "Yes" && i === 3) {
+                (updated as any)[pKey] = ""; // Skip Step 4
                 continue;
               }
-              if (stepIdx === 6 && (updated as any)[`status_4`] === "Yes") {
-                const actual4 = (updated as any)[`actual_4`];
-                if (actual4 && actual4 !== "-" && actual4.trim() !== "") {
-                  (updated as any)[pKey] = calculatePlannedDate(actual4, tat);
+              if (stepIdx === 5 && (updated as any)[`status_3`] === "Yes") {
+                const actual3 = (updated as any)[`actual_3`];
+                if (actual3 && actual3 !== "-" && actual3.trim() !== "") {
+                  (updated as any)[pKey] = calculatePlannedDate(actual3, tat);
                   continue;
                 }
+              }
+
+              // Termination logic: if Step 4 is No, end the process (no planned Step 5)
+              if (stepIdx === 5 && prevStatus === "No" && i === 4) {
+                (updated as any)[pKey] = ""; // Skip Step 5
+                continue;
               }
 
               if (
@@ -1498,10 +1504,10 @@ export default function O2DPage() {
       fields.final_amount_1 = first?.final_amount_1 || "";
       fields.so_number_1 = first?.so_number_1 || "";
       fields.merge_order_with_1 = first?.merge_order_with_1 || "";
-    } else if (stepIdx === 6) {
-      fields.num_of_parcel_6 = first?.num_of_parcel_6 || "";
-      fields.actual_date_of_order_packed_6 =
-        first?.actual_date_of_order_packed_6 || "";
+    } else if (stepIdx === 5) {
+      fields.num_of_parcel_5 = first?.num_of_parcel_5 || "";
+      fields.actual_date_of_order_packed_5 =
+        first?.actual_date_of_order_packed_5 || "";
     } else if (stepIdx === 7) {
       fields.voucher_num_7 = first?.voucher_num_7 || "";
     } else if (stepIdx === 8) {
@@ -1539,10 +1545,10 @@ export default function O2DPage() {
         updated.final_amount_1 = stepUpdateFields.final_amount_1;
         updated.so_number_1 = stepUpdateFields.so_number_1;
         updated.merge_order_with_1 = stepUpdateFields.merge_order_with_1;
-      } else if (stepIdx === 6) {
-        updated.num_of_parcel_6 = stepUpdateFields.num_of_parcel_6;
-        updated.actual_date_of_order_packed_6 =
-          stepUpdateFields.actual_date_of_order_packed_6;
+      } else if (stepIdx === 5) {
+        updated.num_of_parcel_5 = stepUpdateFields.num_of_parcel_5;
+        updated.actual_date_of_order_packed_5 =
+          stepUpdateFields.actual_date_of_order_packed_5;
       } else if (stepIdx === 7) {
         updated.voucher_num_7 = stepUpdateFields.voucher_num_7;
       } else if (stepIdx === 8) {
@@ -1556,26 +1562,26 @@ export default function O2DPage() {
 
       if (
         (stepUpdateFields.status === "Yes" ||
-          (stepIdx === 4 && stepUpdateFields.status === "No")) &&
+          (stepIdx === 3 && stepUpdateFields.status === "No")) &&
         stepIdx < 11
       ) {
         let nextStepIdx = stepIdx + 1;
 
-        // Skip logic: if Step 4 is Yes, skip Step 5 and go straight to Step 6
-        if (stepIdx === 4 && stepUpdateFields.status === "Yes") {
-          (updated as any)[`planned_5`] = "";
-          nextStepIdx = 6;
+        // Skip logic: if Step 3 is Yes, skip Step 4 and go straight to Step 5
+        if (stepIdx === 3 && stepUpdateFields.status === "Yes") {
+          (updated as any)[`planned_4`] = "";
+          nextStepIdx = 5;
         }
 
-        // Termination logic: if Step 5 is No, end the process (do not plan Step 6)
-        if (stepIdx === 5 && stepUpdateFields.status === "No") {
+        // Termination logic: if Step 4 is No, end the process (do not plan Step 5)
+        if (stepIdx === 4 && stepUpdateFields.status === "No") {
           return updated;
         }
 
         const nextTat = globalConfigs[nextStepIdx - 1]?.tat || "24 Hrs";
         let baseForNext = timestamp;
-        if (stepIdx === 6 && stepUpdateFields.actual_date_of_order_packed_6) {
-          baseForNext = stepUpdateFields.actual_date_of_order_packed_6;
+        if (stepIdx === 5 && stepUpdateFields.actual_date_of_order_packed_5) {
+          baseForNext = stepUpdateFields.actual_date_of_order_packed_5;
         }
         (updated as any)[`planned_${nextStepIdx}`] = calculatePlannedDate(
           baseForNext,
@@ -1612,7 +1618,7 @@ export default function O2DPage() {
           fileUploaded = true;
           const fieldMap: any = {
             1: "upload_so_1",
-            6: "upload_pi_6",
+            5: "upload_pi_5",
             9: "attach_bilty_9",
           };
           const targetField = fieldMap[currentStepToUpdate];
@@ -2900,10 +2906,10 @@ export default function O2DPage() {
                                 )}
                               </div>
 
-                              {/* Step 6: Packing */}
+                              {/* Step 5: Packing */}
                               <div className="space-y-4">
                                 <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
-                                  <ArchiveBoxIcon className="w-4 h-4" /> Step 6:
+                                  <ArchiveBoxIcon className="w-4 h-4" /> Step 5:
                                   Packing
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
@@ -2912,7 +2918,7 @@ export default function O2DPage() {
                                       Parcels
                                     </span>
                                     <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                                      {selectedOrder[0]?.num_of_parcel_6 || "-"}
+                                      {selectedOrder[0]?.num_of_parcel_5 || "-"}
                                     </span>
                                   </div>
                                   <div className="flex flex-col">
@@ -2921,19 +2927,19 @@ export default function O2DPage() {
                                     </span>
                                     <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
                                       {selectedOrder[0]
-                                        ?.actual_date_of_order_packed_6
+                                        ?.actual_date_of_order_packed_5
                                         ? new Date(
                                             selectedOrder[0]
-                                              ?.actual_date_of_order_packed_6,
+                                              ?.actual_date_of_order_packed_5,
                                           ).toLocaleDateString()
                                         : "-"}
                                     </span>
                                   </div>
                                 </div>
-                                {selectedOrder[0]?.upload_pi_6 && (
+                                {selectedOrder[0]?.upload_pi_5 && (
                                   <a
                                     href={getDriveImageUrl(
-                                      selectedOrder[0]?.upload_pi_6,
+                                      selectedOrder[0]?.upload_pi_5,
                                     )}
                                     target="_blank"
                                     className="flex items-center gap-2 px-4 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest mt-1"
@@ -4011,7 +4017,7 @@ export default function O2DPage() {
                   </div>
                 )}
 
-                {currentStepToUpdate === 6 && (
+                 {currentStepToUpdate === 5 && (
                   <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
                     <div>
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
@@ -4019,11 +4025,11 @@ export default function O2DPage() {
                       </label>
                       <input
                         type="text"
-                        value={stepUpdateFields.num_of_parcel_6}
+                        value={stepUpdateFields.num_of_parcel_5}
                         onChange={(e) =>
                           setStepUpdateFields({
                             ...stepUpdateFields,
-                            num_of_parcel_6: e.target.value,
+                            num_of_parcel_5: e.target.value,
                           })
                         }
                         className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
@@ -4037,9 +4043,9 @@ export default function O2DPage() {
                       <input
                         type="date"
                         value={
-                          stepUpdateFields.actual_date_of_order_packed_6
+                          stepUpdateFields.actual_date_of_order_packed_5
                             ? new Date(
-                                stepUpdateFields.actual_date_of_order_packed_6,
+                                stepUpdateFields.actual_date_of_order_packed_5,
                               )
                                 .toISOString()
                                 .split("T")[0]
@@ -4048,7 +4054,7 @@ export default function O2DPage() {
                         onChange={(e) =>
                           setStepUpdateFields({
                             ...stepUpdateFields,
-                            actual_date_of_order_packed_6: new Date(
+                            actual_date_of_order_packed_5: new Date(
                               e.target.value,
                             ).toISOString(),
                           })

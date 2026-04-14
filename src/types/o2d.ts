@@ -29,12 +29,13 @@ export interface O2D {
 
   // Step 5
   planned_5?: string; actual_5?: string; status_5?: string;
+  num_of_parcel_5?: string;
+  upload_pi_5?: string;
+  actual_date_of_order_packed_5?: string;
 
   // Step 6
   planned_6?: string; actual_6?: string; status_6?: string;
-  num_of_parcel_6?: string;
-  upload_pi_6?: string;
-  actual_date_of_order_packed_6?: string;
+  // num_of_parcel_6, etc. moved to _5
 
   // Step 7
   planned_7?: string; actual_7?: string; status_7?: string;
@@ -76,26 +77,26 @@ export interface O2DStepConfig {
 }
 
 export const O2D_STEPS = [
-  "Make SO",
-  "Cross verify SO with Actual Order and inform to Shubham",
-  "DISPATCHED AND PACKING APPROVAL",
-  "SHARE PI TO CUSTOMER",
+  "MAKE SO",
+  "CROSS CHECK OF SO",
+  "DISPATCH AND PACKING APPROVAL",
   "RECONFIRM APPROVAL",
   "PACK ITEM",
-  "GENERATE INVOICE BILL AND DISPATCHED GOODS",
-  "BILL UPDATE In 51",
-  "SEND BILTY TO CRM",
+  "SHARE PI TO CUSTOMER",
+  "GENERATE INVOICE AND DISPATCH GOOD",
+  "BILL UPDATE IN 51",
+  "SEND BILLTY TO CRM",
   "DELIVERY DOCUMENT",
-  "Clear Payment"
+  "CLEAR PAYMENT"
 ];
 
 export const O2D_STEP_SHORTS = [
-  "Make SO",
+  "MAKE SO",
   "Verify SO",
   "Pack Appr.",
-  "Share PI",
   "Reconfirm",
   "Pack Item",
+  "Share PI",
   "Invoice & Disp.",
   "Bill Update",
   "Send Bilty to CRM",
