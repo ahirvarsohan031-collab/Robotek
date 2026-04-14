@@ -567,10 +567,20 @@ export default function O2DPage() {
 
       // Step is active if it's PLANNED...
       if (pVal && pVal !== "-" && pVal !== "") {
-        // ...and either it has NO actual date OR it was marked as "No"
-        if (!aVal || aVal === "-" || aVal === "" || sVal === "No") {
+        const hasActual = aVal && aVal !== "-" && aVal !== "";
+        const isStep3CompletedNo = i === 3 && sVal === "No";
+        const isStep4CompletedNo = i === 4 && sVal === "No";
+
+        // A step is pending if it has NO actual date, 
+        // OR it's a standard step (not 3 or 4) marked as "No"
+        const isPending = !hasActual || (sVal === "No" && !isStep3CompletedNo && !isStep4CompletedNo);
+
+        if (isPending) {
           return i;
         }
+
+        // If Step 4 is finished with "No", the process terminates
+        if (isStep4CompletedNo) return -1;
       }
     }
     return -1;
