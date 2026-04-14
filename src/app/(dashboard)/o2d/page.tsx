@@ -571,15 +571,23 @@ export default function O2DPage() {
         const isStep3CompletedNo = i === 3 && sVal === "No";
         const isStep4CompletedNo = i === 4 && sVal === "No";
 
-        // A step is pending if it has NO actual date, 
-        // OR it's a standard step (not 3 or 4) marked as "No"
-        const isPending = !hasActual || (sVal === "No" && !isStep3CompletedNo && !isStep4CompletedNo);
+        // Step 3 with "No" is only "done" if Step 4 is planned
+        let stepDone = hasActual && sVal !== "No";
+        if (isStep3CompletedNo) {
+          const step4Plan = (firstItem[`planned_4`] || "").toString().trim();
+          if (step4Plan && step4Plan !== "-" && step4Plan !== "") {
+            stepDone = true;
+          }
+        }
+        
+        // Step 4 with "No" is always "done" (it terminates the process)
+        if (isStep4CompletedNo) stepDone = true;
 
-        if (isPending) {
+        if (!stepDone) {
           return i;
         }
 
-        // If Step 4 is finished with "No", the process terminates
+        // If Step 4 specifically was the termination point, return -1
         if (isStep4CompletedNo) return -1;
       }
     }
