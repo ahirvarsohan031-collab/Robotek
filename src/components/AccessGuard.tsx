@@ -14,6 +14,14 @@ export default function AccessGuard({ children }: { children: React.ReactNode })
 
   const { permissions: userPermissions, isAdmin, isLoading: loadingPermissions } = usePermissions();
 
+  // Safety timeout — never stay stuck longer than 5s
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isAuthorized === null) setIsAuthorized(true);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [isAuthorized]);
+
   useEffect(() => {
     if (status === "loading" || loadingPermissions) return;
 

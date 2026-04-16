@@ -524,6 +524,241 @@ class O2DService extends BaseSheetsService<O2D> {
 
 export const o2dService = new O2DService();
 
+// Helper: Get pending step index for an order
+function getPendingStepIdx(orderItems: O2D[]): number {
+  const firstItem = orderItems[0] as any;
+  for (let i = 1; i <= 11; i++) {
+    const pVal = (firstItem[`planned_${i}`] || "").toString().trim();
+    const aVal = (firstItem[`actual_${i}`] || "").toString().trim();
+    const sVal = (firstItem[`status_${i}`] || "").toString().trim();
+
+    if (!pVal || pVal === "-") return i;
+    if (!sVal || sVal === "-") return i;
+    if (!aVal || aVal === "-") {
+      const lastActual = (firstItem[`actual_${i - 1}`] || "").toString().trim();
+      if (lastActual && lastActual !== "-") return i;
+      if (i === 1) return i;
+    }
+  }
+  
+  const isStep4CompletedNo = (firstItem[`actual_4`] || "").toString().trim() !== "" &&
+    (firstItem[`actual_4`] || "").toString().trim() !== "-" &&
+    (firstItem[`status_4`] || "").toString().trim() !== "" &&
+    (firstItem[`status_4`] || "").toString().trim() !== "-" &&
+    (firstItem[`status_4`] || "").toString().trim().toUpperCase() === "YES";
+
+  if (isStep4CompletedNo) return -1;
+  
+  return -1;
+}
+
+// Helper: Check if order matches date filter
+function orderMatchesDateFilter(orderItems: O2D[], filter: string): boolean {
+  if (!filter) return true;
+  if (filter === "Hold") return !!orderItems[0].hold && !orderItems[0].cancelled;
+  if (filter === "Cancelled") return !!orderItems[0].cancelled;
+
+  const now = new Date();
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+
+  const pendingStepIdx = getPendingStepIdx(orderItems);
+  if (pendingStepIdx === -1) return false;
+
+  const firstItem = orderItems[0] as any;
+  const plannedRaw = firstItem[`planned_${pendingStepIdx}`] as string;
+  if (!plannedRaw || plannedRaw === "-" || plannedRaw.trim() === "") return false;
+
+  const pd = new Date(plannedRaw);
+  if (isNaN(pd.getTime())) return false;
+
+  const pdDay = new Date(pd);
+  pdDay.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round((pdDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (filter === "Delayed") return pd < now;
+  if (filter === "Today") return diffDays === 0;
+  if (filter === "Tomorrow") return diffDays === 1;
+  if (filter === "Next5") return diffDays > 0 && diffDays <= 5;
+  if (filter === "Next10") return diffDays > 0 && diffDays <= 10;
+
+  return false;
+}
+
+// Comprehensive pagination with all filters applied server-side
+export async function getO2DsPaginated(
+  page: number = 1,
+  limit: number = 10,
+  searchTerm: string = "",
+  selectedDateFilters: string[] = [],
+  selectedStepFilters: number[] = [],
+  tableFilterParty: string = "",
+  tableFilterOrderNo: string = "",
+  tableFilterItemName: string = "",
+  tableFilterPending: boolean = false,
+  filterStartDate: string = "",
+  filterEndDate: string = ""
+) {
+  const allO2Ds = await o2dService.getAll();
+  
+  // Group by order_no to get unique orders
+  const groupedByOrder: Record<string, O2D[]> = {};
+  allO2Ds.forEach((item) => {
+    const orderNo = item.order_no || "Unknown";
+    if (!groupedByOrder[orderNo]) {
+      groupedByOrder[orderNo] = [];
+    }
+    groupedByOrder[orderNo].push(item);
+  });
+  
+  // Get sorted order numbers (descending)
+  let orderNumbers = Object.keys(groupedByOrder).sort((a, b) => b.localeCompare(a));
+  
+  // Apply ALL filters across ALL orders BEFORE pagination
+  orderNumbers = orderNumbers.filter((orderNo) => {
+    const items = groupedByOrder[orderNo];
+    const firstItem = items[0];
+    const pIdx = getPendingStepIdx(items);
+    const isHold = !!firstItem.hold;
+    const isCancelled = !!firstItem.cancelled;
+
+    // Search filter
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch =
+        orderNo.toLowerCase().includes(searchLower) ||
+        firstItem?.party_name?.toLowerCase().includes(searchLower) ||
+        items.some((item) => item.item_name?.toLowerCase().includes(searchLower));
+      if (!matchesSearch) return false;
+    }
+
+    // Party filter
+    if (tableFilterParty && !firstItem.party_name.toLowerCase().includes(tableFilterParty.toLowerCase())) {
+      return false;
+    }
+
+    // Order ID filter
+    if (tableFilterOrderNo && !orderNo.toLowerCase().includes(tableFilterOrderNo.toLowerCase())) {
+      return false;
+    }
+
+    // Item name filter
+    if (tableFilterItemName && !items.some((item) =>
+      item.item_name?.toLowerCase().includes(tableFilterItemName.toLowerCase())
+    )) {
+      return false;
+    }
+
+    // Date range filter
+    if (filterStartDate || filterEndDate) {
+      const itemDate = new Date(firstItem.created_at || firstItem.updated_at || "");
+      if (filterStartDate) {
+        const start = new Date(filterStartDate);
+        start.setHours(0, 0, 0, 0);
+        if (itemDate < start) return false;
+      }
+      if (filterEndDate) {
+        const end = new Date(filterEndDate);
+        end.setHours(23, 59, 59, 999);
+        if (itemDate > end) return false;
+      }
+    }
+
+    // Pending filter
+    if (tableFilterPending && (isHold || isCancelled || pIdx === -1)) {
+      return false;
+    }
+
+    // Step filter
+    if (selectedStepFilters.length > 0 && !selectedStepFilters.includes(pIdx)) {
+      return false;
+    }
+
+    // Date/Status filters
+    if (selectedDateFilters.length > 0) {
+      if (!selectedDateFilters.some((f) => orderMatchesDateFilter(items, f))) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+  
+  // Paginate the filtered orders
+  const startIdx = (page - 1) * limit;
+  const endIdx = startIdx + limit;
+  const paginatedOrderNumbers = orderNumbers.slice(startIdx, endIdx);
+  
+  // Get all rows for the paginated orders
+  const paginatedData = paginatedOrderNumbers.flatMap((orderNo) => groupedByOrder[orderNo]);
+  
+  return {
+    data: paginatedData,
+    orders: paginatedOrderNumbers,
+    total: orderNumbers.length, // Total filtered orders, not rows
+    page,
+    limit,
+    totalPages: Math.ceil(orderNumbers.length / limit),
+    totalRows: allO2Ds.length, // Total rows for reference
+  };
+}
+
+// Summary method - returns step counts without full data (for button counts)
+export async function getO2DSummary() {
+  const allO2Ds = await o2dService.getAll();
+  
+  // Group by order_no to get unique orders
+  const groupedByOrder: Record<string, O2D[]> = {};
+  allO2Ds.forEach((item) => {
+    const orderNo = item.order_no || "Unknown";
+    if (!groupedByOrder[orderNo]) {
+      groupedByOrder[orderNo] = [];
+    }
+    groupedByOrder[orderNo].push(item);
+  });
+  
+  // Count orders by step
+  const stepCounts = Array(11).fill(0);
+  
+  Object.values(groupedByOrder).forEach((orderItems) => {
+    // Find the pending step for this order
+    const firstItem = orderItems[0];
+    let pendingStep = -1;
+    
+    for (let i = 1; i <= 11; i++) {
+      const status = (firstItem as any)[`status_${i}`];
+      const actual = (firstItem as any)[`actual_${i}`];
+      
+      // If status is not yet decided or actual is not filled, this is the pending step
+      if (!status || status === "" || status === "-") {
+        pendingStep = i;
+        break;
+      }
+      
+      // If actual is filled and status is Yes/No, move to next
+      if (actual && actual !== "" && actual !== "-") {
+        continue;
+      }
+    }
+    
+    // If no pending step found and all are complete, mark as complete (step 12)
+    if (pendingStep === -1) {
+      pendingStep = 12;
+    }
+    
+    if (pendingStep >= 1 && pendingStep <= 11) {
+      stepCounts[pendingStep - 1]++;
+    }
+  });
+  
+  return {
+    stepCounts,
+    totalOrders: Object.keys(groupedByOrder).length,
+    totalRows: allO2Ds.length,
+  };
+}
+
 // Legacy function bridges
 export async function getO2Ds() { return o2dService.getAll(); }
 export async function addO2D(o2d: O2D) { return o2dService.add(o2d); }

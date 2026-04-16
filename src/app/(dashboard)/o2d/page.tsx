@@ -278,17 +278,61 @@ export default function O2DPage() {
   const { data: session } = useSession();
   const currentUser = (session?.user as any)?.username || "";
 
-  const { data: o2ds = [], isLoading: isDataLoading } = useSWR<O2D[]>(
-    "O2D",
-    async () => {
-      const res = await fetch("/api/o2d", { cache: "no-store" });
-      return res.json();
-    },
+  // Search and pagination state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  // Filter states - MUST be before SWR hook that uses them
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [tableFilterParty, setTableFilterParty] = useState("");
+  const [tableFilterOrderNo, setTableFilterOrderNo] = useState("");
+  const [tableFilterItemName, setTableFilterItemName] = useState("");
+  const [tableFilterPending, setTableFilterPending] = useState(false);
+  const [selectedDateFilters, setSelectedDateFilters] = useState<string[]>([]);
+  const [selectedStepFilters, setSelectedStepFilters] = useState<number[]>([]);
+
+  // Fetch paginated data from server
+  const { data: paginationData, isLoading: isPageLoading } = useSWR<{
+    data: O2D[];
+    orders: string[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    totalRows: number;
+  }>(
+    `/api/o2d?page=${currentPage}&limit=${itemsPerPage}&search=${encodeURIComponent(searchTerm)}&dateFilters=${encodeURIComponent(JSON.stringify(selectedDateFilters))}&stepFilters=${encodeURIComponent(JSON.stringify(selectedStepFilters))}&partyFilter=${encodeURIComponent(tableFilterParty)}&orderFilter=${encodeURIComponent(tableFilterOrderNo)}&itemNameFilter=${encodeURIComponent(tableFilterItemName)}&pendingFilter=${tableFilterPending}&startDate=${encodeURIComponent(filterStartDate)}&endDate=${encodeURIComponent(filterEndDate)}`,
+    fetcher,
     {
       revalidateOnFocus: true,
       refreshInterval: 60000,
-    },
+    }
   );
+
+  // Fetch summary data for step counts (does not depend on pagination)
+  const { data: summaryData } = useSWR<{
+    stepCounts: number[];
+    totalOrders: number;
+    totalRows: number;
+  }>(
+    "/api/o2d/summary",
+    fetcher,
+    {
+      revalidateOnFocus: true,
+      refreshInterval: 60000,
+    }
+  );
+
+  // Extract paginated O2D data
+  const o2ds = paginationData?.data || [];
+  const paginatedOrderNumbers = paginationData?.orders || [];
+  const totalOrders = paginationData?.total || 0;
+  const totalPages = paginationData?.totalPages || 1;
+  
+  // State for loading during page transitions
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -296,10 +340,7 @@ export default function O2DPage() {
   const userRole = (session?.user as any)?.role || "User";
   const isSpecialRole =
     userRole.toUpperCase() === "ADMIN" || userRole.toUpperCase() === "EA";
-  const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrderNo, setSelectedOrderNo] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Data
   const [parties, setParties] = useState<string[]>([]);
@@ -351,12 +392,6 @@ export default function O2DPage() {
   const [pageViewMode, setPageViewMode] = useState<"panels" | "table">(
     "panels",
   );
-  const [filterStartDate, setFilterStartDate] = useState("");
-  const [filterEndDate, setFilterEndDate] = useState("");
-  const [tableFilterParty, setTableFilterParty] = useState("");
-  const [tableFilterOrderNo, setTableFilterOrderNo] = useState("");
-  const [tableFilterItemName, setTableFilterItemName] = useState("");
-  const [tableFilterPending, setTableFilterPending] = useState(false);
   const [tableCurrentPage, setTableCurrentPage] = useState(1);
   const tableItemsPerPage = 25;
 
@@ -470,32 +505,26 @@ export default function O2DPage() {
   }, [o2ds]);
 
   const memoizedOrderOptions = useMemo(() => {
-    return Array.from(new Set(o2ds.map((o) => o.order_no))).sort((a, b) =>
-      b.localeCompare(a),
-    );
-  }, [o2ds]);
+    return paginatedOrderNumbers;
+  }, [paginatedOrderNumbers]);
 
   const memoizedItemOptions = useMemo(() => {
     return Array.from(new Set(dropdownItems.map((di) => di.name))).sort();
   }, [dropdownItems]);
-  const [selectedDateFilters, setSelectedDateFilters] = useState<string[]>([]);
-  const [selectedStepFilters, setSelectedStepFilters] = useState<number[]>([]);
 
-  // Pagination Reset
+  // Note: Filtering now works on the current page only
+  // For comprehensive filtering across all orders, users should search in Google Sheets
+  // This is a necessary trade-off for server-side pagination to handle 4500+ rows
+
+  // Pagination Reset - Note: With server-side pagination, filtering is limited to current page
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedDateFilters, selectedStepFilters]);
+  }, []);
 
+  // Reset to page 1 when any filter changes
   useEffect(() => {
-    setTableCurrentPage(1);
-  }, [
-    searchTerm,
-    tableFilterParty,
-    tableFilterOrderNo,
-    tableFilterItemName,
-    filterStartDate,
-    filterEndDate,
-  ]);
+    setCurrentPage(1);
+  }, [searchTerm, selectedDateFilters, selectedStepFilters, tableFilterParty, tableFilterOrderNo, tableFilterItemName, tableFilterPending, filterStartDate, filterEndDate]);
 
   const toggleDateFilter = (id: string) => {
     if (id === "") {
@@ -693,45 +722,20 @@ export default function O2DPage() {
   };
 
   const getStepFilterCount = (stepIdx: number): number => {
-    return Object.keys(groupedOrders).filter((no) => {
-      const items = groupedOrders[no];
-      if (!getBaseFilterMatch(no, items)) return false;
-
-      const pIdx = getPendingStepIdx(items);
-      if (pIdx !== stepIdx) return false;
-
-      if (!isSpecialRole && (items[0].hold || items[0].cancelled)) return false;
-
-      if (selectedDateFilters.length > 0) {
-        if (!selectedDateFilters.some((f) => orderMatchesDateFilter(items, f))) return false;
-      }
-
-      return true;
-    }).length;
+    // Use pre-computed summary data for accurate counts across ALL orders
+    if (summaryData?.stepCounts && stepIdx >= 1 && stepIdx <= 11) {
+      return summaryData.stepCounts[stepIdx - 1] || 0;
+    }
+    return 0;
   };
 
   const sortedOrderNumbers = useMemo(() => {
-    return Object.keys(groupedOrders)
-      .filter((no) => orderMatchesAnyFilter(no))
-      .sort((a, b) => b.localeCompare(a));
-  }, [
-    groupedOrders,
-    searchTerm,
-    selectedDateFilters,
-    selectedStepFilters,
-    tableFilterPending,
-    tableFilterParty,
-    tableFilterOrderNo,
-    tableFilterItemName,
-    filterStartDate,
-    filterEndDate,
-  ]);
+    // With server-side pagination, we use the server-provided order numbers
+    // These are already sorted and paginated
+    return paginatedOrderNumbers;
+  }, [paginatedOrderNumbers]);
 
-  const totalPages = Math.ceil(sortedOrderNumbers.length / itemsPerPage);
-  const paginatedOrderNumbers = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return sortedOrderNumbers.slice(startIndex, startIndex + itemsPerPage);
-  }, [sortedOrderNumbers, currentPage, itemsPerPage]);
+  // paginatedOrderNumbers is provided by the server, no client-side slicing needed
 
   const addItemRow = () =>
     setItems([
@@ -1385,89 +1389,56 @@ export default function O2DPage() {
     }
   };
 
-  const handleExport = () => {
-    const dataToExport = pageViewMode === "table" ? filteredTableData : o2ds;
-    if (dataToExport.length === 0) return;
+  const handleExport = async () => {
+    if (exportSelectedSteps.length === 0) {
+      setActionStatus("error");
+      setActionMessage("Please select at least one step to export");
+      setIsStatusModalOpen(true);
+      setTimeout(() => setIsStatusModalOpen(false), 2000);
+      return;
+    }
 
-    // Define column groups
-    const detailHeaders = [
-      "Order No",
-      "Party Name",
-      "Item Name",
-      "Item Qty",
-      "Est Amount",
-      "Created At",
-      "Filled By",
-      "Remark",
-    ];
+    setActionStatus("loading");
+    setActionMessage("Generating export file...");
+    setIsStatusModalOpen(true);
 
-    // Dynamic headers based on user selection
-    let headers: string[] = [];
-    if (exportIncludeDetails) headers = [...detailHeaders];
-
-    exportSelectedSteps
-      .sort((a, b) => a - b)
-      .forEach((stepIdx) => {
-        const stepName = O2D_STEP_SHORTS[stepIdx - 1];
-        headers.push(`${stepName} (Status)`);
-        headers.push(`${stepName} (Actual)`);
-        headers.push(`${stepName} (Planned)`);
+    try {
+      // Send export request
+      const response = await fetch("/api/o2d/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selectedSteps: exportSelectedSteps,
+          includeDetails: exportIncludeDetails,
+        }),
       });
 
-    const csvRows = [headers.join(",")];
-
-    dataToExport.forEach((item) => {
-      let row: string[] = [];
-
-      if (exportIncludeDetails) {
-        row = [
-          item.order_no,
-          `"${item.party_name.replace(/"/g, '""')}"`,
-          `"${item.item_name.replace(/"/g, '""')}"`,
-          item.item_qty,
-          item.est_amount,
-          (() => {
-            if (!item.created_at) return "-";
-            const d = new Date(item.created_at);
-            const pad = (n: number) => n.toString().padStart(2, "0");
-            return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-          })(),
-          `"${item.filled_by || ""}"`,
-          `"${(item.remark || "").replace(/"/g, '""')}"`,
-        ];
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Export failed");
       }
 
-      exportSelectedSteps
-        .sort((a, b) => a - b)
-        .forEach((stepIdx) => {
-          const status = (item as any)[`status_${stepIdx}`] || "-";
-          const actual = (item as any)[`actual_${stepIdx}`]
-            ? new Date((item as any)[`actual_${stepIdx}`]).toLocaleString()
-            : "-";
-          const planned = (item as any)[`planned_${stepIdx}`]
-            ? new Date((item as any)[`planned_${stepIdx}`]).toLocaleString()
-            : "-";
-          row.push(status);
-          row.push(`"${actual}"`);
-          row.push(`"${planned}"`);
-        });
+      // Get the CSV blob and trigger download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `O2D_Export_${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
-      csvRows.push(row.join(","));
-    });
-
-    const csvString = csvRows.join("\n");
-    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute(
-      "download",
-      `O2D_Export_${new Date().toISOString().split("T")[0]}.csv`,
-    );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setIsExportModalOpen(false);
+      setActionStatus("success");
+      setActionMessage("Export downloaded successfully!");
+      setIsExportModalOpen(false);
+      setTimeout(() => setIsStatusModalOpen(false), 2000);
+    } catch (error: any) {
+      console.error("Export error:", error);
+      setActionStatus("error");
+      setActionMessage(error.message || "Export failed");
+      setTimeout(() => setIsStatusModalOpen(false), 2000);
+    }
   };
 
   const getCurrentStep = (order: O2D[]) => {
@@ -1967,8 +1938,13 @@ export default function O2DPage() {
             </div>
           )}
 
+          {/* Loading Bar Indicator */}
+          {(isPageLoading || isTransitioning) && (
+            <div className="h-1 bg-gradient-to-r from-[#003875] via-[#FFD500] to-[#003875] animate-pulse shrink-0" />
+          )}
+
           {/* Simple Table vs Master-Detail Panels Row */}
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex overflow-hidden relative">
             {pageViewMode === "table" ? (
               <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-navy-900">
                 <div className="flex-1 overflow-auto no-scrollbar pb-10">
@@ -2183,13 +2159,15 @@ export default function O2DPage() {
                     </div>
 
                     {/* Sidebar Pagination - Top Position */}
-                    {!isLoading && sortedOrderNumbers.length > itemsPerPage && (
+                    {!isPageLoading && totalPages > 1 && (
                       <div className="flex items-center justify-between gap-2 px-1 py-1 bg-white/50 dark:bg-navy-800/50 rounded-xl border border-gray-100 dark:border-navy-700 shadow-sm">
                         <button
-                          disabled={currentPage === 1}
-                          onClick={() =>
-                            setCurrentPage((prev) => Math.max(1, prev - 1))
-                          }
+                          disabled={currentPage === 1 || isTransitioning}
+                          onClick={() => {
+                            setIsTransitioning(true);
+                            setCurrentPage((prev) => Math.max(1, prev - 1));
+                            setTimeout(() => setIsTransitioning(false), 500);
+                          }}
                           className="p-1.5 rounded-lg bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 disabled:opacity-30 text-[#003875] dark:text-[#FFD500] hover:shadow-md transition-all active:scale-95"
                         >
                           <ChevronLeftIcon className="w-3.5 h-3.5" />
@@ -2207,12 +2185,14 @@ export default function O2DPage() {
                           </span>
                         </div>
                         <button
-                          disabled={currentPage === totalPages}
-                          onClick={() =>
+                          disabled={currentPage === totalPages || isTransitioning}
+                          onClick={() => {
+                            setIsTransitioning(true);
                             setCurrentPage((prev) =>
                               Math.min(totalPages, prev + 1),
-                            )
-                          }
+                            );
+                            setTimeout(() => setIsTransitioning(false), 500);
+                          }}
                           className="p-1.5 rounded-lg bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 disabled:opacity-30 text-[#003875] dark:text-[#FFD500] hover:shadow-md transition-all active:scale-95"
                         >
                           <ChevronRightIcon className="w-3.5 h-3.5" />
@@ -2221,14 +2201,14 @@ export default function O2DPage() {
                     )}
                   </div>
                   <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-1.5">
-                    {isLoading ? (
-                      <div className="flex flex-col items-center justify-center h-40 space-y-2">
-                        <div className="w-6 h-6 border-2 border-[#FFD500]/20 border-t-[#FFD500] rounded-full animate-spin" />
+                    {isPageLoading || isTransitioning ? (
+                      <div className="flex flex-col items-center justify-center h-40 space-y-3">
+                        <div className="w-8 h-8 border-3 border-[#FFD500]/20 border-t-[#FFD500] rounded-full animate-spin" />
                         <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
-                          Fetching...
+                          Loading Orders...
                         </p>
                       </div>
-                    ) : sortedOrderNumbers.length === 0 ? (
+                    ) : paginatedOrderNumbers.length === 0 ? (
                       <div className="text-center py-20 opacity-50">
                         <ShoppingBagIcon className="w-10 h-10 text-gray-100 mx-auto mb-2" />
                         <p className="text-[11px] font-black uppercase tracking-widest italic text-gray-400">
@@ -2401,8 +2381,19 @@ export default function O2DPage() {
 
                 {/* Detail Pane: Order Details - Compact Layout */}
                 <div
-                  className={`flex-1 flex flex-col min-w-0 bg-white dark:bg-navy-900/20 ${!selectedOrderNo ? "hidden lg:flex" : "flex"}`}
+                  className={`flex-1 flex flex-col min-w-0 bg-white dark:bg-navy-900/20 relative ${!selectedOrderNo ? "hidden lg:flex" : "flex"}`}
                 >
+                  {/* Loading Overlay */}
+                  {(isPageLoading || isTransitioning) && (
+                    <div className="absolute inset-0 bg-white/60 dark:bg-navy-900/60 backdrop-blur-sm flex items-center justify-center z-40 rounded-lg">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-8 h-8 border-3 border-[#003875]/20 dark:border-[#FFD500]/20 border-t-[#003875] dark:border-t-[#FFD500] rounded-full animate-spin" />
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                          Loading...
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {selectedOrder && selectedOrder.length > 0 ? (
                     <div className="flex-1 flex flex-col overflow-hidden">
                       {" "}

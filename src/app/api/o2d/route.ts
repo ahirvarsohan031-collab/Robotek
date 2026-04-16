@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-import { getO2Ds, addO2D, addO2Ds, getO2DDetails, addItem } from "@/lib/o2d-sheets";
+import { getO2Ds, addO2D, addO2Ds, getO2DDetails, addItem, getO2DsPaginated, getO2DSummary } from "@/lib/o2d-sheets";
 import { uploadFileToDrive } from "@/lib/google-drive";
 import { O2D } from "@/types/o2d";
 
@@ -11,14 +11,57 @@ const O2D_FOLDER_ID = "19ZqWS5zYD2P4SIpcGNQR8gXcDiagH2rq";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type");
+  const allData = searchParams.get("all");
   
   if (type === "details") {
     const details = await getO2DDetails();
     return NextResponse.json(details);
   }
 
-  const o2ds = await getO2Ds();
-  return NextResponse.json(o2ds);
+  // If ?all=true is passed, return all data without pagination (for sidebar counting)
+  if (allData === "true") {
+    const o2ds = await getO2Ds();
+    return NextResponse.json(o2ds);
+  }
+
+  // Get pagination params
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const limit = parseInt(searchParams.get("limit") || "10", 10);
+  const search = searchParams.get("search") || "";
+  
+  // Get filter params
+  const dateFiltersStr = searchParams.get("dateFilters") || "[]";
+  const stepFiltersStr = searchParams.get("stepFilters") || "[]";
+  const partyFilter = searchParams.get("partyFilter") || "";
+  const orderFilter = searchParams.get("orderFilter") || "";
+  const itemNameFilter = searchParams.get("itemNameFilter") || "";
+  const pendingFilter = searchParams.get("pendingFilter") === "true";
+  const startDate = searchParams.get("startDate") || "";
+  const endDate = searchParams.get("endDate") || "";
+
+  try {
+    const dateFilters = JSON.parse(dateFiltersStr);
+    const stepFilters = JSON.parse(stepFiltersStr);
+
+    // Return paginated data with metadata (with all filters applied server-side)
+    const result = await getO2DsPaginated(
+      page,
+      limit,
+      search,
+      dateFilters,
+      stepFilters,
+      partyFilter,
+      orderFilter,
+      itemNameFilter,
+      pendingFilter,
+      startDate,
+      endDate
+    );
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("Pagination error:", error);
+    return NextResponse.json({ error: "Pagination failed" }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {

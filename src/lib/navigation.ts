@@ -10,7 +10,8 @@ import {
   ChatBubbleLeftRightIcon,
   CalendarIcon,
   BriefcaseIcon,
-  PhoneIcon
+  PhoneIcon,
+  InboxIcon
 } from "@heroicons/react/24/outline";
 
 export const navigation = [
@@ -21,6 +22,7 @@ export const navigation = [
   { name: 'Checklists', id: 'checklists', href: '/checklists', icon: ClipboardDocumentListIcon },
   { name: 'Help Tickets', id: 'tickets', href: '/tickets', icon: TicketIcon },
   { name: 'O2D', id: 'o2d', href: '/o2d', icon: ShoppingBagIcon },
+  { name: 'IMS', id: 'ims', href: '/ims', icon: InboxIcon },
   { name: 'Party Management', id: 'party-management', href: '/party-management', icon: UserGroupIcon },
   { name: 'Attendance', id: 'attendance', href: '/attendance', icon: ClipboardDocumentListIcon },
   { name: 'Score', id: 'score', href: '/score', icon: ChartBarIcon },

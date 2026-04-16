@@ -232,6 +232,10 @@ export abstract class BaseSheetsService<T extends SheetItem> {
   protected invalidateCache() {
     const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
     globalCache.delete(cacheKey);
-    // Note: We don't necessarily need to invalidate headers on data changes
+    // Also clear header cache so structural changes (added/removed columns) are picked up
+    const headerCacheKey = `${this.spreadsheetId}_${this.sheetName}_headers`;
+    globalCache.delete(headerCacheKey);
+    // Reset in-memory hMap so ensureHeaders() re-fetches on next request
+    this.hMap = {};
   }
 }

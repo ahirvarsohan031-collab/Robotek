@@ -33,31 +33,56 @@ export async function GET(req: NextRequest) {
       
       let dynamicMetrics: any = {};
       if (partyO2Ds.length > 0) {
-        const count = partyO2Ds.length;
+        // Group by unique order_no to avoid counting multiple items per order as separate orders
+        const uniqueOrderNos = [...new Set(partyO2Ds.map(o => (o.order_no || '').trim()).filter(Boolean))];
+        const uniqueCount = uniqueOrderNos.length;
+
+        // For average order size: total amount across all rows / unique orders
         const totalAmt = partyO2Ds.reduce((sum, o) => {
           const amt = parseFloat(String(o.est_amount || "0").replace(/[^0-9.]/g, ''));
           return sum + (isNaN(amt) ? 0 : amt);
         }, 0);
-        
-        const dates = partyO2Ds
-          .map(o => new Date(o.created_at))
-          .filter(d => !isNaN(d.getTime()))
-          .sort((a, b) => a.getTime() - b.getTime());
-        
-        const firstDate = dates[0] || new Date();
-        const monthsActive = Math.max(1, (new Date().getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44));
-        
-        const gaps = dates.map((d, i) => i > 0 ? (d.getTime() - dates[i-1].getTime()) / (1000 * 60 * 60 * 24) : null).filter(g => g !== null) as number[];
-        
-        const lastOrderDate = dates.length > 0 ? dates[dates.length - 1].toISOString().split('T')[0] : "";
-        
-        const calcOrderSize = totalAmt / count;
-        const calcMonthly = count / monthsActive;
-        const calcFreq = gaps.length > 0 ? (gaps.reduce((a, b) => a + b, 0) / gaps.length) : 0;
+
+        // Build per-month unique order sets for historical average
+        const monthOrderSets: Record<string, Set<string>> = {};
+        partyO2Ds.forEach(o => {
+          const orderNo = (o.order_no || '').trim();
+          if (!orderNo) return;
+          const d = new Date(o.created_at);
+          if (isNaN(d.getTime())) return;
+          const key = `${d.getFullYear()}-${d.getMonth()}`;
+          if (!monthOrderSets[key]) monthOrderSets[key] = new Set();
+          monthOrderSets[key].add(orderNo);
+        });
+        const monthlyUniqueCounts = Object.values(monthOrderSets).map(s => s.size);
+        const calcMonthly = monthlyUniqueCounts.length > 0
+          ? monthlyUniqueCounts.reduce((a, b) => a + b, 0) / monthlyUniqueCounts.length
+          : 0;
+
+        // Frequency: average days between consecutive unique orders (by first occurrence date)
+        const orderFirstDates = uniqueOrderNos
+          .map(no => {
+            const rows = partyO2Ds.filter(o => (o.order_no || '').trim() === no);
+            const dates = rows.map(o => new Date(o.created_at)).filter(d => !isNaN(d.getTime()));
+            return dates.length ? dates.reduce((a, b) => a < b ? a : b) : null;
+          })
+          .filter(Boolean) as Date[];
+        orderFirstDates.sort((a, b) => a.getTime() - b.getTime());
+
+        const gaps = orderFirstDates.map((d, i) =>
+          i > 0 ? (d.getTime() - orderFirstDates[i-1].getTime()) / (1000 * 60 * 60 * 24) : null
+        ).filter(g => g !== null) as number[];
+
+        const lastOrderDate = orderFirstDates.length > 0
+          ? orderFirstDates[orderFirstDates.length - 1].toISOString().split('T')[0]
+          : "";
+
+        const calcOrderSize = uniqueCount > 0 ? totalAmt / uniqueCount : 0;
+        const calcFreq = gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0;
 
         dynamicMetrics = {
           averageOrderSize: calcOrderSize > 0 ? calcOrderSize.toFixed(2) : call.averageOrderSize,
-          usuallyNoOfOrderMonthly: calcMonthly > 0 ? calcMonthly.toFixed(1) : call.usuallyNoOfOrderMonthly,
+          usuallyNoOfOrderMonthly: calcMonthly > 0 ? Math.round(calcMonthly).toString() : call.usuallyNoOfOrderMonthly,
           frequencyOfCallingAfterOrderPlaced: calcFreq > 0 ? calcFreq.toFixed(0) : call.frequencyOfCallingAfterOrderPlaced,
           lastOrderDate: lastOrderDate,
           

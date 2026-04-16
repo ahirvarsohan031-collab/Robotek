@@ -47,7 +47,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           safeFetch('/api/delegations'),
           safeFetch('/api/checklists'),
           safeFetch('/api/tickets'),
-          safeFetch('/api/o2d'),
+          safeFetch('/api/o2d?all=true'),
           safeFetch('/api/o2d/config'),
           safeFetch('/api/chat/users')
         ]);
@@ -100,7 +100,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         let delayed = 0;
         let today = 0;
 
-        o2dData.forEach((order: any) => {
+        (o2dData || []).forEach((order: any) => {
           if (order.hold || order.cancelled) return;
 
           // Find pending step

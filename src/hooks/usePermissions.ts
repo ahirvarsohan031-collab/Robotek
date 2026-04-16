@@ -24,10 +24,14 @@ export function usePermissions() {
     }
   );
 
+  // Only block on loading if there is an active fetch (userId exists and SWR is fetching)
+  // Don't block indefinitely when session itself is loading — AccessGuard handles that
+  const isLoadingPermissions = !!userId && isLoading;
+
   return {
     permissions: data?.permissions || initialPermissions,
     isAdmin,
-    isLoading: isLoading || status === "loading",
+    isLoading: isLoadingPermissions,
     error
   };
 }

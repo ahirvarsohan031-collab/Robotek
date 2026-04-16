@@ -28,7 +28,7 @@ import * as XLSX from 'xlsx';
 import SearchableSelect from '@/components/SearchableSelect';
 import { useToast } from '@/components/ToastProvider';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PencilSquareIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { PencilSquareIcon, XMarkIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from '@heroicons/react/24/outline';
 import Portal from '@/components/Portal';
 
 interface ScotRecord {
@@ -89,8 +89,14 @@ export default function ScotPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isImporting, setIsImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'feeder' | 'calls' | 'lost'>('feeder');
+  const [activeTab, setActiveTab] = useState<'feeder' | 'calls' | 'lost' | 'dashboard'>('feeder');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dashboard order counts from O2D
+  const [dashboardOrderCounts, setDashboardOrderCounts] = useState<Record<string, number>>({});
+  const [dashboardHistoricalAvg, setDashboardHistoricalAvg] = useState<Record<string, number>>({});
+  const [isDashboardLoading, setIsDashboardLoading] = useState(false);
+  const [dashboardSearch, setDashboardSearch] = useState('');
 
   // Edit Modal State
   const [editingCall, setEditingCall] = useState<any | null>(null);
@@ -206,6 +212,62 @@ export default function ScotPage() {
   };
 
   const fetchScotData = async () => {
+    if (activeTab === 'dashboard') {
+      // Dashboard uses callsData — fetch it if not loaded
+      if (callsData.length === 0) {
+        setIsLoading(true);
+        try {
+          const res = await fetch('/api/scot?tab=calls');
+          if (res.ok) setCallsData([...await res.json()].reverse());
+        } catch {}
+        finally { setIsLoading(false); }
+      }
+      // Also fetch O2D data to count actual orders this month
+      setIsDashboardLoading(true);
+      try {
+        const res = await fetch('/api/o2d?all=true');
+        if (res.ok) {
+          const o2dData: any[] = await res.json();
+          const now = new Date();
+          const thisMonth = now.getMonth();
+          const thisYear = now.getFullYear();
+
+          // Single pass: build per-party per-month unique order sets
+          // partyMonths[party]["YYYY-M"] = Set<orderNo>
+          const partyMonths: Record<string, Record<string, Set<string>>> = {};
+          o2dData.forEach((order: any) => {
+            const party = (order.party_name || '').trim().toLowerCase();
+            const orderNo = (order.order_no || '').trim();
+            if (!party || !orderNo) return;
+            const created = new Date(order.created_at || '');
+            if (isNaN(created.getTime())) return;
+            const monthKey = `${created.getFullYear()}-${created.getMonth()}`;
+            if (!partyMonths[party]) partyMonths[party] = {};
+            if (!partyMonths[party][monthKey]) partyMonths[party][monthKey] = new Set();
+            partyMonths[party][monthKey].add(orderNo);
+          });
+
+          // This-month actuals
+          const thisMonthKey = `${thisYear}-${thisMonth}`;
+          const counts: Record<string, number> = {};
+          Object.entries(partyMonths).forEach(([party, months]) => {
+            counts[party] = months[thisMonthKey]?.size ?? 0;
+          });
+          setDashboardOrderCounts(counts);
+
+          // Historical average: avg unique orders per month across ALL months with data
+          const avgOrders: Record<string, number> = {};
+          Object.entries(partyMonths).forEach(([party, months]) => {
+            const monthlyCounts = Object.values(months).map(s => s.size);
+            const avg = monthlyCounts.reduce((a, b) => a + b, 0) / monthlyCounts.length;
+            avgOrders[party] = Math.round(avg);
+          });
+          setDashboardHistoricalAvg(avgOrders);
+        }
+      } catch {}
+      finally { setIsDashboardLoading(false); }
+      return;
+    }
     setIsLoading(true);
     try {
       const res = await fetch(`/api/scot?tab=${activeTab}`);
@@ -226,7 +288,7 @@ export default function ScotPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
     fetchScotData();
@@ -587,6 +649,18 @@ export default function ScotPage() {
               <span>Calls</span>
             </button>
 
+            {/* Tab: Dashboard */}
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`flex items-center gap-2 px-4 py-1.5 font-black uppercase tracking-widest text-[10px] transition-all rounded-full whitespace-nowrap ${
+                activeTab === 'dashboard' 
+                ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' 
+                : 'text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
+              }`}
+            >
+              <span>Dashboard</span>
+            </button>
+
             {/* Tab: Lost Parties */}
             <button
               onClick={() => setActiveTab('lost')}
@@ -644,6 +718,7 @@ export default function ScotPage() {
         className="rounded-2xl border overflow-hidden shadow-sm transition-all duration-500 bg-white dark:bg-navy-900"
       >
         {/* Integrated Search & Pagination Row */}
+        {activeTab !== 'dashboard' && (
         <div 
           className="px-3 md:px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-gray-100 dark:border-navy-700/50"
         >
@@ -773,8 +848,148 @@ export default function ScotPage() {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Table Section */}
+        {/* Dashboard Tab View */}
+        {activeTab === 'dashboard' && (
+          <div className="min-h-[400px]">
+            {/* Dashboard Search Bar */}
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-navy-700/50">
+              <div className="relative group max-w-xs">
+                <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
+                <input
+                  type="text"
+                  placeholder="Search party..."
+                  value={dashboardSearch}
+                  onChange={(e) => setDashboardSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-1.5 bg-gray-50 dark:bg-navy-950 border border-gray-100 dark:border-navy-700/50 rounded-lg focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-white transition-all shadow-sm"
+                />
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+            {isDashboardLoading || isLoading ? (
+              <div className="py-20 flex flex-col items-center gap-4">
+                <div className="w-10 h-10 border-4 border-[#FFD500] border-t-transparent rounded-full animate-spin" />
+                <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Loading Dashboard...</p>
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse table-auto">
+                <thead>
+                  {/* Row 1: Group headers */}
+                  <tr className="bg-[#003875] dark:bg-navy-950 text-white dark:text-slate-200 uppercase text-[10px] md:text-[11px] font-black tracking-widest whitespace-nowrap">
+                    <th rowSpan={2} className="px-4 py-3 border-r border-white/20 align-middle">Client Name</th>
+                    <th colSpan={3} className="px-4 py-2 border-r border-white/20 text-center border-b border-white/20">
+                      <span className="text-[#FFD500]">Month</span>
+                    </th>
+                    <th colSpan={3} className="px-4 py-2 text-center border-b border-white/20">
+                      <span className="text-[#FFD500]">Week</span>
+                    </th>
+                  </tr>
+                  {/* Row 2: Sub-headers */}
+                  <tr className="bg-[#002a5a] dark:bg-navy-900 text-white/80 dark:text-slate-300 uppercase text-[9px] md:text-[10px] font-black tracking-widest whitespace-nowrap">
+                    <th className="px-4 py-2 border-r border-white/10">No. of Orders / Month</th>
+                    <th className="px-4 py-2 border-r border-white/10">Actual Orders Received</th>
+                    <th className="px-4 py-2 border-r border-white/20">Remaining Orders</th>
+                    <th className="px-4 py-2 border-r border-white/10">Weekly Order Planned</th>
+                    <th className="px-4 py-2 border-r border-white/10">Actual Order Received this Week</th>
+                    <th className="px-4 py-2">Remaining Order</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-white/10">
+                  {callsData.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-20 text-center">
+                        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest font-mono">No client data found</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    [...callsData]
+                      .filter(r => r.partyName && r.partyName.trim())
+                      .filter(r => !dashboardSearch.trim() || r.partyName.toLowerCase().includes(dashboardSearch.toLowerCase()) || (r.firmName || '').toLowerCase().includes(dashboardSearch.toLowerCase()))
+                      .sort((a, b) => {
+                        const aKey = a.partyName.trim().toLowerCase();
+                        const bKey = b.partyName.trim().toLowerCase();
+                        return (dashboardHistoricalAvg[bKey] || 0) - (dashboardHistoricalAvg[aKey] || 0);
+                      })
+                      .map((record, idx) => {
+                        const partyKey = record.partyName.trim().toLowerCase();
+                        const monthlyPlanned = dashboardHistoricalAvg[partyKey] || 0;
+                        const actualMonth = dashboardOrderCounts[partyKey] || 0;
+                        const remainingMonth = Math.max(0, monthlyPlanned - actualMonth);
+                        const weeklyPlanned = monthlyPlanned > 0 ? Math.ceil(monthlyPlanned / 4) : 0;
+                        const actualWeek = Math.round(actualMonth / 4);
+                        const remainingWeek = Math.max(0, weeklyPlanned - actualWeek);
+
+                        return (
+                          <tr
+                            key={`${record.partyName}-${idx}`}
+                            className="hover:bg-orange-50/10 dark:hover:bg-white/5 border-b border-gray-100 dark:border-white/5 last:border-0 transition-colors whitespace-nowrap"
+                          >
+                            <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5">
+                              <p className="text-[13px] font-black text-gray-900 dark:text-white uppercase truncate max-w-[200px]">{record.partyName}</p>
+                              {record.firmName && (
+                                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 truncate italic mt-0.5">{record.firmName}</p>
+                              )}
+                            </td>
+                            {/* Monthly */}
+                            <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 text-center">
+                              <span className="text-[13px] font-black text-[#003875] dark:text-[#FFD500]">{monthlyPlanned || '—'}</span>
+                            </td>
+                            <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 text-center">
+                              <span className="text-[13px] font-black text-emerald-600 dark:text-emerald-400">{actualMonth}</span>
+                            </td>
+                            <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 text-center">
+                              {monthlyPlanned ? (
+                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black ${
+                                  remainingMonth > 0
+                                    ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400'
+                                    : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
+                                }`}>
+                                  {remainingMonth > 0 ? (
+                                    <ArrowTrendingDownIcon className="w-3.5 h-3.5 shrink-0" />
+                                  ) : (
+                                    <ArrowTrendingUpIcon className="w-3.5 h-3.5 shrink-0" />
+                                  )}
+                                  <span>{remainingMonth > 0 ? `-${remainingMonth}` : `+${Math.abs(remainingMonth)}`}</span>
+                                </div>
+                              ) : <span className="text-gray-300">—</span>}
+                            </td>
+                            {/* Weekly */}
+                            <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 text-center">
+                              <span className="text-[13px] font-black text-[#003875] dark:text-[#FFD500]">{weeklyPlanned || '—'}</span>
+                            </td>
+                            <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 text-center">
+                              <span className="text-[13px] font-black text-emerald-600 dark:text-emerald-400">{actualWeek}</span>
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              {weeklyPlanned ? (
+                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black ${
+                                  remainingWeek > 0
+                                    ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400'
+                                    : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
+                                }`}>
+                                  {remainingWeek > 0 ? (
+                                    <ArrowTrendingDownIcon className="w-3.5 h-3.5 shrink-0" />
+                                  ) : (
+                                    <ArrowTrendingUpIcon className="w-3.5 h-3.5 shrink-0" />
+                                  )}
+                                  <span>{remainingWeek > 0 ? `-${remainingWeek}` : `+${Math.abs(remainingWeek)}`}</span>
+                                </div>
+                              ) : <span className="text-gray-300">—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })
+                  )}
+                </tbody>
+              </table>
+            )}
+            </div>
+          </div>
+        )}
+
+        {/* Table Section (for feeder / calls / lost tabs) */}
+        {activeTab !== 'dashboard' && (
         <div className="overflow-x-auto min-h-[400px]">
           <table className="w-full text-left border-collapse table-auto">
             <thead>
@@ -1033,6 +1248,7 @@ export default function ScotPage() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {/* Edit Call Modal */}
