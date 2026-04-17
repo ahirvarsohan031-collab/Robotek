@@ -189,6 +189,27 @@ export default function ScotPage() {
     return "";
   };
 
+  // Converts an Excel/Google Sheets serial date (e.g. 46127.00012) to a Date object.
+  // Falls back gracefully if the value is already a normal date string.
+  const excelSerialToDate = (serial: string | number): Date | null => {
+    const num = typeof serial === 'string' ? parseFloat(serial) : serial;
+    if (isNaN(num)) return null;
+    if (num > 40000 && num < 60000) {
+      // Excel serial: days since 1900-01-01 (with Lotus 1-2-3 leap year bug correction)
+      const date = new Date((num - 25569) * 86400 * 1000);
+      return isNaN(date.getTime()) ? null : date;
+    }
+    // Already a parseable date string
+    const d = new Date(serial as string);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const formatCallDate = (callDate: string): string => {
+    const d = excelSerialToDate(callDate);
+    if (!d) return callDate;
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
+  };
+
   const getDateFilterCount = (filter: string) => {
     const baseData = activeTab === 'feeder' ? [] : callsData;
     return baseData.filter(d => {
@@ -214,12 +235,19 @@ export default function ScotPage() {
   const fetchScotData = async () => {
     if (activeTab === 'dashboard') {
       // Dashboard uses callsData — fetch it if not loaded
+      // skipO2D=true avoids a heavy O2D merge inside the SCOT API (O2D is fetched separately below)
       if (callsData.length === 0) {
         setIsLoading(true);
         try {
-          const res = await fetch('/api/scot?tab=calls');
-          if (res.ok) setCallsData([...await res.json()].reverse());
-        } catch {}
+          const res = await fetch('/api/scot?tab=calls&skipO2D=true');
+          if (res.ok) {
+            setCallsData([...await res.json()].reverse());
+          } else {
+            toast.error(`Failed to load client data (${res.status})`);
+          }
+        } catch (err) {
+          toast.error("Error connecting to server while loading clients");
+        }
         finally { setIsLoading(false); }
       }
       // Also fetch O2D data to count actual orders this month
@@ -263,8 +291,12 @@ export default function ScotPage() {
             avgOrders[party] = Math.round(avg);
           });
           setDashboardHistoricalAvg(avgOrders);
+        } else {
+          toast.error(`Failed to load order data (${res.status})`);
         }
-      } catch {}
+      } catch (err) {
+        toast.error("Error connecting to server while loading order counts");
+      }
       finally { setIsDashboardLoading(false); }
       return;
     }
@@ -352,8 +384,8 @@ export default function ScotPage() {
     if (sortConfig.key === 'latest' && activeTab === 'feeder') {
       const ra = a as ScotRecord;
       const rb = b as ScotRecord;
-      const valA = new Date(`${ra.callDate} ${ra.callTime}`).getTime();
-      const valB = new Date(`${rb.callDate} ${rb.callTime}`).getTime();
+      const valA = (excelSerialToDate(ra.callDate)?.getTime() ?? 0);
+      const valB = (excelSerialToDate(rb.callDate)?.getTime() ?? 0);
       return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
     }
     
@@ -509,7 +541,7 @@ export default function ScotPage() {
         r.toNumber,
         r.callType,
         r.duration,
-        r.callDate,
+        formatCallDate(r.callDate),
         r.callTime,
         r.notes,
         r.uniqueId,
@@ -1110,7 +1142,7 @@ export default function ScotPage() {
                             </span>
                           </td>
                           <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 font-bold text-[12px] text-gray-600 dark:text-slate-300">{record.duration}</td>
-                          <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 font-black text-[12px] text-[#003875] dark:text-[#FFD500]">{record.callDate}</td>
+                          <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 font-black text-[12px] text-[#003875] dark:text-[#FFD500]">{formatCallDate(record.callDate)}</td>
                           <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 font-bold text-[11px] text-gray-400">{record.callTime}</td>
                           <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 min-w-[160px]">
                             <p className="text-[12px] font-bold text-gray-500 dark:text-slate-400 line-clamp-1 italic truncate max-w-[220px]">{record.notes}</p>
@@ -1690,7 +1722,7 @@ export default function ScotPage() {
                                  {log.callType || "Outbound"}
                                </span>
                                <span className="text-[9px] font-black text-gray-400">
-                                 {log.callDate} {log.callTime}
+                                 {formatCallDate(log.callDate)} {log.callTime}
                                </span>
                             </div>
                             <div className="flex justify-between items-end mt-2">

@@ -97,7 +97,7 @@ export async function GET(request: Request) {
       getO2DStepConfig(),
       getUsers(),
       getFollowUpData(),
-      fetch(`${baseUrl}/api/scot?tab=calls`, { headers: { cookie: request.headers.get('cookie') || '' } })
+      fetch(`${baseUrl}/api/scot?tab=calls&skipO2D=true`, { headers: { cookie: request.headers.get('cookie') || '' } })
     ]);
 
     const scotCalls = await scotRes.json();

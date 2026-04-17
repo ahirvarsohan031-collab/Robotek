@@ -11,11 +11,14 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const tab = searchParams.get('tab') || 'feeder';
+  const skipO2D = searchParams.get('skipO2D') === 'true';
 
   if (tab === 'calls' || tab === 'lost') {
     const allCalls = await getCallData();
     const allFollowUps = await getFollowUpData();
-    const allO2Ds = await getO2Ds();
+
+    // skipO2D=true skips the heavy O2D fetch (used by dashboard tab which fetches O2D separately)
+    const allO2Ds = skipO2D ? [] : await getO2Ds();
 
     // Group follow-ups by partyName and find the latest one for each
     const latestFollowUps = allFollowUps.reduce((acc, curr) => {

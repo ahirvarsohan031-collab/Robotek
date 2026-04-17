@@ -434,11 +434,12 @@ class O2DService extends BaseSheetsService<O2D> {
       const sheets = await this.getSheetsClient();
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `Details!A2:D`,
+        range: `Details!A2:E`,
       });
       const rows = response.data.values || [];
       const parties: string[] = []; // Parties are now managed in party-management-sheets
-      const items = rows.map(row => ({ name: row[0] || "", amount: row[3] || row[1] || "" })).filter(item => item.name);
+      // Column layout: A=ID, B=item_name, C=est_amount, D=gst, E=final_amount
+      const items = rows.map(row => ({ name: row[1] || "", amount: row[4] || row[2] || "" })).filter(item => item.name);
       const data = { parties, items };
       
       globalCache.set(cacheKey, data, 30 * 60 * 1000); // 30 mins TTL
@@ -451,12 +452,24 @@ class O2DService extends BaseSheetsService<O2D> {
   async addItem(name: string, price: string, gst: string = "", finalPrice: string = ""): Promise<boolean> {
     try {
       const sheets = await this.getSheetsClient();
+
+      // Fetch existing rows to determine next ID
+      const existing = await sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `Details!A2:A`,
+      });
+      const existingIds = (existing.data.values || [])
+        .map(row => parseInt(row[0], 10))
+        .filter(id => !isNaN(id));
+      const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+
+      // Column layout: A=ID, B=item_name, C=est_amount, D=gst, E=final_amount
       await sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
-        range: `Details!A:D`,
+        range: `Details!A:E`,
         valueInputOption: "USER_ENTERED",
         requestBody: {
-          values: [[name, price, gst, finalPrice]],
+          values: [[nextId, name, price, gst, finalPrice]],
         },
       });
       globalCache.delete(`${this.spreadsheetId}_details`);
@@ -532,23 +545,22 @@ function getPendingStepIdx(orderItems: O2D[]): number {
     const aVal = (firstItem[`actual_${i}`] || "").toString().trim();
     const sVal = (firstItem[`status_${i}`] || "").toString().trim();
 
-    if (!pVal || pVal === "-") return i;
-    if (!sVal || sVal === "-") return i;
-    if (!aVal || aVal === "-") {
-      const lastActual = (firstItem[`actual_${i - 1}`] || "").toString().trim();
-      if (lastActual && lastActual !== "-") return i;
-      if (i === 1) return i;
+    if (pVal && pVal !== "-") {
+      const hasActual = aVal && aVal !== "-";
+      const isStep3CompletedNo = i === 3 && sVal === "No";
+      const isStep4CompletedNo = i === 4 && sVal === "No";
+
+      let stepDone = hasActual && sVal !== "No";
+      if (isStep3CompletedNo) {
+        const step4Plan = (firstItem[`planned_4`] || "").toString().trim();
+        if (step4Plan && step4Plan !== "-") stepDone = true;
+      }
+      if (isStep4CompletedNo) stepDone = true;
+
+      if (!stepDone) return i;
+      if (isStep4CompletedNo) return -1;
     }
   }
-  
-  const isStep4CompletedNo = (firstItem[`actual_4`] || "").toString().trim() !== "" &&
-    (firstItem[`actual_4`] || "").toString().trim() !== "-" &&
-    (firstItem[`status_4`] || "").toString().trim() !== "" &&
-    (firstItem[`status_4`] || "").toString().trim() !== "-" &&
-    (firstItem[`status_4`] || "").toString().trim().toUpperCase() === "YES";
-
-  if (isStep4CompletedNo) return -1;
-  
   return -1;
 }
 
@@ -717,35 +729,16 @@ export async function getO2DSummary() {
     }
     groupedByOrder[orderNo].push(item);
   });
-  
-  // Count orders by step
+
+  // Count orders by step — exclude hold/cancelled (matches left panel default view)
   const stepCounts = Array(11).fill(0);
   
   Object.values(groupedByOrder).forEach((orderItems) => {
-    // Find the pending step for this order
     const firstItem = orderItems[0];
-    let pendingStep = -1;
-    
-    for (let i = 1; i <= 11; i++) {
-      const status = (firstItem as any)[`status_${i}`];
-      const actual = (firstItem as any)[`actual_${i}`];
-      
-      // If status is not yet decided or actual is not filled, this is the pending step
-      if (!status || status === "" || status === "-") {
-        pendingStep = i;
-        break;
-      }
-      
-      // If actual is filled and status is Yes/No, move to next
-      if (actual && actual !== "" && actual !== "-") {
-        continue;
-      }
-    }
-    
-    // If no pending step found and all are complete, mark as complete (step 12)
-    if (pendingStep === -1) {
-      pendingStep = 12;
-    }
+    // Skip hold and cancelled orders (left panel hides them by default)
+    if (firstItem.hold || firstItem.cancelled) return;
+
+    const pendingStep = getPendingStepIdx(orderItems);
     
     if (pendingStep >= 1 && pendingStep <= 11) {
       stepCounts[pendingStep - 1]++;

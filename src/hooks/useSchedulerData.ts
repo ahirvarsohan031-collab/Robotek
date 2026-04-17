@@ -30,7 +30,7 @@ export function useSchedulerData() {
         fetch("/api/delegations"),
         fetch("/api/checklists"),
         fetch("/api/tickets"),
-        fetch("/api/o2d"),
+        fetch("/api/o2d?all=true"),
         fetch("/api/scheduler/meetings"),
       ]);
 
