@@ -8,7 +8,10 @@ import { partyManagementService } from '@/lib/party-management-sheets';
 import { checklistService } from '@/lib/checklist-sheets';
 
 // Map module names to their sheet services (all extend BaseSheetsService)
-const SERVICES: Record<string, { getLatestIds: () => Promise<(string | number)[]> }> = {
+const SERVICES: Record<string, {
+  getLatestIds: () => Promise<(string | number)[]>;
+  getLastModified: () => Promise<number>;
+}> = {
   delegations: delegationService,
   tickets: ticketService,
   ims: imsService,
@@ -19,11 +22,13 @@ const SERVICES: Record<string, { getLatestIds: () => Promise<(string | number)[]
 
 /**
  * SSE endpoint — Lambda-safe design:
- * 1. Client connects with ?modules=...&counts={...} (last known row counts)
- * 2. Server reads only the ID column for each module (fast, 1 column per sheet)
- * 3. Compares counts — if different, sends a "change" event; else sends "heartbeat"
+ * 1. Client connects with ?modules=...&counts={...}&timestamps={...}
+ *    (last known row counts AND last-modified timestamps per module)
+ * 2. Server reads the ID column (for count) AND the meta cell (last-modified timestamp)
+ * 3. If EITHER the row count OR the timestamp changed → sends a "change" event
+ *    This means field-level edits (status changes, date updates) are now detected!
  * 4. Closes the stream immediately (Lambda-safe — no long-lived connections)
- * 5. Client's onerror handler reconnects after 30s with updated counts
+ * 5. Client's onerror handler reconnects after 15s with updated state
  *
  * Data savings: on unchanged data, response is ~100 bytes instead of 300KB.
  * Full data is only fetched by the client when a "change" event is received.
@@ -32,53 +37,75 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const modulesParam = searchParams.get('modules') || '';
   const countsParam = searchParams.get('counts') || '{}';
+  const timestampsParam = searchParams.get('timestamps') || '{}';
 
   const requestedModules = modulesParam.split(',').filter((m) => m in SERVICES);
   let lastCounts: Record<string, number> = {};
-  try {
-    lastCounts = JSON.parse(countsParam);
-  } catch {
-    lastCounts = {};
-  }
+  let lastTimestamps: Record<string, number> = {};
+  try { lastCounts = JSON.parse(countsParam); } catch { lastCounts = {}; }
+  try { lastTimestamps = JSON.parse(timestampsParam); } catch { lastTimestamps = {}; }
 
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Read only the ID column for each module — runs in parallel
+        // Read ID column + last-modified timestamp for each module in parallel
         const results = await Promise.all(
           requestedModules.map(async (mod) => {
             try {
-              const ids = await SERVICES[mod].getLatestIds();
-              return { mod, count: ids.length };
+              const [ids, lastModified] = await Promise.all([
+                SERVICES[mod].getLatestIds(),
+                SERVICES[mod].getLastModified(),
+              ]);
+              return { mod, count: ids.length, lastModified };
             } catch {
-              return { mod, count: lastCounts[mod] ?? 0 };
+              return {
+                mod,
+                count: lastCounts[mod] ?? 0,
+                lastModified: lastTimestamps[mod] ?? 0,
+              };
             }
           })
         );
 
         const newCounts: Record<string, number> = {};
+        const newTimestamps: Record<string, number> = {};
         const changed: string[] = [];
 
-        for (const { mod, count } of results) {
+        for (const { mod, count, lastModified } of results) {
           newCounts[mod] = count;
-          // Only flag as changed if we had a previous count to compare against
-          if (mod in lastCounts && lastCounts[mod] !== count) {
+          newTimestamps[mod] = lastModified;
+
+          // Detect row-count change (add / delete)
+          const countChanged = mod in lastCounts && lastCounts[mod] !== count;
+          // Detect field-level edit via timestamp change (update)
+          const timestampChanged =
+            lastModified > 0 &&
+            mod in lastTimestamps &&
+            lastTimestamps[mod] !== lastModified;
+
+          if (countChanged || timestampChanged) {
             changed.push(mod);
           }
         }
 
         const eventType = changed.length > 0 ? 'change' : 'heartbeat';
-        const payload = JSON.stringify({ modules: changed, counts: newCounts });
-        // retry:30000 tells EventSource to wait 30s before auto-reconnecting,
-        // but we manually reconnect (to update counts in URL), so this is a fallback.
+        const payload = JSON.stringify({
+          modules: changed,
+          counts: newCounts,
+          timestamps: newTimestamps,
+        });
+
+        // retry:15000 → client auto-reconnects after 15s if our manual reconnect fails
         controller.enqueue(
-          encoder.encode(`retry: 30000\nevent: ${eventType}\ndata: ${payload}\n\n`)
+          encoder.encode(`retry: 15000\nevent: ${eventType}\ndata: ${payload}\n\n`)
         );
       } catch {
         controller.enqueue(
-          encoder.encode(`retry: 30000\nevent: heartbeat\ndata: {"modules":[],"counts":{}}\n\n`)
+          encoder.encode(
+            `retry: 15000\nevent: heartbeat\ndata: {"modules":[],"counts":{},"timestamps":{}}\n\n`
+          )
         );
       }
       controller.close();

@@ -25,6 +25,9 @@ export abstract class BaseSheetsService<T extends SheetItem> {
 
   protected hMap: Record<string, number> = {};
   private CACHE_TTL = 300000; // 5 minutes
+  // Column used to store a last-modified Unix timestamp (a cell unlikely to collide with data)
+  private META_COL = 'ZZ';
+  private META_ROW = 1;
 
   protected abstract mapRowToItem(row: any[]): T;
   protected abstract mapItemToRow(item: T): any[];
@@ -80,21 +83,57 @@ export abstract class BaseSheetsService<T extends SheetItem> {
      }
    }
  
-   async getLatestIds(): Promise<(string | number)[]> {
-     await this.ensureHeaders();
-     try {
-       const sheets = await this.getSheetsClient();
-       const idColLetter = getColumnLetter(this.idColumnIndex);
-       const response = await sheets.spreadsheets.values.get({
-         spreadsheetId: this.spreadsheetId,
-         range: `${this.sheetName}!${idColLetter}:${idColLetter}`,
-       });
-       return response.data.values?.slice(1).map(row => row[0]) || [];
-     } catch (error) {
-       console.error(`Error fetching latest IDs for ${this.sheetName}:`, error);
-       return [];
-     }
-   }
+  async getLatestIds(): Promise<(string | number)[]> {
+    await this.ensureHeaders();
+    try {
+      const sheets = await this.getSheetsClient();
+      const idColLetter = getColumnLetter(this.idColumnIndex);
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${this.sheetName}!${idColLetter}:${idColLetter}`,
+      });
+      return response.data.values?.slice(1).map(row => row[0]) || [];
+    } catch (error) {
+      console.error(`Error fetching latest IDs for ${this.sheetName}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns the last-modified Unix timestamp (ms) stored in the meta cell.
+   * Returns 0 if not yet written.
+   */
+  async getLastModified(): Promise<number> {
+    try {
+      const sheets = await this.getSheetsClient();
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${this.sheetName}!${this.META_COL}${this.META_ROW}`,
+      });
+      const val = response.data.values?.[0]?.[0];
+      return val ? Number(val) : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Writes the current Unix timestamp (ms) into the meta cell.
+   * Called internally after every add / update / delete.
+   */
+  private async writeLastModified(): Promise<void> {
+    try {
+      const sheets = await this.getSheetsClient();
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `${this.sheetName}!${this.META_COL}${this.META_ROW}`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [[Date.now()]] },
+      });
+    } catch {
+      // Non-critical — silently ignore if meta-write fails
+    }
+  }
 
   async getHeaders(): Promise<string[]> {
     const cacheKey = `${this.spreadsheetId}_${this.sheetName}_headers`;
@@ -143,6 +182,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       });
 
       this.invalidateCache();
+      void this.writeLastModified(); // stamp timestamp — non-blocking
       return true;
     } catch (error) {
       console.error(`Error adding to ${this.sheetName}:`, error);
@@ -182,6 +222,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       });
 
       this.invalidateCache();
+      void this.writeLastModified(); // stamp timestamp — non-blocking
       return true;
     } catch (error) {
       console.error(`Error updating ${this.sheetName}:`, error);
@@ -222,6 +263,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       });
 
       this.invalidateCache();
+      void this.writeLastModified(); // stamp timestamp — non-blocking
       return true;
     } catch (error) {
       console.error(`Error deleting from ${this.sheetName}:`, error);
