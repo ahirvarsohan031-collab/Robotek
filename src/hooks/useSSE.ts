@@ -5,8 +5,8 @@ import { useEffect, useRef, useCallback } from 'react';
 type UseSSEOptions = {
   /** Module names to watch: 'delegations' | 'tickets' | 'ims' | 'i2r' | 'party-management' | 'checklists' */
   modules: string[];
-  /** Called with the list of modules that changed. Trigger your SWR mutate() here. */
-  onUpdate: (changedModules: string[]) => void;
+  /** Called with the incremental data (upserts, deletes) for modified modules. */
+  onUpdate: (incremental: { module: string, upserts: any[], currentIds: (string | number)[] }[]) => void;
   /** Set false to disable SSE (e.g. for unauthenticated pages) */
   enabled?: boolean;
 };
@@ -51,11 +51,11 @@ export function useSSE({ modules, onUpdate, enabled = true }: UseSSEOptions) {
     const es = new EventSource(`/api/events?${params}`);
     esRef.current = es;
 
-    // Server detected a change (row count OR timestamp) in one or more modules
+    // Server detected a change in one or more modules
     es.addEventListener('change', (e: MessageEvent) => {
       try {
         const data: {
-          modules: string[];
+          incremental: any[];
           counts: Record<string, number>;
           timestamps: Record<string, number>;
         } = JSON.parse(e.data);
@@ -66,8 +66,8 @@ export function useSSE({ modules, onUpdate, enabled = true }: UseSSEOptions) {
         if (data.timestamps) {
           timestampsRef.current = { ...timestampsRef.current, ...data.timestamps };
         }
-        if (data.modules?.length > 0) {
-          onUpdateRef.current(data.modules);
+        if (data.incremental?.length > 0) {
+          onUpdateRef.current(data.incremental);
         }
       } catch {
         // ignore parse errors

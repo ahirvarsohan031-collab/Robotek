@@ -167,6 +167,7 @@ export async function addChecklistRemark(remark: any) {
     spreadsheetId: GOOGLE_SHEET_ID, range: `checklists_remarks!A:F`, valueInputOption: "USER_ENTERED",
     requestBody: { values: [[remark.id, remark.checklists_id, remark.user_id, remark.username, remark.remark, remark.created_at]] }
   });
+  void checklistService.triggerSync();
   return true;
 }
 
@@ -176,6 +177,7 @@ export async function addChecklistRevision(rev: any) {
     spreadsheetId: GOOGLE_SHEET_ID, range: `checklists_revision_history!A:G`, valueInputOption: "USER_ENTERED",
     requestBody: { values: [[rev.id, rev.checklists_id, rev.old_status, rev.new_status, rev.reason, rev.created_at, rev.evidence_urls]] }
   });
+  void checklistService.triggerSync();
   return true;
 }
 

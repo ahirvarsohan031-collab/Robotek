@@ -37,6 +37,7 @@ import ConfirmModal from "@/components/ConfirmModal";
 import Portal from "@/components/Portal";
 import useSWR from "swr";
 import { useSSE } from "@/hooks/useSSE";
+import { applyIncrementalUpdate } from "@/lib/utils/swr-sync";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -86,8 +87,16 @@ export default function TicketsPage() {
     revalidateOnMount: true,   // Refetch on page load
   });
 
-  // SSE: instantly refetch when a new ticket is added or deleted
-  useSSE({ modules: ['tickets'], onUpdate: () => mutateTickets() });
+  // SSE: incrementally update local cache when a change is detected
+  useSSE({ 
+    modules: ['tickets'], 
+    onUpdate: (incremental) => {
+      const updates = incremental.find(m => m.module === 'tickets');
+      if (updates) {
+        mutateTickets((current) => applyIncrementalUpdate(current, updates.upserts, updates.currentIds), false);
+      }
+    } 
+  });
 
   useEffect(() => {
     if (swrTickets) {

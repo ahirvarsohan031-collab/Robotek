@@ -172,6 +172,7 @@ export async function addDelegationRemark(remark: any) {
     spreadsheetId: GOOGLE_SHEET_ID, range: `delegation_remarks!A:F`, valueInputOption: "USER_ENTERED",
     requestBody: { values: [[remark.id, remark.delegation_id, remark.user_id, remark.username, remark.remark, remark.created_at]] }
   });
+  void delegationService.triggerSync();
   return true;
 }
 
@@ -181,5 +182,6 @@ export async function addDelegationRevision(rev: any) {
     spreadsheetId: GOOGLE_SHEET_ID, range: `delegation_revision_history!A:I`, valueInputOption: "USER_ENTERED",
     requestBody: { values: [[rev.id, rev.delegation_id, rev.old_status, rev.new_status, rev.old_due_date, rev.new_due_date, rev.reason, rev.created_at, rev.evidence_urls]] }
   });
+  void delegationService.triggerSync();
   return true;
 }

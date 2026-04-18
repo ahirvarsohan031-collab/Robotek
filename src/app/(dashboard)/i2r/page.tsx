@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { I2R, I2RStepConfig, I2R_STEPS } from "@/types/i2r";
 import useSWR from "swr";
 import { useSSE } from "@/hooks/useSSE";
+import { applyIncrementalUpdate } from "@/lib/utils/swr-sync";
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -224,7 +225,16 @@ export default function I2RPage() {
   );
 
   // SSE: instantly refetch when a new I2R item is added or deleted
-  useSSE({ modules: ['i2r'], onUpdate: () => mutateItems() });
+  // SSE: incrementally update local cache when a change is detected
+  useSSE({ 
+    modules: ['i2r'], 
+    onUpdate: (incremental) => {
+      const updates = incremental.find(m => m.module === 'i2r');
+      if (updates) {
+        mutateItems((current) => applyIncrementalUpdate(current, updates.upserts, updates.currentIds), false);
+      }
+    } 
+  });
 
   // Fetch IMS item names for the combobox
   const { data: imsItems } = useSWR<{ item_name: string }[]>("/api/ims", fetcher);

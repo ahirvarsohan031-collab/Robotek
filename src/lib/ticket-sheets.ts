@@ -228,5 +228,7 @@ export async function getTicketHistory(ticketId: string): Promise<TicketHistory[
 }
 
 export async function addTicketHistory(history: TicketHistory): Promise<boolean> {
-  return ticketHistoryService.add(history);
+  const result = await ticketHistoryService.add(history);
+  if (result) void ticketService.triggerSync();
+  return result;
 }

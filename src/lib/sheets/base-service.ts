@@ -121,7 +121,14 @@ export abstract class BaseSheetsService<T extends SheetItem> {
    * Writes the current Unix timestamp (ms) into the meta cell.
    * Called internally after every add / update / delete.
    */
-  private async writeLastModified(): Promise<void> {
+  /**
+   * Manually trigger a synchronization event for this module.
+   */
+  public async triggerSync(): Promise<void> {
+    return this.writeLastModified();
+  }
+
+  protected async writeLastModified(): Promise<void> {
     try {
       const sheets = await this.getSheetsClient();
       await sheets.spreadsheets.values.update({
@@ -151,6 +158,24 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       });
       
       const headers = response.data.values?.[0]?.map((h: any) => h.toString().toLowerCase().trim()) || [];
+      
+      // AUTO-PROVISIONING: If updated_at is missing, add it to the sheet
+      if (headers.length > 0 && !headers.includes("updated_at")) {
+        console.log(`[AUTO-PROVISION] Adding updated_at column to ${this.sheetName}`);
+        try {
+          const nextColLetter = getColumnLetter(headers.length);
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: this.spreadsheetId,
+            range: `${this.sheetName}!${nextColLetter}1`,
+            valueInputOption: "RAW",
+            requestBody: { values: [["updated_at"]] },
+          });
+          headers.push("updated_at");
+        } catch (e) {
+          console.error(`Failed to auto-provision updated_at for ${this.sheetName}`, e);
+        }
+      }
+
       globalCache.set(cacheKey, headers, 24 * 60 * 60 * 1000); // Cache headers for 24 hours
       return headers;
     } catch (error) {
@@ -172,9 +197,15 @@ export abstract class BaseSheetsService<T extends SheetItem> {
     try {
       console.log(`[API CALL] Adding to ${this.sheetName}...`);
       const sheets = await this.getSheetsClient();
+
+      // Auto-timestamp if column exists
+      if (this.hMap['updated_at'] !== undefined) {
+        (item as any).updated_at = new Date().toISOString();
+      }
+
       await sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!${this.range}`,
+        range: `${this.sheetName}!A:A`, // Append to start of data
         valueInputOption: "USER_ENTERED",
         requestBody: {
           values: [this.mapItemToRow(item)],
@@ -182,7 +213,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       });
 
       this.invalidateCache();
-      void this.writeLastModified(); // stamp timestamp — non-blocking
+      void this.writeLastModified(); // meta-level heartbeat
       return true;
     } catch (error) {
       console.error(`Error adding to ${this.sheetName}:`, error);
@@ -210,7 +241,12 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       
       if (rowIndex === -1) return false;
 
-      const endCol = this.range.split(':')[1] || 'Z';
+      const endCol = getColumnLetter(Math.max(...Object.values(this.hMap)));
+
+      // Auto-timestamp if column exists
+      if (this.hMap['updated_at'] !== undefined) {
+        (item as any).updated_at = new Date().toISOString();
+      }
 
       await sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
@@ -222,7 +258,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       });
 
       this.invalidateCache();
-      void this.writeLastModified(); // stamp timestamp — non-blocking
+      void this.writeLastModified(); // meta-level heartbeat
       return true;
     } catch (error) {
       console.error(`Error updating ${this.sheetName}:`, error);
@@ -268,6 +304,95 @@ export abstract class BaseSheetsService<T extends SheetItem> {
     } catch (error) {
       console.error(`Error deleting from ${this.sheetName}:`, error);
       return false;
+    }
+  }
+
+  async getChanges(sinceTimestamp: string): Promise<{ upserts: T[], currentIds: (string | number)[], timestamp: string }> {
+    await this.ensureHeaders();
+    try {
+      const sheets = await this.getSheetsClient();
+      const idIdx = this.idColumnIndex;
+      const updateIdx = this.hMap['updated_at'];
+
+      // If no updated_at column, fallback to full fetch
+      if (updateIdx === undefined) {
+        const all = await this.getAll();
+        return { 
+          upserts: all, 
+          currentIds: all.map(i => i.id), 
+          timestamp: new Date().toISOString() 
+        };
+      }
+
+      // 1. Fetch ONLY the ID and updated_at columns for efficiency
+      const idCol = getColumnLetter(idIdx);
+      const updateCol = getColumnLetter(updateIdx);
+      const response = await sheets.spreadsheets.values.batchGet({
+        spreadsheetId: this.spreadsheetId,
+        ranges: [`${this.sheetName}!${idCol}:${idCol}`, `${this.sheetName}!${updateCol}:${updateCol}`],
+      });
+
+      const idRows = response.data.valueRanges?.[0].values || [];
+      const updateRows = response.data.valueRanges?.[1].values || [];
+      
+      const upsertIndices: number[] = [];
+      const currentIds: (string | number)[] = [];
+      const sinceTime = new Date(sinceTimestamp).getTime();
+
+      // Skip header row
+      const maxLength = Math.max(idRows.length, updateRows.length);
+      for (let i = 1; i < maxLength; i++) {
+        const id = idRows[i]?.[0];
+        const updatedAt = updateRows[i]?.[0];
+        
+        if (id !== undefined) currentIds.push(id);
+        
+        if (updatedAt) {
+          const rowTime = new Date(updatedAt).getTime();
+          if (rowTime > sinceTime) {
+            upsertIndices.push(i + 1); // 1-based index (e.g. index 1 is row 2)
+          }
+        }
+      }
+
+      let upserts: T[] = [];
+      if (upsertIndices.length > 0) {
+        // Fallback to full fetch if too many changes (prevents 413 error)
+        if (upsertIndices.length > 50) {
+          console.log(`[SYNC] Too many changes (${upsertIndices.length}), falling back to full fetch`);
+          const all = await this.getAll();
+          const upsertIds = new Set(upsertIndices.map(idx => {
+            const rowData = idRows[idx - 1]; // idRows is 0-indexed, upsertIndices is 1-indexed (sheet row num)
+            return rowData?.[0];
+          }).filter(Boolean));
+          
+          upserts = all.filter(item => upsertIds.has(String(item.id)));
+        } else {
+          // Fetch specific rows for efficiency
+          const maxColIdx = Math.max(...Object.values(this.hMap));
+          const endCol = getColumnLetter(maxColIdx);
+          const ranges = upsertIndices.map(rowNum => `${this.sheetName}!A${rowNum}:${endCol}${rowNum}`);
+          
+          const batchResponse = await sheets.spreadsheets.values.batchGet({
+            spreadsheetId: this.spreadsheetId,
+            ranges,
+          });
+          
+          upserts = batchResponse.data.valueRanges?.map(vr => {
+            const row = vr.values?.[0] || [];
+            return this.mapRowToItem(row);
+          }) || [];
+        }
+      }
+
+      return {
+        upserts,
+        currentIds,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error(`Error fetching changes for ${this.sheetName}:`, error);
+      return { upserts: [], currentIds: [], timestamp: sinceTimestamp };
     }
   }
 

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { IMS } from "@/types/ims";
 import useSWR from "swr";
 import { useSSE } from "@/hooks/useSSE";
+import { applyIncrementalUpdate } from "@/lib/utils/swr-sync";
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -68,7 +69,16 @@ export default function IMSPage() {
   );
 
   // SSE: instantly refetch when a new IMS item is added or deleted
-  useSSE({ modules: ['ims'], onUpdate: () => mutateItems() });
+  // SSE: incrementally update local cache when a change is detected
+  useSSE({ 
+    modules: ['ims'], 
+    onUpdate: (incremental) => {
+      const updates = incremental.find(m => m.module === 'ims');
+      if (updates) {
+        mutateItems((current) => applyIncrementalUpdate(current, updates.upserts, updates.currentIds), false);
+      }
+    } 
+  });
 
   useEffect(() => {
     if (swrItems) {

@@ -7,17 +7,17 @@ import { i2rService } from '@/lib/i2r-sheets';
 import { partyManagementService } from '@/lib/party-management-sheets';
 import { checklistService } from '@/lib/checklist-sheets';
 
+import { o2dService } from '@/lib/o2d-sheets';
+
 // Map module names to their sheet services (all extend BaseSheetsService)
-const SERVICES: Record<string, {
-  getLatestIds: () => Promise<(string | number)[]>;
-  getLastModified: () => Promise<number>;
-}> = {
+const SERVICES: Record<string, any> = {
   delegations: delegationService,
   tickets: ticketService,
   ims: imsService,
   i2r: i2rService,
   'party-management': partyManagementService,
   checklists: checklistService,
+  o2d: o2dService,
 };
 
 /**
@@ -50,65 +50,90 @@ export async function GET(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Read ID column + last-modified timestamp for each module in parallel
         const results = await Promise.all(
           requestedModules.map(async (mod) => {
+            const service = SERVICES[mod];
+            const lastTime = lastTimestamps[mod] || 0;
+            const lastCount = lastCounts[mod] || 0;
+
             try {
-              const [ids, lastModified] = await Promise.all([
-                SERVICES[mod].getLatestIds(),
-                SERVICES[mod].getLastModified(),
-              ]);
-              return { mod, count: ids.length, lastModified };
-            } catch {
-              return {
-                mod,
-                count: lastCounts[mod] ?? 0,
-                lastModified: lastTimestamps[mod] ?? 0,
-              };
+              const lastModified = await service.getLastModified();
+              
+              // 1. Initial Sync: If client has no baseline, don't send upserts.
+              // Just return the current timestamp/count so they have a baseline for next time.
+              if (lastTime === 0) {
+                const currentIds = await service.getLatestIds();
+                return { mod, changed: false, lastModified, count: currentIds.length };
+              }
+
+              // 2. Quick Check: Has anything changed at all?
+              if (lastModified > 0 && lastModified <= lastTime) {
+                // No changes based on meta-cell
+                return { mod, changed: false, lastModified, count: lastCount };
+              }
+
+              // 3. Fetch changes (Upserts + Current IDs)
+              const sinceStr = new Date(lastTime).toISOString();
+              const { upserts, currentIds, timestamp } = await service.getChanges(sinceStr);
+              const newCount = currentIds.length;
+              const newTime = new Date(timestamp).getTime();
+
+              const countChanged = lastCount !== newCount;
+              const hasUpserts = upserts.length > 0;
+
+              if (countChanged || hasUpserts) {
+                return { 
+                  mod, 
+                  changed: true, 
+                  upserts: upserts.slice(0, 100), // Cap upserts in one SSE burst to 100 for stability
+                  currentIds, 
+                  count: newCount, 
+                  lastModified: newTime 
+                };
+              }
+
+              return { mod, changed: false, lastModified: newTime, count: newCount };
+            } catch (err) {
+              console.error(`SSE Error for module ${mod}:`, err);
+              return { mod, changed: false, lastModified: lastTime, count: lastCount };
             }
           })
         );
 
         const newCounts: Record<string, number> = {};
         const newTimestamps: Record<string, number> = {};
-        const changed: string[] = [];
+        const incremental: any[] = [];
 
-        for (const { mod, count, lastModified } of results) {
-          newCounts[mod] = count;
-          newTimestamps[mod] = lastModified;
+        for (const res of results) {
+          newCounts[res.mod] = res.count;
+          newTimestamps[res.mod] = res.lastModified;
 
-          // Detect row-count change (add / delete)
-          const countChanged = mod in lastCounts && lastCounts[mod] !== count;
-          // Detect field-level edit via timestamp change (update)
-          const timestampChanged =
-            lastModified > 0 &&
-            mod in lastTimestamps &&
-            lastTimestamps[mod] !== lastModified;
-
-          if (countChanged || timestampChanged) {
-            changed.push(mod);
+          if (res.changed) {
+            incremental.push({
+              module: res.mod,
+              upserts: res.upserts,
+              currentIds: res.currentIds,
+            });
           }
         }
 
-        const eventType = changed.length > 0 ? 'change' : 'heartbeat';
+        const eventType = incremental.length > 0 ? 'change' : 'heartbeat';
         const payload = JSON.stringify({
-          modules: changed,
+          incremental,
           counts: newCounts,
           timestamps: newTimestamps,
         });
 
-        // retry:15000 → client auto-reconnects after 15s if our manual reconnect fails
+        // SAFETY: Only enqueue if controller is not closed
         controller.enqueue(
           encoder.encode(`retry: 15000\nevent: ${eventType}\ndata: ${payload}\n\n`)
         );
-      } catch {
-        controller.enqueue(
-          encoder.encode(
-            `retry: 15000\nevent: heartbeat\ndata: {"modules":[],"counts":{},"timestamps":{}}\n\n`
-          )
-        );
+      } catch (err) {
+        if (err instanceof Error && err.message.includes("closed")) return;
+        console.error("SSE Stream Error:", err);
+      } finally {
+        try { controller.close(); } catch {}
       }
-      controller.close();
     },
   });
 

@@ -10,8 +10,9 @@ import {
   O2DStepConfig,
 } from "@/types/o2d";
 import { PartyManagement } from "@/types/party-management";
-import useSWR, { mutate } from "swr";
+import useSWR, { mutate, useSWRConfig } from "swr";
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
+import { useSSE } from "@/hooks/useSSE";
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -334,6 +335,55 @@ export default function O2DPage() {
       refreshInterval: 300000,
     }
   );
+
+  const { mutate: globalMutate } = useSWRConfig();
+
+  // SSE: Incremental real-time updates for O2D
+  useSSE({
+    modules: ["o2d"],
+    onUpdate: (incremental) => {
+      const updates = incremental.find((m) => m.module === "o2d");
+      if (updates) {
+        // 1. Update the paginated cache incrementally (only for items already in view)
+        globalMutate(
+          (key: any) => typeof key === "string" && key.includes("/api/o2d?page="),
+          (current: any) => {
+            if (!current?.data) return current;
+            const nextData = [...current.data];
+            let changed = false;
+
+            // Merge modified rows
+            updates.upserts.forEach((item: O2D) => {
+              const idx = nextData.findIndex((o) => String(o.id) === String(item.id));
+              if (idx !== -1) {
+                nextData[idx] = item;
+                changed = true;
+              }
+              // Note: We don't blindly unshift new items into the paginated view 
+              // because it might break server-side pagination/ordering. 
+              // New items will appear on the next manual or focus-based refetch.
+            });
+
+            // Handle deletions (IDs no longer present in currentIds)
+            const currentIdsSet = new Set(updates.currentIds.map(String));
+            const filteredData = nextData.filter((o) => {
+              const keep = currentIdsSet.has(String(o.id));
+              if (!keep) changed = true;
+              return keep;
+            });
+
+            if (!changed) return current;
+            return { ...current, data: filteredData };
+          },
+          false
+        );
+
+        // 2. Revalidate counts and order list (these are hard to sync incrementally)
+        globalMutate("/api/o2d/summary");
+        globalMutate("/api/o2d?type=ordernumbers");
+      }
+    },
+  });
 
   // Extract paginated O2D data
   const o2ds = paginationData?.data || [];

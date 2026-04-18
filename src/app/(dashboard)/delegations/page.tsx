@@ -62,8 +62,28 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
     revalidateOnMount: true,   // Refetch on page load
   });
 
-  // SSE: instantly refetch when a new delegation is added or deleted
-  useSSE({ modules: ['delegations'], onUpdate: () => mutateDelegations() });
+  // SSE: incrementally update local cache when a change is detected
+  useSSE({ 
+    modules: ['delegations'], 
+    onUpdate: (incremental) => {
+      const updates = incremental.find(m => m.module === 'delegations');
+      if (updates) {
+        mutateDelegations((current: Delegation[] | undefined) => {
+          if (!current) return current;
+          // 1. Merge Upserts
+          const next = [...current];
+          updates.upserts.forEach((item: Delegation) => {
+            const idx = next.findIndex(d => String(d.id) === String(item.id));
+            if (idx !== -1) next[idx] = item;
+            else next.unshift(item); // Add new items to top
+          });
+          // 2. Filter out Deletes
+          const currentIdsSet = new Set(updates.currentIds.map(String));
+          return next.filter(d => currentIdsSet.has(String(d.id)));
+        }, false); // false = don't revalidate immediately
+      }
+    } 
+  });
 
   useEffect(() => {
     if (swrDelegations) {

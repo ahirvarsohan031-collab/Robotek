@@ -54,6 +54,7 @@ import ConfirmModal from "@/components/ConfirmModal";
 import Portal from "@/components/Portal";
 import useSWR from "swr";
 import { useSSE } from "@/hooks/useSSE";
+import { applyPaginatedIncrementalUpdate } from "@/lib/utils/swr-sync";
 
 import { User } from "@/types/user";
 
@@ -180,8 +181,19 @@ export default function ChecklistsPage() {
   });
   const isLoading = isPageLoading;
 
-  // SSE: instantly refetch when a new checklist is added or deleted
-  useSSE({ modules: ['checklists'], onUpdate: () => mutateChecklists() });
+  // SSE: incrementally update local cache when a change is detected
+  useSSE({ 
+    modules: ['checklists'], 
+    onUpdate: (incremental) => {
+      const updates = incremental.find(m => m.module === 'checklists');
+      if (updates) {
+        // 1. Surgical update of the list for immediate feedback
+        mutateChecklists((current) => applyPaginatedIncrementalUpdate(current as any, updates.upserts, updates.currentIds), false);
+        // 2. Background refetch to update counts and handle complex filters
+        mutateChecklists();
+      }
+    } 
+  });
 
   // Derived data from server response
   const paginatedChecklists = paginationData?.data || [];

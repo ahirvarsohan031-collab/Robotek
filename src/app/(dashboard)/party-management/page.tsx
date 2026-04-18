@@ -28,6 +28,7 @@ import {
 import { useSession } from "next-auth/react";
 import useSWR from "swr";
 import { useSSE } from "@/hooks/useSSE";
+import { applyIncrementalUpdate } from "@/lib/utils/swr-sync";
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
 
@@ -48,7 +49,16 @@ export default function PartyManagementPage() {
   });
 
   // SSE: instantly refetch when a new party is added or deleted
-  useSSE({ modules: ['party-management'], onUpdate: () => mutateParties() });
+  // SSE: incrementally update local cache when a change is detected
+  useSSE({ 
+    modules: ['party-management'], 
+    onUpdate: (incremental) => {
+      const updates = incremental.find(m => m.module === 'party-management');
+      if (updates) {
+        mutateParties((current) => applyIncrementalUpdate(current, updates.upserts, updates.currentIds), false);
+      }
+    } 
+  });
 
   useEffect(() => {
     if (swrParties) {

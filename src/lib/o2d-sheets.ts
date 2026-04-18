@@ -293,18 +293,9 @@ class O2DService extends BaseSheetsService<O2D> {
     }
 
     const updatedLoc = getColumnLetter(updatedColIdx);
-    const updatedAtColIdx = this.hMap["updated_at"];
-    const timestamp = new Date().toISOString();
 
-    const data: any[] = sheetRows.flatMap(sheetRow => {
-      const updates: any[] = [
-        { range: `${this.sheetName}!${updatedLoc}${sheetRow}`, values: [[value]] },
-      ];
-      if (updatedAtColIdx !== undefined) {
-        const updatedAtLoc = getColumnLetter(updatedAtColIdx);
-        updates.push({ range: `${this.sheetName}!${updatedAtLoc}${sheetRow}`, values: [[timestamp]] });
-      }
-      return updates;
+    const data: any[] = sheetRows.map(sheetRow => {
+      return { range: `${this.sheetName}!${updatedLoc}${sheetRow}`, values: [[value]] };
     });
 
     await sheets.spreadsheets.values.batchUpdate({
@@ -313,6 +304,8 @@ class O2DService extends BaseSheetsService<O2D> {
     });
 
     this.invalidateCache();
+    // Use base class logic to stamp ZZ1 meta-timestamp
+    void this.writeLastModified();
     return true;
   }
 
@@ -355,9 +348,6 @@ class O2DService extends BaseSheetsService<O2D> {
       if (!rows) return false;
 
       const endStep = onlyThisStep ? startStep : 11;
-      const timestamp = new Date().toISOString();
-      const updatedAtColIdx = this.hMap["updated_at"];
-
       const data = indicesToUpdate.map(index => {
         const row = [...rows[index]];
         const maxIdx = Math.max(...Object.values(this.hMap));
@@ -390,7 +380,6 @@ class O2DService extends BaseSheetsService<O2D> {
           }
         }
 
-        if (updatedAtColIdx !== undefined) row[updatedAtColIdx] = timestamp;
         const rowRange = `${this.sheetName}!A${index + 1}:${lastCol}${index + 1}`;
         return { range: rowRange, values: [row] };
       });
@@ -401,6 +390,7 @@ class O2DService extends BaseSheetsService<O2D> {
       });
 
       this.invalidateCache();
+      void this.writeLastModified();
       return true;
     } catch (error) {
       return false;
@@ -420,7 +410,7 @@ class O2DService extends BaseSheetsService<O2D> {
     const data = response.data.values?.map(row => ({
       step_name: row[0] || "", tat: row[1] || "", responsible_person: row[2] || ""
     })) || [];
-    
+
     globalCache.set(cacheKey, data, 60 * 60 * 1000); // 1 hour TTL
     return data;
   }
@@ -441,7 +431,7 @@ class O2DService extends BaseSheetsService<O2D> {
       // Column layout: A=ID, B=item_name, C=est_amount, D=gst, E=final_amount
       const items = rows.map(row => ({ name: row[1] || "", amount: row[4] || row[2] || "" })).filter(item => item.name);
       const data = { parties, items };
-      
+
       globalCache.set(cacheKey, data, 30 * 60 * 1000); // 30 mins TTL
       return data;
     } catch (error) {
@@ -620,7 +610,7 @@ export async function getO2DsPaginated(
   const stepConfigs = (userRole.toUpperCase() === "USER" && currentUser)
     ? await o2dService.getStepConfig()
     : null;
-  
+
   // Group by order_no to get unique orders
   const groupedByOrder: Record<string, O2D[]> = {};
   allO2Ds.forEach((item) => {
@@ -630,10 +620,10 @@ export async function getO2DsPaginated(
     }
     groupedByOrder[orderNo].push(item);
   });
-  
+
   // Get sorted order numbers (descending)
   let orderNumbers = Object.keys(groupedByOrder).sort((a, b) => b.localeCompare(a));
-  
+
   // Apply ALL filters across ALL orders BEFORE pagination
   orderNumbers = orderNumbers.filter((orderNo) => {
     const items = groupedByOrder[orderNo];
@@ -718,15 +708,15 @@ export async function getO2DsPaginated(
 
     return true;
   });
-  
+
   // Paginate the filtered orders
   const startIdx = (page - 1) * limit;
   const endIdx = startIdx + limit;
   const paginatedOrderNumbers = orderNumbers.slice(startIdx, endIdx);
-  
+
   // Get all rows for the paginated orders
   const paginatedData = paginatedOrderNumbers.flatMap((orderNo) => groupedByOrder[orderNo]);
-  
+
   return {
     data: paginatedData,
     orders: paginatedOrderNumbers,
@@ -745,7 +735,7 @@ export async function getO2DSummary(currentUser: string = "", userRole: string =
   const stepConfigs = (userRole.toUpperCase() === "USER" && currentUser)
     ? await o2dService.getStepConfig()
     : null;
-  
+
   // Group by order_no to get unique orders
   const groupedByOrder: Record<string, O2D[]> = {};
   allO2Ds.forEach((item) => {
@@ -758,14 +748,14 @@ export async function getO2DSummary(currentUser: string = "", userRole: string =
 
   // Count orders by step — exclude hold/cancelled (matches left panel default view)
   const stepCounts = Array(11).fill(0);
-  
+
   Object.values(groupedByOrder).forEach((orderItems) => {
     const firstItem = orderItems[0];
     // Skip hold and cancelled orders (left panel hides them by default)
     if (firstItem.hold || firstItem.cancelled) return;
 
     const pendingStep = getPendingStepIdx(orderItems);
-    
+
     if (pendingStep >= 1 && pendingStep <= 11) {
       // Apply user role filter on step counts
       if (stepConfigs) {
@@ -778,7 +768,7 @@ export async function getO2DSummary(currentUser: string = "", userRole: string =
       stepCounts[pendingStep - 1]++;
     }
   });
-  
+
   return {
     stepCounts,
     totalOrders: Object.keys(groupedByOrder).length,
@@ -832,8 +822,8 @@ export async function getScotDashboardMetrics() {
   return { dashboardOrderCounts: counts, dashboardHistoricalAvg: avgOrders };
 }
 
-export async function addItem(name: string, price: string, gst?: string, finalPrice?: string) { 
-  return o2dService.addItem(name, price, gst, finalPrice); 
+export async function addItem(name: string, price: string, gst?: string, finalPrice?: string) {
+  return o2dService.addItem(name, price, gst, finalPrice);
 }
 
 export async function updateO2DStepConfig(configs: O2DStepConfig[]): Promise<boolean> {
