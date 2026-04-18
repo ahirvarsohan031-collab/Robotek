@@ -2,13 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-import { getO2Ds, addO2D, addO2Ds, getO2DDetails, addItem, getO2DsPaginated, getO2DSummary } from "@/lib/o2d-sheets";
+import { getO2Ds, addO2D, addO2Ds, getO2DDetails, addItem, getO2DsPaginated, getO2DSummary, getScotDashboardMetrics } from "@/lib/o2d-sheets";
 import { uploadFileToDrive } from "@/lib/google-drive";
 import { O2D } from "@/types/o2d";
+import { auth } from "@/auth";
 
 const O2D_FOLDER_ID = "19ZqWS5zYD2P4SIpcGNQR8gXcDiagH2rq";
 
 export async function GET(req: NextRequest) {
+  const session = await auth();
+  const currentUser = (session?.user as any)?.username || "";
+  const userRole = (session?.user as any)?.role || "User";
+
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type");
   const allData = searchParams.get("all");
@@ -18,10 +23,28 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(details);
   }
 
+  if (type === "scotDashboard") {
+    const metrics = await getScotDashboardMetrics();
+    return NextResponse.json(metrics, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+    });
+  }
+
+  // Return all unique order numbers for filter dropdowns
+  if (type === "ordernumbers") {
+    const o2ds = await getO2Ds();
+    const orderNumbers = Array.from(new Set(o2ds.map((o) => o.order_no).filter(Boolean))).sort((a, b) => b.localeCompare(a));
+    return NextResponse.json(orderNumbers, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+    });
+  }
+
   // If ?all=true is passed, return all data without pagination (for sidebar counting)
   if (allData === "true") {
     const o2ds = await getO2Ds();
-    return NextResponse.json(o2ds);
+    return NextResponse.json(o2ds, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+    });
   }
 
   // Get pagination params
@@ -55,9 +78,13 @@ export async function GET(req: NextRequest) {
       itemNameFilter,
       pendingFilter,
       startDate,
-      endDate
+      endDate,
+      currentUser,
+      userRole
     );
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+    });
   } catch (error) {
     console.error("Pagination error:", error);
     return NextResponse.json({ error: "Pagination failed" }, { status: 500 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
@@ -10,6 +10,7 @@ import SearchableSelect from "../SearchableSelect";
 import { UserCircleIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
 import { XMarkIcon, ArrowDownTrayIcon, DocumentDuplicateIcon, CheckIcon, UserGroupIcon, PlusSmallIcon, TrashIcon, PencilIcon } from "@heroicons/react/24/outline";
 import { getDriveImageUrl } from "@/lib/drive-utils";
+import { format, isToday, isYesterday } from "date-fns";
 
 interface ChatMessage {
   id: string;
@@ -40,6 +41,21 @@ interface ChatWindowProps {
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 // Helper for gradient background color based on username
+function getDateLabel(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isToday(date)) return "Today";
+  if (isYesterday(date)) return "Yesterday";
+  return format(date, "MMMM d, yyyy");
+}
+
+function isSameDay(a: string, b: string): boolean {
+  const da = new Date(a);
+  const db = new Date(b);
+  return da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate();
+}
+
 function getAvatarGradient(username: string) {
   const colors = [
     "from-blue-500 to-indigo-600",
@@ -67,7 +83,7 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
 
   // Fetch messages between current user and the partner (chatId)
   const { data: messages, mutate } = useSWR<ChatMessage[]>(`/api/chat/messages?chatId=${chatId}`, fetcher, {
-    refreshInterval: 3000, 
+    refreshInterval: 15000, 
   });
 
   const isGroup = chatId.startsWith("group_");
@@ -463,16 +479,27 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
           messages.map((msg, index) => {
             const isOwn = msg.sender_id === currentUsername;
             const showTail = index === messages.length - 1 || messages[index + 1].sender_id !== msg.sender_id;
+            const showDateDivider = index === 0 || !isSameDay(messages[index - 1].created_at, msg.created_at);
             
             return (
-              <MessageBubble
-                key={msg.id}
-                message={msg as any}
-                isOwn={isOwn}
-                showTail={showTail}
-                onImageClick={(url) => setPreviewMediaUrl(url)}
-                onForwardClick={(msgToForward) => setForwardingMessage(msgToForward as any)}
-              />
+              <React.Fragment key={msg.id}>
+                {showDateDivider && (
+                  <div className="flex items-center gap-3 my-2">
+                    <div className="flex-1 h-px bg-gray-300/60 dark:bg-white/10" />
+                    <span className="text-[11px] font-semibold text-gray-500 dark:text-white/40 bg-white/70 dark:bg-white/5 px-3 py-0.5 rounded-full shadow-sm border border-gray-200/60 dark:border-white/10 whitespace-nowrap">
+                      {getDateLabel(msg.created_at)}
+                    </span>
+                    <div className="flex-1 h-px bg-gray-300/60 dark:bg-white/10" />
+                  </div>
+                )}
+                <MessageBubble
+                  message={msg as any}
+                  isOwn={isOwn}
+                  showTail={showTail}
+                  onImageClick={(url) => setPreviewMediaUrl(url)}
+                  onForwardClick={(msgToForward) => setForwardingMessage(msgToForward as any)}
+                />
+              </React.Fragment>
             );
           })
         )}

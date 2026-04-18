@@ -40,6 +40,7 @@ import {
   FunnelIcon
 } from "@heroicons/react/24/outline";
 import useSWR from "swr";
+import { useSSE } from "@/hooks/useSSE";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -56,8 +57,13 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
  
    const [delegations, setDelegations] = useState<Delegation[]>([]);
   const { data: swrDelegations, mutate: mutateDelegations } = useSWR<Delegation[]>("/api/delegations", fetcher, {
-    refreshInterval: 60000, // Sync every 60 seconds
+    refreshInterval: 0,        // No background polling — SSE handles change detection
+    revalidateOnFocus: true,   // Refetch when user returns to the tab
+    revalidateOnMount: true,   // Refetch on page load
   });
+
+  // SSE: instantly refetch when a new delegation is added or deleted
+  useSSE({ modules: ['delegations'], onUpdate: () => mutateDelegations() });
 
   useEffect(() => {
     if (swrDelegations) {

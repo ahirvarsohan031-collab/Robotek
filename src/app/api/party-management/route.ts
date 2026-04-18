@@ -5,7 +5,9 @@ import { PartyManagement } from "@/types/party-management";
 export async function GET() {
   try {
     const parties = await getParties();
-    return NextResponse.json(parties);
+    return NextResponse.json(parties, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+    });
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch parties" }, { status: 500 });
   }

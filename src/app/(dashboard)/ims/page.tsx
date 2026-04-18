@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { IMS } from "@/types/ims";
 import useSWR from "swr";
+import { useSSE } from "@/hooks/useSSE";
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -60,9 +61,14 @@ export default function IMSPage() {
     "/api/ims",
     fetcher,
     {
-      refreshInterval: 60000,
+      refreshInterval: 0,        // No background polling — SSE handles change detection
+      revalidateOnFocus: true,   // Refetch when user returns to the tab
+      revalidateOnMount: true,   // Refetch on page load
     }
   );
+
+  // SSE: instantly refetch when a new IMS item is added or deleted
+  useSSE({ modules: ['ims'], onUpdate: () => mutateItems() });
 
   useEffect(() => {
     if (swrItems) {

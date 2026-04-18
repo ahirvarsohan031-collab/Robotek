@@ -22,7 +22,9 @@ export async function GET(request: NextRequest) {
     }
 
     const items = await getI2RItems();
-    return NextResponse.json(items);
+    return NextResponse.json(items, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+    });
   } catch (error) {
     console.error("Error fetching I2R items:", error);
     return NextResponse.json(

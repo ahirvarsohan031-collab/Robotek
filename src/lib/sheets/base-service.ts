@@ -24,7 +24,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
   protected abstract idColumnIndex: number; // 0-based
 
   protected hMap: Record<string, number> = {};
-  private CACHE_TTL = 30000; // 30 seconds (was 10s)
+  private CACHE_TTL = 300000; // 5 minutes
 
   protected abstract mapRowToItem(row: any[]): T;
   protected abstract mapItemToRow(item: T): any[];

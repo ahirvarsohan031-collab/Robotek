@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { I2R, I2RStepConfig, I2R_STEPS } from "@/types/i2r";
 import useSWR from "swr";
+import { useSSE } from "@/hooks/useSSE";
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -206,14 +207,24 @@ export default function I2RPage() {
   // View mode: active / cancelled
   const [viewMode, setViewMode] = useState<"active" | "cancelled">("active");
 
+  // Date quick-filters: 'Yesterday' | 'Today' | 'Tomorrow'
+  const [dateFilter, setDateFilter] = useState<string | null>(null);
+
   // Live clock for time-delay display
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const { data: swrItems, mutate: mutateItems } = useSWR<I2R[]>(
     "/api/i2r",
     fetcher,
-    { refreshInterval: 60000 }
+    {
+      refreshInterval: 0,        // No background polling — SSE handles change detection
+      revalidateOnFocus: true,   // Refetch when user returns to the tab
+      revalidateOnMount: true,   // Refetch on page load
+    }
   );
+
+  // SSE: instantly refetch when a new I2R item is added or deleted
+  useSSE({ modules: ['i2r'], onUpdate: () => mutateItems() });
 
   // Fetch IMS item names for the combobox
   const { data: imsItems } = useSWR<{ item_name: string }[]>("/api/ims", fetcher);
@@ -307,10 +318,41 @@ export default function I2RPage() {
         return false;
       }
     }
+
+    // Date quick-filter on created_at
+    if (dateFilter) {
+      const createdAt = item.created_at ? new Date(item.created_at) : null;
+      if (!createdAt || isNaN(createdAt.getTime())) return false;
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const itemDay = new Date(createdAt);
+      itemDay.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((itemDay.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      if (dateFilter === 'Yesterday' && diffDays !== -1) return false;
+      if (dateFilter === 'Today' && diffDays !== 0) return false;
+      if (dateFilter === 'Tomorrow' && diffDays !== 1) return false;
+    }
+
     return Object.values(item).some((val) =>
       val?.toString().toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
+
+  // Helper: count items for a date quick-filter
+  const getDateFilterCount = (f: string) => items.filter((item) => {
+    if (!!(item.cancelled || "").trim()) return false;
+    const createdAt = item.created_at ? new Date(item.created_at) : null;
+    if (!createdAt || isNaN(createdAt.getTime())) return false;
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const itemDay = new Date(createdAt);
+    itemDay.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((itemDay.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (f === 'Yesterday') return diffDays === -1;
+    if (f === 'Today') return diffDays === 0;
+    if (f === 'Tomorrow') return diffDays === 1;
+    return false;
+  }).length;
 
   // Sorting
   const sortedItems = [...filteredItems].sort((a, b) => {
@@ -813,32 +855,61 @@ export default function I2RPage() {
             backgroundColor: "var(--panel-card)",
             borderBottom: "1px solid var(--panel-border)",
           }}
-          className="px-3 md:px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+          className="px-3 md:px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3"
         >
-          <div className="relative group flex-1 max-w-full lg:max-w-sm">
-            <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
-            <input
-              type="text"
-              placeholder="Search database..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-10 pr-4 py-1.5 bg-gray-50 dark:bg-navy-900 border border-gray-100 dark:border-navy-700/50 rounded-lg focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-white transition-all shadow-sm"
-            />
-          </div>
+          {/* Left: Search + Date filters + Step Done — all in one tight row */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative group w-36 shrink-0">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-navy-900 border border-gray-100 dark:border-navy-700/50 rounded-lg focus:border-[#FFD500] outline-none font-bold text-[12px] text-gray-700 dark:text-white transition-all shadow-sm"
+              />
+            </div>
 
-          {/* Bulk Step Done button — only when rows selected in active view */}
-          {selectedIds.size > 0 && viewMode === "active" && (
-            <button
-              onClick={openBulkModal}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 shrink-0"
-            >
-              <CheckCircleIcon className="w-3.5 h-3.5" />
-              Step Done ({selectedIds.size})
-            </button>
-          )}
+            {/* Date quick-filters: Yesterday / Today / Tomorrow */}
+            {[
+              { id: 'Yesterday', color: 'bg-slate-50 text-slate-600 border-slate-300 dark:bg-slate-900/30 dark:text-slate-400 dark:border-slate-700' },
+              { id: 'Today',     color: 'bg-amber-50 text-amber-600 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700' },
+              { id: 'Tomorrow',  color: 'bg-blue-50 text-blue-600 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700' },
+            ].map(f => {
+              const count = getDateFilterCount(f.id);
+              const isActive = dateFilter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => { setDateFilter(isActive ? null : f.id); setCurrentPage(1); }}
+                  className={`px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all h-[30px] flex items-center gap-1.5 whitespace-nowrap ${
+                    isActive
+                      ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black border-[#003875] dark:border-[#FFD500] shadow-sm scale-105'
+                      : `${f.color} hover:shadow-sm hover:scale-[1.02]`
+                  }`}
+                >
+                  {f.id}
+                  <span className={`px-1 py-0.5 rounded-full text-[9px] ${isActive ? 'bg-white/20 dark:bg-black/20' : 'bg-black/5 dark:bg-white/10'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+
+            {/* Bulk Step Done button — only when rows selected in active view */}
+            {selectedIds.size > 0 && viewMode === "active" && (
+              <button
+                onClick={openBulkModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003875] hover:bg-[#002a5a] text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 shrink-0"
+              >
+                <CheckCircleIcon className="w-3.5 h-3.5" />
+                Step Done ({selectedIds.size})
+              </button>
+            )}
+          </div>
 
           <div className="flex flex-wrap items-center gap-3 md:gap-4">
             <div className="flex items-center gap-2">
@@ -947,7 +1018,8 @@ export default function I2RPage() {
                       { key: "category", label: "Category" },
                       { key: "filled_by", label: "Filled By" },
                       { key: "created_at", label: "Created At" },
-                      { key: "cancelled", label: "Cancelled At" },
+                      // Only show "Cancelled At" column in cancelled view
+                      ...(viewMode === "cancelled" ? [{ key: "cancelled" as keyof I2R, label: "Cancelled At" }] : []),
                     ] as { key: keyof I2R; label: string }[]
                   ).map(({ key, label }) => (
                     <th
@@ -1017,13 +1089,6 @@ export default function I2RPage() {
                           >
                             <TrashIcon className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => setCancelTargetId(item.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                            title="Cancel Item"
-                          >
-                            <NoSymbolIcon className="w-4 h-4" />
-                          </button>
                         </div>
                       ) : (
                         <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
@@ -1060,19 +1125,21 @@ export default function I2RPage() {
                         </div>
                       ) : "—"}
                     </td>
-                    {/* Cancelled At */}
-                    <td className="px-3 md:px-4 py-3 text-[11px] md:text-[12px] text-gray-500 dark:text-slate-500">
-                      {item.cancelled ? (
-                        <div>
-                          <div className="font-bold text-red-600 dark:text-red-400">
-                            {new Date(item.cancelled).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                    {/* Cancelled At — only shown in cancelled view */}
+                    {viewMode === "cancelled" && (
+                      <td className="px-3 md:px-4 py-3 text-[11px] md:text-[12px] text-gray-500 dark:text-slate-500">
+                        {item.cancelled ? (
+                          <div>
+                            <div className="font-bold text-red-600 dark:text-red-400">
+                              {new Date(item.cancelled).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                            </div>
+                            <div className="text-[10px] text-gray-400">
+                              {new Date(item.cancelled).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+                            </div>
                           </div>
-                          <div className="text-[10px] text-gray-400">
-                            {new Date(item.cancelled).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
-                          </div>
-                        </div>
-                      ) : <span className="text-gray-300 dark:text-slate-600">—</span>}
-                    </td>
+                        ) : <span className="text-gray-300 dark:text-slate-600">—</span>}
+                      </td>
+                    )}
                     {/* ── One column per step ── */}
                     {Array.from({ length: 9 }, (_, i) => {
                       const n = i + 1;

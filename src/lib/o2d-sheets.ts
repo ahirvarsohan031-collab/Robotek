@@ -610,9 +610,16 @@ export async function getO2DsPaginated(
   tableFilterItemName: string = "",
   tableFilterPending: boolean = false,
   filterStartDate: string = "",
-  filterEndDate: string = ""
+  filterEndDate: string = "",
+  currentUser: string = "",
+  userRole: string = ""
 ) {
   const allO2Ds = await o2dService.getAll();
+
+  // Fetch step configs once for user-role filtering (cached)
+  const stepConfigs = (userRole.toUpperCase() === "USER" && currentUser)
+    ? await o2dService.getStepConfig()
+    : null;
   
   // Group by order_no to get unique orders
   const groupedByOrder: Record<string, O2D[]> = {};
@@ -694,6 +701,21 @@ export async function getO2DsPaginated(
       }
     }
 
+    // User role filter: only show orders where the pending step's responsible_person includes the current user
+    if (stepConfigs && pIdx !== -1) {
+      const stepConfig = stepConfigs[pIdx - 1];
+      if (stepConfig?.responsible_person) {
+        const responsible = stepConfig.responsible_person.split(",").map((s) => s.trim());
+        if (!responsible.includes(currentUser)) return false;
+      }
+    }
+    // For USER role, hide hold/cancelled and completed orders (unless a status filter is active)
+    if (userRole.toUpperCase() === "USER" && currentUser) {
+      const hasStatusFilter = selectedDateFilters.includes("Hold") || selectedDateFilters.includes("Cancelled");
+      if ((isHold || isCancelled) && !hasStatusFilter) return false;
+      if (pIdx === -1 && !isHold && !isCancelled) return false;
+    }
+
     return true;
   });
   
@@ -717,8 +739,12 @@ export async function getO2DsPaginated(
 }
 
 // Summary method - returns step counts without full data (for button counts)
-export async function getO2DSummary() {
+export async function getO2DSummary(currentUser: string = "", userRole: string = "") {
   const allO2Ds = await o2dService.getAll();
+
+  const stepConfigs = (userRole.toUpperCase() === "USER" && currentUser)
+    ? await o2dService.getStepConfig()
+    : null;
   
   // Group by order_no to get unique orders
   const groupedByOrder: Record<string, O2D[]> = {};
@@ -741,6 +767,14 @@ export async function getO2DSummary() {
     const pendingStep = getPendingStepIdx(orderItems);
     
     if (pendingStep >= 1 && pendingStep <= 11) {
+      // Apply user role filter on step counts
+      if (stepConfigs) {
+        const stepConfig = stepConfigs[pendingStep - 1];
+        if (stepConfig?.responsible_person) {
+          const responsible = stepConfig.responsible_person.split(",").map((s) => s.trim());
+          if (!responsible.includes(currentUser)) return;
+        }
+      }
       stepCounts[pendingStep - 1]++;
     }
   });
@@ -764,6 +798,40 @@ export async function updateOrderToggleStatus(oNo: string, act: 'hold' | 'cancel
 export async function removeFollowUp(oNo: string, sS: number, oTS: boolean) { return o2dService.removeFollowUp(oNo, sS, oTS); }
 export async function getO2DStepConfig() { return o2dService.getStepConfig(); }
 export async function getO2DDetails() { return o2dService.getDetails(); }
+
+export async function getScotDashboardMetrics() {
+  const o2dData = await o2dService.getAll();
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+
+  const partyMonths: Record<string, Record<string, Set<string>>> = {};
+  o2dData.forEach((order: any) => {
+    const party = (order.party_name || '').trim().toLowerCase();
+    const orderNo = (order.order_no || '').trim();
+    if (!party || !orderNo) return;
+    const created = new Date(order.created_at || '');
+    if (isNaN(created.getTime())) return;
+    const monthKey = `${created.getFullYear()}-${created.getMonth()}`;
+    if (!partyMonths[party]) partyMonths[party] = {};
+    if (!partyMonths[party][monthKey]) partyMonths[party][monthKey] = new Set();
+    partyMonths[party][monthKey].add(orderNo);
+  });
+
+  const thisMonthKey = `${thisYear}-${thisMonth}`;
+  const counts: Record<string, number> = {};
+  const avgOrders: Record<string, number> = {};
+
+  Object.entries(partyMonths).forEach(([party, months]) => {
+    counts[party] = months[thisMonthKey]?.size ?? 0;
+    const monthlyCounts = Object.values(months).map(s => s.size);
+    const avg = monthlyCounts.reduce((a, b) => a + b, 0) / monthlyCounts.length;
+    avgOrders[party] = Math.round(avg);
+  });
+
+  return { dashboardOrderCounts: counts, dashboardHistoricalAvg: avgOrders };
+}
+
 export async function addItem(name: string, price: string, gst?: string, finalPrice?: string) { 
   return o2dService.addItem(name, price, gst, finalPrice); 
 }

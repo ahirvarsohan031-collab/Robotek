@@ -38,7 +38,9 @@ export async function GET() {
       console.error("Error fetching ticket history for latest comments:", err);
     }
     
-    return NextResponse.json(tickets);
+    return NextResponse.json(tickets, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+    });
   } catch (error) {
     console.error("GET /api/tickets error:", error);
     return NextResponse.json({ error: "Failed to fetch tickets" }, { status: 500 });

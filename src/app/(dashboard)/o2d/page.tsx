@@ -307,7 +307,7 @@ export default function O2DPage() {
     fetcher,
     {
       revalidateOnFocus: true,
-      refreshInterval: 60000,
+      refreshInterval: 300000,
     }
   );
 
@@ -321,7 +321,17 @@ export default function O2DPage() {
     fetcher,
     {
       revalidateOnFocus: true,
-      refreshInterval: 60000,
+      refreshInterval: 300000,
+    }
+  );
+
+  // Fetch all order numbers for the Order ID filter dropdown (not paginated)
+  const { data: allOrderNumbers } = useSWR<string[]>(
+    "/api/o2d?type=ordernumbers",
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      refreshInterval: 300000,
     }
   );
 
@@ -505,8 +515,8 @@ export default function O2DPage() {
   }, [o2ds]);
 
   const memoizedOrderOptions = useMemo(() => {
-    return paginatedOrderNumbers;
-  }, [paginatedOrderNumbers]);
+    return allOrderNumbers || [];
+  }, [allOrderNumbers]);
 
   const memoizedItemOptions = useMemo(() => {
     return Array.from(new Set(dropdownItems.map((di) => di.name))).sort();
@@ -657,17 +667,7 @@ export default function O2DPage() {
       }
     }
 
-    // Role-based Configuration Checking
-    if (!isSpecialRole && pIdx !== -1) {
-      const stepConfig = globalConfigs[pIdx - 1];
-      if (
-        stepConfig?.responsible_person &&
-        userRole.toUpperCase() === "USER" &&
-        !stepConfig.responsible_person.split(",").map((s) => s.trim()).includes(currentUser)
-      ) {
-        return false;
-      }
-    }
+    // Role-based Configuration Checking is now done server-side
     return true;
   };
 
@@ -2639,7 +2639,7 @@ export default function O2DPage() {
                                   ) : (
                                     <PhotoIcon className="w-6 h-6 text-gray-100 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                                   )}
-                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                     <a
                                       href={
                                         selectedOrder[0]?.order_screenshot
@@ -2651,9 +2651,20 @@ export default function O2DPage() {
                                       }
                                       target="_blank"
                                       className="p-2 bg-white rounded-full transition-transform hover:scale-110"
+                                      title="View"
                                     >
-                                      <EyeIcon className="w-4.5 h-4.5 text-black" />
+                                      <EyeIcon className="w-4 h-4 text-black" />
                                     </a>
+                                    {selectedOrder[0]?.order_screenshot && (
+                                      <a
+                                        href={`https://drive.google.com/uc?export=download&id=${selectedOrder[0]?.order_screenshot}`}
+                                        target="_blank"
+                                        className="p-2 bg-white rounded-full transition-transform hover:scale-110"
+                                        title="Download"
+                                      >
+                                        <ArrowDownTrayIcon className="w-4 h-4 text-black" />
+                                      </a>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -2909,15 +2920,25 @@ export default function O2DPage() {
                                   </span>
                                 </div>
                                 {selectedOrder[0]?.upload_so_1 && (
-                                  <a
-                                    href={getDriveImageUrl(
-                                      selectedOrder[0]?.upload_so_1,
-                                    )}
-                                    target="_blank"
-                                    className="flex items-center gap-2 px-4 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest mt-1"
-                                  >
-                                    <EyeIcon className="w-4 h-4" /> View SO Doc
-                                  </a>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <a
+                                      href={getDriveImageUrl(
+                                        selectedOrder[0]?.upload_so_1,
+                                      )}
+                                      target="_blank"
+                                      className="flex items-center gap-2 px-4 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
+                                    >
+                                      <EyeIcon className="w-4 h-4" /> View SO Doc
+                                    </a>
+                                    <a
+                                      href={`https://drive.google.com/uc?export=download&id=${selectedOrder[0]?.upload_so_1}`}
+                                      target="_blank"
+                                      className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
+                                      title="Download SO Doc"
+                                    >
+                                      <ArrowDownTrayIcon className="w-4 h-4" />
+                                    </a>
+                                  </div>
                                 )}
                               </div>
 
@@ -2952,15 +2973,25 @@ export default function O2DPage() {
                                   </div>
                                 </div>
                                 {selectedOrder[0]?.upload_pi_5 && (
-                                  <a
-                                    href={getDriveImageUrl(
-                                      selectedOrder[0]?.upload_pi_5,
-                                    )}
-                                    target="_blank"
-                                    className="flex items-center gap-2 px-4 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest mt-1"
-                                  >
-                                    <EyeIcon className="w-4 h-4" /> View PI Doc
-                                  </a>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <a
+                                      href={getDriveImageUrl(
+                                        selectedOrder[0]?.upload_pi_5,
+                                      )}
+                                      target="_blank"
+                                      className="flex items-center gap-2 px-4 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
+                                    >
+                                      <EyeIcon className="w-4 h-4" /> View PI Doc
+                                    </a>
+                                    <a
+                                      href={`https://drive.google.com/uc?export=download&id=${selectedOrder[0]?.upload_pi_5}`}
+                                      target="_blank"
+                                      className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
+                                      title="Download PI Doc"
+                                    >
+                                      <ArrowDownTrayIcon className="w-4 h-4" />
+                                    </a>
+                                  </div>
                                 )}
                               </div>
 
@@ -4508,17 +4539,39 @@ function BusyModal({
   const [copyStatus, setCopyStatus] = useState("Copy All for Busy");
   const [selectedBusyDate, setSelectedBusyDate] = useState<string>("");
   const [isBusyCalendarOpen, setIsBusyCalendarOpen] = useState(false);
+  const [allGroupedOrders, setAllGroupedOrders] = useState<any>(groupedOrders);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setIsLoadingOrders(true);
+    fetch("/api/o2d?all=true")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const grouped = data.reduce((acc: Record<string, any[]>, o2d: any) => {
+            const orderNo = o2d.order_no || "Unknown";
+            if (!acc[orderNo]) acc[orderNo] = [];
+            acc[orderNo].push(o2d);
+            return acc;
+          }, {});
+          setAllGroupedOrders(grouped);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setIsLoadingOrders(false));
+  }, [isOpen]);
 
   const orderOptions = useMemo(() => {
-    let filteredOrders = Object.keys(groupedOrders);
+    let filteredOrders = Object.keys(allGroupedOrders);
 
     if (selectedBusyDate) {
       filteredOrders = filteredOrders.filter((no) => {
-        const order = groupedOrders[no][0];
+        const order = allGroupedOrders[no][0];
         if (!order || !order.created_at) return false;
 
         const orderDate = new Date(order.created_at);
-        const filterDate = new Date(selectedBusyDate);
+        const filterDate = new Date(selectedBusyDate + "T00:00:00");
 
         return (
           orderDate.getFullYear() === filterDate.getFullYear() &&
@@ -4531,17 +4584,17 @@ function BusyModal({
     return filteredOrders
       .map((no) => ({
         no,
-        party: groupedOrders[no][0]?.party_name || "",
+        party: allGroupedOrders[no][0]?.party_name || "",
       }))
       .sort((a, b) => b.no.localeCompare(a.no)) // Sort newest first
       .map((item) => `${item.no} | ${item.party}`);
-  }, [groupedOrders, selectedBusyDate]);
+  }, [allGroupedOrders, selectedBusyDate]);
 
   const results = useMemo(() => {
     return selectedNos.map((no) => {
-      const orders = Object.keys(groupedOrders)
+      const orders = Object.keys(allGroupedOrders)
         .filter((k) => k.toLowerCase() === no.toLowerCase())
-        .map((k) => groupedOrders[k])[0];
+        .map((k) => allGroupedOrders[k])[0];
 
       if (!orders || orders.length === 0)
         return {
@@ -4658,19 +4711,19 @@ function BusyModal({
 
               {(() => {
                 const now = new Date();
-                const today = new Date(now.setHours(0, 0, 0, 0))
-                  .toISOString()
-                  .split("T")[0];
-                const yesterday = new Date(
-                  new Date().setDate(new Date().getDate() - 1),
-                )
-                  .toISOString()
-                  .split("T")[0];
-                const dayBeforeYesterday = new Date(
-                  new Date().setDate(new Date().getDate() - 2),
-                )
-                  .toISOString()
-                  .split("T")[0];
+                const fmtLocal = (d: Date) => {
+                  const y = d.getFullYear();
+                  const m = String(d.getMonth() + 1).padStart(2, "0");
+                  const day = String(d.getDate()).padStart(2, "0");
+                  return `${y}-${m}-${day}`;
+                };
+                const today = fmtLocal(now);
+                const yd = new Date(now);
+                yd.setDate(yd.getDate() - 1);
+                const yesterday = fmtLocal(yd);
+                const dbyd = new Date(now);
+                dbyd.setDate(dbyd.getDate() - 2);
+                const dayBeforeYesterday = fmtLocal(dbyd);
 
                 return (
                   <>
@@ -4703,11 +4756,10 @@ function BusyModal({
                     selectedBusyDate &&
                     ![0, 1, 2].some((d) => {
                       const dt = new Date();
-                      dt.setHours(0, 0, 0, 0);
-                      dt.setDate(dt.getDate() - d);
-                      return (
-                        dt.toISOString().split("T")[0] === selectedBusyDate
-                      );
+                      const y = dt.getFullYear();
+                      const m = String(dt.getMonth() + 1).padStart(2, "0");
+                      const day = String(dt.getDate() - d).padStart(2, "0");
+                      return `${y}-${m}-${day}` === selectedBusyDate;
                     })
                       ? "bg-[#003875] text-white shadow-md"
                       : "bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800"
@@ -4717,11 +4769,12 @@ function BusyModal({
                   {selectedBusyDate &&
                   ![0, 1, 2].some((d) => {
                     const dt = new Date();
-                    dt.setHours(0, 0, 0, 0);
-                    dt.setDate(dt.getDate() - d);
-                    return dt.toISOString().split("T")[0] === selectedBusyDate;
+                    const y = dt.getFullYear();
+                    const m = String(dt.getMonth() + 1).padStart(2, "0");
+                    const day = String(dt.getDate() - d).padStart(2, "0");
+                    return `${y}-${m}-${day}` === selectedBusyDate;
                   })
-                    ? new Date(selectedBusyDate).toLocaleDateString("en-GB")
+                    ? new Date(selectedBusyDate + "T00:00:00").toLocaleDateString("en-GB")
                     : "Calendar"}
                 </button>
 
@@ -4757,11 +4810,11 @@ function BusyModal({
                   <span
                     key={no}
                     className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#003875] text-[#FFD500] rounded-full text-[10px] font-black shadow-sm"
-                    title={groupedOrders[no]?.[0]?.party_name}
+                    title={allGroupedOrders[no]?.[0]?.party_name}
                   >
                     {no}
                     <span className="opacity-60 font-bold border-l border-[#FFD500]/30 pl-1.5 ml-0.5 truncate max-w-[80px]">
-                      {groupedOrders[no]?.[0]?.party_name}
+                      {allGroupedOrders[no]?.[0]?.party_name}
                     </span>
                     <button
                       onClick={() => removeOrder(no)}

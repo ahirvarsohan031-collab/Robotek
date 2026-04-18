@@ -53,6 +53,7 @@ import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
 import Portal from "@/components/Portal";
 import useSWR from "swr";
+import { useSSE } from "@/hooks/useSSE";
 
 import { User } from "@/types/user";
 
@@ -62,19 +63,8 @@ export default function ChecklistsPage() {
    const { data: session } = useSession();
    const userRole = (session?.user as any)?.role || "USER";
    const currentUser = (session?.user as any)?.username || "";
-   const [checklists, setChecklists] = useState<Checklist[]>([]);
-  const { data: swrChecklists, mutate: mutateChecklists } = useSWR<Checklist[]>("/api/checklists", fetcher, {
-    refreshInterval: 60000,
-  });
-
-  useEffect(() => {
-    if (swrChecklists) {
-      setChecklists(swrChecklists);
-    }
-  }, [swrChecklists]);
 
   const [usersList, setUsersList] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Checklist | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -163,18 +153,48 @@ export default function ChecklistsPage() {
    const [pendingDeleteGroupId, setPendingDeleteGroupId] = useState<string | null>(null);
  
    const [submitting, setSubmitting] = useState(false);
- 
+
+  // Server-side paginated SWR
+  const checklistSWRKey = `/api/checklists?page=${currentPage}&limit=${itemsPerPage}&search=${encodeURIComponent(searchTerm)}&statusFilters=${encodeURIComponent(JSON.stringify(activeStatusFilters))}&assignmentFilter=${encodeURIComponent(assignmentFilter)}&currentUser=${encodeURIComponent(currentUser)}&userRole=${encodeURIComponent(userRole)}&dateFilters=${encodeURIComponent(JSON.stringify(dateFilters))}&startDate=${encodeURIComponent(modalStartDate)}&endDate=${encodeURIComponent(modalEndDate)}&modalStatus=${encodeURIComponent(JSON.stringify(modalStatusFilter))}&modalPriority=${encodeURIComponent(JSON.stringify(modalPriorityFilter))}&modalAssignedTo=${encodeURIComponent(JSON.stringify(modalAssignedToFilter))}&modalAssignedBy=${encodeURIComponent(JSON.stringify(modalAssignedByFilter))}&modalDepartment=${encodeURIComponent(JSON.stringify(modalDepartmentFilter))}&modalFrequency=${encodeURIComponent(JSON.stringify(modalFrequencyFilter))}&sortKey=${encodeURIComponent(sortConfig?.key || 'id')}&sortDir=${encodeURIComponent(sortConfig?.direction || 'desc')}`;
+  const { data: paginationData, isLoading: isPageLoading, mutate: mutateChecklists } = useSWR<{
+    data: Checklist[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    statusCounts: Record<string, number>;
+    dateCounts: Record<string, number>;
+    toMeCount: number;
+    byMeCount: number;
+    counts: {
+      priority: Record<string, number>;
+      assignedTo: Record<string, number>;
+      assignedBy: Record<string, number>;
+      department: Record<string, number>;
+      frequency: Record<string, number>;
+    };
+  }>(checklistSWRKey, fetcher, {
+    revalidateOnFocus: true,
+    revalidateOnMount: true,
+    refreshInterval: 0, // No background polling — SSE handles change detection
+  });
+  const isLoading = isPageLoading;
+
+  // SSE: instantly refetch when a new checklist is added or deleted
+  useSSE({ modules: ['checklists'], onUpdate: () => mutateChecklists() });
+
+  // Derived data from server response
+  const paginatedChecklists = paginationData?.data || [];
+  const totalPages = paginationData?.totalPages || 1;
+  const statusCounts = paginationData?.statusCounts || {};
+  const dateCounts = paginationData?.dateCounts || {};
+  const toMeCount = paginationData?.toMeCount || 0;
+  const byMeCount = paginationData?.byMeCount || 0;
+  const modalCounts = paginationData?.counts || { priority: {}, assignedTo: {}, assignedBy: {}, department: {}, frequency: {} };
+
    useEffect(() => {
     fetchUsers();
   }, []);
-
-  useEffect(() => {
-    if (!swrChecklists && checklists.length === 0) {
-      setIsLoading(true);
-    } else {
-      setIsLoading(false);
-    }
-  }, [swrChecklists, checklists]);
 
   useEffect(() => {
     if (selectedTask) {
@@ -508,28 +528,39 @@ export default function ChecklistsPage() {
     return formattedDates.join(', ');
   };
 
-  const handleExport = () => {
-    const headers = ["ID", "Task", "Assigned By", "Assigned To", "Priority", "Department", "Verification", "Attachment", "Frequency", "Due Date", "Status", "Group ID"];
-    const rows = sortedChecklists.map(c => [
-      c.id, c.task, c.assigned_by, c.assigned_to, c.priority, c.department,
-      c.verification_required, c.attachment_required,
-      c.frequency, c.due_date, c.status, c.group_id
-    ]);
+  const handleExport = async () => {
+    const exportUrl = checklistSWRKey
+      .replace(`page=${currentPage}`, 'page=1')
+      .replace(`limit=${itemsPerPage}`, 'limit=100000');
+    try {
+      const res = await fetch(exportUrl);
+      const result = await res.json();
+      const allItems: Checklist[] = result.data || [];
 
-    const csvContent = [
-      headers.join(","),
-      ...rows.map(row => row.map(val => `"${val}"`).join(","))
-    ].join("\n");
+      const headers = ["ID", "Task", "Assigned By", "Assigned To", "Priority", "Department", "Verification", "Attachment", "Frequency", "Due Date", "Status", "Group ID"];
+      const rows = allItems.map((c: Checklist) => [
+        c.id, c.task, c.assigned_by, c.assigned_to, c.priority, c.department,
+        c.verification_required, c.attachment_required,
+        c.frequency, c.due_date, c.status, c.group_id
+      ]);
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `checklists_export_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const csvContent = [
+        headers.join(","),
+        ...rows.map(row => row.map(val => `"${val}"`).join(","))
+      ].join("\n");
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `checklists_export_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Export failed", err);
+    }
   };
 
   const handleDeleteClick = (item: Checklist) => {
@@ -567,160 +598,34 @@ export default function ChecklistsPage() {
     }
   };
 
+  // Filtering and sorting handled server-side. Client only needs display status for badges.
   const getDisplayStatus = (item: Checklist) => {
     const s = item.status;
-    if (s && s !== 'Pending') {
-      if (s === 'Completed') return 'Completed';
-      if (s === 'Approved') return 'Approved';
-      if (s === 'Hold') return 'Hold';
-      if (s === 'Re-Open') return 'Re-Open';
-      if (s === 'Need Revision') return 'Need Revision';
-      return s;
-    }
-
+    if (s && s !== 'Pending') return s;
     if (!item.due_date) return s || 'Pending';
-
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-
     const due = getEarliestDate(item.due_date);
     if (!due) return item.status || 'Pending';
     due.setHours(0, 0, 0, 0);
-
     if (due < now) return 'Overdue';
     if (due > now) return 'Planned';
     return 'Pending';
-  };
-
-  // Filtering
-  const baseChecklists = userRole === 'USER' 
-    ? checklists.filter(c => c.assigned_to === currentUser)
-    : checklists;
-
-  const filteredChecklists = baseChecklists.filter((c) => {
-    const matchesSearch = Object.values(c).some((val) =>
-      val?.toString().toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    
-    const matchesStatus = activeStatusFilters.length === 0 || activeStatusFilters.includes(getDisplayStatus(c));
-    
-    let matchesAssignment = true;
-    
-    if (userRole === 'USER') {
-      matchesAssignment = c.assigned_to === currentUser;
-    } else {
-      if (assignmentFilter === 'ToMe') matchesAssignment = c.assigned_to === currentUser;
-      else if (assignmentFilter === 'ByMe') matchesAssignment = c.assigned_by === currentUser;
-    }
-
-    let matchesDate = true;
-    if (dateFilters.length > 0) {
-      const displayStatus = getDisplayStatus(c);
-      if (!c.due_date || displayStatus === 'Completed' || displayStatus === 'Approved') {
-        matchesDate = false;
-      } else {
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        const due = getEarliestDate(c.due_date);
-        if (due) {
-          due.setHours(0, 0, 0, 0);
-          const diffDays = Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-          
-          matchesDate = dateFilters.some(f => {
-            if (f === 'Delayed') return diffDays < 0;
-            if (f === 'Today') return diffDays === 0;
-            if (f === 'Tomorrow') return diffDays === 1;
-            if (f === 'Next3') return diffDays > 0 && diffDays <= 3;
-            return false;
-          });
-        } else {
-          matchesDate = false;
-        }
-      }
-    }
-
-    // Modal Filters
-    const matchesModalStatus = modalStatusFilter.length === 0 || modalStatusFilter.includes(getDisplayStatus(c));
-    const matchesModalPriority = modalPriorityFilter.length === 0 || modalPriorityFilter.includes(c.priority || "");
-    const matchesModalAssignedTo = modalAssignedToFilter.length === 0 || modalAssignedToFilter.includes(c.assigned_to || "");
-    const matchesModalAssignedBy = modalAssignedByFilter.length === 0 || modalAssignedByFilter.includes(c.assigned_by || "");
-    const matchesModalDepartment = modalDepartmentFilter.length === 0 || modalDepartmentFilter.includes(c.department || "");
-    const matchesModalFrequency = modalFrequencyFilter.length === 0 || modalFrequencyFilter.includes(c.frequency || "");
-
-    let matchesModalDate = true;
-    if (modalStartDate || modalEndDate) {
-      const due = getEarliestDate(c.due_date);
-      if (due) {
-        due.setHours(0, 0, 0, 0);
-        if (modalStartDate) {
-          const start = new Date(modalStartDate);
-          start.setHours(0, 0, 0, 0);
-          if (due < start) matchesModalDate = false;
-        }
-        if (modalEndDate) {
-          const end = new Date(modalEndDate);
-          end.setHours(0, 0, 0, 0);
-          if (due > end) matchesModalDate = false;
-        }
-      } else {
-        matchesModalDate = false;
-      }
-    }
-
-    return matchesSearch && matchesStatus && matchesAssignment && matchesDate && 
-           matchesModalStatus && matchesModalPriority && matchesModalAssignedTo && 
-           matchesModalAssignedBy && matchesModalDepartment && matchesModalFrequency && matchesModalDate;
-  });
-
-  const getDateFilterCount = (filter: string) => {
-    return baseChecklists.filter(c => {
-      const displayStatus = getDisplayStatus(c);
-      if (!c.due_date || displayStatus === 'Completed' || displayStatus === 'Approved') return false;
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      const due = getEarliestDate(c.due_date);
-      if (!due) return false;
-      due.setHours(0, 0, 0, 0);
-      const diffDays = Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      if (filter === 'Delayed') return diffDays < 0;
-      if (filter === 'Today') return diffDays === 0;
-      if (filter === 'Tomorrow') return diffDays === 1;
-      if (filter === 'Next3') return diffDays > 0 && diffDays <= 3;
-      return false;
-    }).length;
   };
 
   const handleSort = (key: keyof Checklist) => {
     let direction: 'asc' | 'desc' = 'asc';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
     setSortConfig({ key, direction });
+    setCurrentPage(1);
   };
-
-  const sortedChecklists = [...filteredChecklists].sort((a, b) => {
-    if (!sortConfig) return 0;
-    const { key, direction } = sortConfig;
-    let aValue = a[key] || "";
-    let bValue = b[key] || "";
-    if (key === 'id') {
-      const aNum = parseInt(String(aValue));
-      const bNum = parseInt(String(bValue));
-      if (!isNaN(aNum) && !isNaN(bNum)) return direction === 'asc' ? aNum - bNum : bNum - aNum;
-    }
-    if (aValue < bValue) return direction === 'asc' ? -1 : 1;
-    if (aValue > bValue) return direction === 'asc' ? 1 : -1;
-    return 0;
-  });
 
   const SortIcon = ({ column }: { column: keyof Checklist }) => {
     if (sortConfig?.key !== column) return <div className="w-3 h-3 ml-1 opacity-20" />;
-    return sortConfig.direction === 'asc' ? 
-      <ChevronUpIcon className="w-3 h-3 ml-1 text-[#FFD500]" /> : 
+    return sortConfig.direction === 'asc' ?
+      <ChevronUpIcon className="w-3 h-3 ml-1 text-[#FFD500]" /> :
       <ChevronDownIcon className="w-3 h-3 ml-1 text-[#FFD500]" />;
   };
-
-  const totalPages = Math.ceil(sortedChecklists.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedChecklists = sortedChecklists.slice(startIndex, startIndex + itemsPerPage);
 
   const getPriorityBadge = (priority: string) => {
     const p = priority?.toLowerCase();
@@ -794,9 +699,6 @@ export default function ChecklistsPage() {
       </span>
     );
   };
-
-  // Get unique users for dropdowns
-  const allUsers = Array.from(new Set(checklists.flatMap(c => [c.assigned_by, c.assigned_to]).filter(Boolean)));
 
   return (
     <div className="space-y-6">
@@ -884,7 +786,7 @@ export default function ChecklistsPage() {
             { label: 'Approved', icon: <ShieldCheckIcon className="w-3 h-3" />, color: 'bg-green-50 text-green-600 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700' },
             { label: 'Overdue', icon: <ExclamationTriangleIcon className="w-3 h-3" />, color: 'bg-red-50 text-red-600 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700' },
           ].map(tile => {
-            const count = tile.label === 'All' ? baseChecklists.length : baseChecklists.filter(c => getDisplayStatus(c) === tile.label).length;
+            const count = statusCounts[tile.label] || 0;
             const isActive = tile.label === 'All' ? activeStatusFilters.length === 0 : activeStatusFilters.includes(tile.label);
             return (
               <button
@@ -945,7 +847,7 @@ export default function ChecklistsPage() {
                   type="text"
                   placeholder="Search..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                   className="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-navy-900 border border-gray-100 dark:border-navy-700/50 rounded-lg focus:border-[#FFD500] outline-none font-bold text-[12px] text-gray-700 dark:text-white transition-all shadow-sm"
                 />
               </div>
@@ -959,7 +861,7 @@ export default function ChecklistsPage() {
                     <span className="hidden xs:inline">To Me</span>
                     <span className="xs:hidden">To</span>
                     <span className={`px-1 rounded-full text-[8px] ${assignmentFilter === 'ToMe' ? 'bg-white/20' : 'bg-gray-200 dark:bg-navy-800'}`}>
-                      {baseChecklists.filter(c => c.assigned_to === ((session?.user as any)?.username || "")).length}
+                      {toMeCount}
                     </span>
                   </button>
                   <button 
@@ -969,7 +871,7 @@ export default function ChecklistsPage() {
                     <span className="hidden xs:inline">By Me</span>
                     <span className="xs:hidden">By</span>
                     <span className={`px-1 rounded-full text-[8px] ${assignmentFilter === 'ByMe' ? 'bg-white/20' : 'bg-gray-200 dark:bg-navy-800'}`}>
-                      {baseChecklists.filter(c => c.assigned_by === ((session?.user as any)?.username || "")).length}
+                      {byMeCount}
                     </span>
                   </button>
                 </div>
@@ -984,7 +886,7 @@ export default function ChecklistsPage() {
                 { id: 'Tomorrow', label: 'Tomorrow', color: 'bg-blue-50 text-blue-600 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700' },
                 { id: 'Next3', label: 'Next 3', color: 'bg-emerald-50 text-emerald-600 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700' }
               ].map(f => {
-                const count = getDateFilterCount(f.id);
+                const count = dateCounts[f.id] || 0;
                 const isActive = dateFilters.includes(f.id);
                 return (
                   <button
@@ -2091,7 +1993,7 @@ export default function ChecklistsPage() {
                         {['Pending', 'Planned', 'Need Clarity', 'Need Revision', 'Completed', 'Approved', 'Hold', 'Re-Open', 'Overdue']
                           .filter(s => s.toLowerCase().includes(modalStatusSearch.toLowerCase()))
                           .map(s => {
-                            const count = baseChecklists.filter(c => getDisplayStatus(c) === s).length;
+                            const count = statusCounts[s] || 0;
                             const isSelected = modalStatusFilter.includes(s);
                             return (
                               <div key={s} 
@@ -2140,7 +2042,7 @@ export default function ChecklistsPage() {
                     <div className="absolute z-[10000] w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
                        <div className="max-h-48 overflow-y-auto p-1 custom-scrollbar">
                         {['Low', 'Medium', 'High'].map(p => {
-                          const count = baseChecklists.filter(c => c.priority === p).length;
+                          const count = modalCounts.priority[p] || 0;
                           const isSelected = modalPriorityFilter.includes(p);
                           return (
                             <div key={p} 
@@ -2198,7 +2100,7 @@ export default function ChecklistsPage() {
                         {usersList
                           .filter(u => u.username.toLowerCase().includes(modalAssignedToSearch.toLowerCase()))
                           .map(u => {
-                            const count = baseChecklists.filter(c => c.assigned_to === u.username).length;
+                            const count = modalCounts.assignedTo[u.username] || 0;
                             const isSelected = modalAssignedToFilter.includes(u.username);
                             return (
                               <div key={u.id} 
@@ -2256,7 +2158,7 @@ export default function ChecklistsPage() {
                         {usersList
                           .filter(u => ['ADMIN', 'EA'].includes(u.role_name?.toUpperCase() || '') && u.username.toLowerCase().includes(modalAssignedBySearch.toLowerCase()))
                           .map(u => {
-                            const count = baseChecklists.filter(c => c.assigned_by === u.username).length;
+                            const count = modalCounts.assignedBy[u.username] || 0;
                             const isSelected = modalAssignedByFilter.includes(u.username);
                             return (
                               <div key={u.id} 
@@ -2314,7 +2216,7 @@ export default function ChecklistsPage() {
                         {predefinedDepartments
                           .filter(d => d.toLowerCase().includes(modalDepartmentSearch.toLowerCase()))
                           .map(d => {
-                            const count = baseChecklists.filter(del => del.department === d).length;
+                            const count = modalCounts.department[d] || 0;
                             const isSelected = modalDepartmentFilter.includes(d);
                             return (
                               <div key={d} 
@@ -2372,7 +2274,7 @@ export default function ChecklistsPage() {
                         {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Half Yearly', 'Yearly']
                           .filter(f => f.toLowerCase().includes(modalFrequencySearch.toLowerCase()))
                           .map(f => {
-                            const count = baseChecklists.filter(c => c.frequency === f).length;
+                            const count = modalCounts.frequency[f] || 0;
                             const isSelected = modalFrequencyFilter.includes(f);
                             return (
                               <div key={f} 

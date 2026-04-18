@@ -14,6 +14,9 @@ import WeeklyUpdateView from "./WeeklyUpdateView";
 import ActionLogView from "./ActionLogView";
 import TeamQueriesView from "./TeamQueriesView";
 import SyncMeetingView from "./SyncMeetingView";
+import UrgentLogView from "./UrgentLogView";
+import DashboardView from "./DashboardView";
+import MdDashboardView from "./MdDashboardView";
 
 export default function EaMdHubPage() {
   const tabs = [
@@ -26,20 +29,26 @@ export default function EaMdHubPage() {
   ];
 
   const [activeTab, setActiveTab] = useState(tabs[0].id);
+  const [viewMode, setViewMode] = useState<'EA' | 'MD'>('EA');
 
   return (
     <div className="space-y-2 flex flex-col h-full w-full">
       {/* Sticky Top Header & Filters */}
       <div className="space-y-2 mb-2 shrink-0">
         {/* Header Section */}
-        <div className="flex flex-col lg:flex-row items-center gap-4 px-1">
-          <div className="w-full lg:w-1/3 text-center lg:text-left min-w-0">
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-4 px-1 pb-2">
+          <div className="text-center lg:text-left min-w-0">
             <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight truncate uppercase">EA–MD Hub</h1>
             <p className="text-gray-500 dark:text-slate-300 font-bold text-[8px] md:text-[10px] uppercase tracking-wider">Executive Assistant & Managing Director Workspace</p>
+          </div>
+          <div className="flex bg-gray-100 dark:bg-navy-900 rounded-full p-1 border border-gray-200 dark:border-navy-700/50 shadow-inner shrink-0">
+            <button onClick={() => setViewMode('EA')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'EA' ? 'bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>EA Workspace</button>
+            <button onClick={() => setViewMode('MD')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'MD' ? 'bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>MD View</button>
           </div>
         </div>
 
         {/* Tabs Layout */}
+        {viewMode === 'EA' && (
         <div className="rounded-2xl border border-gray-100 dark:border-navy-700 overflow-hidden shadow-sm transition-all duration-500 w-full bg-white dark:bg-navy-800">
           <div className="flex flex-nowrap overflow-x-auto no-scrollbar gap-2 p-3 bg-gray-50/50 dark:bg-navy-900/30">
             {tabs.map(tab => {
@@ -55,13 +64,15 @@ export default function EaMdHubPage() {
             })}
           </div>
         </div>
+        )}
       </div>
 
-      <div 
-        className="flex-1 flex flex-col min-h-[500px]"
-      >
-        <AnimatePresence mode="wait">
-          <motion.div
+      {viewMode === 'EA' ? (
+        <div 
+          className="flex-1 flex flex-col min-h-[500px]"
+        >
+          <AnimatePresence mode="wait">
+            <motion.div
              key={activeTab}
              initial={{ opacity: 0, scale: 0.98 }}
              animate={{ opacity: 1, scale: 1 }}
@@ -88,6 +99,14 @@ export default function EaMdHubPage() {
                     <div key={tab.id} className="w-full h-full text-left">
                        <SyncMeetingView />
                     </div>
+                  ) : tab.id === 'urgent-log' ? (
+                    <div key={tab.id} className="w-full h-full text-left">
+                       <UrgentLogView />
+                    </div>
+                  ) : tab.id === 'dashboard' ? (
+                    <div key={tab.id} className="w-full h-full text-left">
+                       <DashboardView goToTab={setActiveTab} />
+                    </div>
                   ) : (
                     <div key={tab.id} className="flex-1 flex flex-col items-center justify-center text-center opacity-50 py-20">
                        <div className="scale-[3] mb-8 text-gray-400">{tab.icon}</div>
@@ -96,10 +115,15 @@ export default function EaMdHubPage() {
                     </div>
                   )
                )
-             ))}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+              ))}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto w-full px-1 scroll-smooth">
+          <MdDashboardView />
+        </div>
+      )}
     </div>
   );
 }

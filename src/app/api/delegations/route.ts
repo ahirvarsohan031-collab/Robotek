@@ -10,7 +10,9 @@ const DELEGATION_FOLDER_ID = "1Rz8tFgUBfLI0WBEXXdZplJJ2zsk0H4l6";
 
 export async function GET() {
   const delegations = await getDelegations();
-  return NextResponse.json(delegations);
+  return NextResponse.json(delegations, {
+    headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+  });
 }
 
 export async function POST(req: NextRequest) {

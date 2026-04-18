@@ -27,6 +27,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useSession } from "next-auth/react";
 import useSWR from "swr";
+import { useSSE } from "@/hooks/useSSE";
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
 
@@ -41,8 +42,13 @@ import PartyFormModal, {
 export default function PartyManagementPage() {
   const [parties, setParties] = useState<PartyManagement[]>([]);
   const { data: swrParties, mutate: mutateParties } = useSWR<PartyManagement[]>("/api/party-management", fetcher, {
-    refreshInterval: 60000,
+    refreshInterval: 0,        // No background polling — SSE handles change detection
+    revalidateOnFocus: true,   // Refetch when user returns to the tab
+    revalidateOnMount: true,   // Refetch on page load
   });
+
+  // SSE: instantly refetch when a new party is added or deleted
+  useSSE({ modules: ['party-management'], onUpdate: () => mutateParties() });
 
   useEffect(() => {
     if (swrParties) {

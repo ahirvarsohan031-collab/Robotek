@@ -253,44 +253,11 @@ export default function ScotPage() {
       // Also fetch O2D data to count actual orders this month
       setIsDashboardLoading(true);
       try {
-        const res = await fetch('/api/o2d?all=true');
+        const res = await fetch('/api/o2d?type=scotDashboard');
         if (res.ok) {
-          const o2dData: any[] = await res.json();
-          const now = new Date();
-          const thisMonth = now.getMonth();
-          const thisYear = now.getFullYear();
-
-          // Single pass: build per-party per-month unique order sets
-          // partyMonths[party]["YYYY-M"] = Set<orderNo>
-          const partyMonths: Record<string, Record<string, Set<string>>> = {};
-          o2dData.forEach((order: any) => {
-            const party = (order.party_name || '').trim().toLowerCase();
-            const orderNo = (order.order_no || '').trim();
-            if (!party || !orderNo) return;
-            const created = new Date(order.created_at || '');
-            if (isNaN(created.getTime())) return;
-            const monthKey = `${created.getFullYear()}-${created.getMonth()}`;
-            if (!partyMonths[party]) partyMonths[party] = {};
-            if (!partyMonths[party][monthKey]) partyMonths[party][monthKey] = new Set();
-            partyMonths[party][monthKey].add(orderNo);
-          });
-
-          // This-month actuals
-          const thisMonthKey = `${thisYear}-${thisMonth}`;
-          const counts: Record<string, number> = {};
-          Object.entries(partyMonths).forEach(([party, months]) => {
-            counts[party] = months[thisMonthKey]?.size ?? 0;
-          });
-          setDashboardOrderCounts(counts);
-
-          // Historical average: avg unique orders per month across ALL months with data
-          const avgOrders: Record<string, number> = {};
-          Object.entries(partyMonths).forEach(([party, months]) => {
-            const monthlyCounts = Object.values(months).map(s => s.size);
-            const avg = monthlyCounts.reduce((a, b) => a + b, 0) / monthlyCounts.length;
-            avgOrders[party] = Math.round(avg);
-          });
-          setDashboardHistoricalAvg(avgOrders);
+          const metrics = await res.json();
+          setDashboardOrderCounts(metrics.dashboardOrderCounts || {});
+          setDashboardHistoricalAvg(metrics.dashboardHistoricalAvg || {});
         } else {
           toast.error(`Failed to load order data (${res.status})`);
         }

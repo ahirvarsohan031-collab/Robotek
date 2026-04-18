@@ -36,6 +36,7 @@ import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ConfirmModal from "@/components/ConfirmModal";
 import Portal from "@/components/Portal";
 import useSWR from "swr";
+import { useSSE } from "@/hooks/useSSE";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -80,8 +81,13 @@ export default function TicketsPage() {
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const { data: swrTickets, mutate: mutateTickets } = useSWR<Ticket[]>("/api/tickets", fetcher, {
-    refreshInterval: 60000,
+    refreshInterval: 0,        // No background polling — SSE handles change detection
+    revalidateOnFocus: true,   // Refetch when user returns to the tab
+    revalidateOnMount: true,   // Refetch on page load
   });
+
+  // SSE: instantly refetch when a new ticket is added or deleted
+  useSSE({ modules: ['tickets'], onUpdate: () => mutateTickets() });
 
   useEffect(() => {
     if (swrTickets) {
@@ -424,10 +430,10 @@ export default function TicketsPage() {
 
   const getDisplayStatus = (t: Ticket) => {
     const s = t.status;
-    if (s === 'Resolved' || s === 'Closed') return s;
+    if (s === 'Resolved') return s;
     if (!t.planned_resolution) return s || 'Open';
     const due = new Date(t.planned_resolution);
-    if (!isNaN(due.getTime()) && due < new Date() && s !== 'Resolved' && s !== 'Closed') return 'Overdue';
+    if (!isNaN(due.getTime()) && due < new Date() && s !== 'Resolved') return 'Overdue';
     return s || 'Open';
   };
 
@@ -461,7 +467,6 @@ export default function TicketsPage() {
     if (s === 'In Progress') return 'bg-amber-500 text-white border-amber-600 shadow-md';
     if (s === 'Pending Info') return 'bg-purple-600 text-white border-purple-700 shadow-md';
     if (s === 'Resolved') return 'bg-emerald-600 text-white border-emerald-700 shadow-md';
-    if (s === 'Closed') return 'bg-slate-600 text-white border-slate-700 shadow-md';
     if (s === 'Overdue') return 'bg-rose-600 text-white border-rose-700 shadow-md';
     return 'bg-gray-500 text-white border-gray-600 shadow-md';
   };
@@ -500,7 +505,6 @@ export default function TicketsPage() {
               { label: 'In Progress', icon: <ArrowPathIcon className="w-3 h-3" />, color: 'bg-amber-50 text-amber-600 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700' },
               { label: 'Pending Info', icon: <ChatBubbleLeftRightIcon className="w-3 h-3" />, color: 'bg-purple-50 text-purple-600 border-purple-300 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-700' },
               { label: 'Resolved', icon: <CheckCircleIcon className="w-3 h-3" />, color: 'bg-emerald-50 text-emerald-600 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700' },
-              { label: 'Closed', icon: <ShieldCheckIcon className="w-3 h-3" />, color: 'bg-gray-50 text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600' },
               { label: 'Overdue', icon: <ExclamationCircleIcon className="w-3 h-3" />, color: 'bg-red-50 text-red-600 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700' },
             ].map(tile => {
               const count = tile.label === 'All' ? baseTickets.length : baseTickets.filter(t => getDisplayStatus(t) === tile.label).length;
@@ -588,7 +592,6 @@ export default function TicketsPage() {
               'In Progress': 'border-amber-300 dark:border-amber-500/30 hover:to-amber-50/20',
               'Pending Info': 'border-purple-300 dark:border-purple-500/30 hover:to-purple-50/20',
               'Resolved': 'border-emerald-300 dark:border-emerald-500/30 hover:to-emerald-50/20',
-              'Closed': 'border-slate-300 dark:border-slate-500/30 hover:to-slate-50/20',
               'Overdue': 'border-rose-300 dark:border-rose-500/30 hover:to-rose-50/20'
             };
             const themeStyle = statusColors[displayStatus] || 'border-gray-300 dark:border-gray-500/30 hover:to-gray-50/20';
@@ -1020,7 +1023,7 @@ export default function TicketsPage() {
                   {submitting && <ArrowPathIcon className="w-3 h-3 animate-spin text-[#003875]" />}
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
-                  {['Open', 'In Progress', 'Pending Info', 'Resolved', 'Closed'].map(s => (
+                  {['Open', 'In Progress', 'Pending Info', 'Resolved'].map(s => (
                     <button
                       key={s}
                       disabled={submitting}

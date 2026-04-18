@@ -272,6 +272,8 @@ export async function GET(req: NextRequest) {
       teamMembers: users.map((u: any) => ({ username: u.username, image_url: u.image_url })),
       score: companyMetrics,
       isAdmin
+    }, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
     });
 
   } catch (error) {

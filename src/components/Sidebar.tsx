@@ -94,7 +94,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
         setDelegationsPendingCount(baseDel.filter(isDelayedOrToday).length);
         setChecklistsPendingCount(baseCheck.filter(isDelayedOrToday).length);
-        setTicketsOpenCount(tickData.filter((t: any) => t.status !== 'Closed').length);
+        setTicketsOpenCount(tickData.filter((t: any) => t.status !== 'Resolved').length);
 
         // O2D Logic
         let delayed = 0;

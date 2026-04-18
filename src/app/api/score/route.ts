@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDelegations } from "@/lib/delegation-sheets";
 import { getChecklists } from "@/lib/checklist-sheets";
 import { getO2Ds, getO2DStepConfig } from "@/lib/o2d-sheets";
-import { getFollowUpData } from "@/lib/scot-sheets";
+import { getFollowUpData, getCallData } from "@/lib/scot-sheets";
 import { getUsers } from "@/lib/google-sheets";
 import { auth } from "@/auth";
 
@@ -61,6 +61,14 @@ const getNextWorkingDay = (dateStr: string) => {
   return date.toISOString().split('T')[0];
 };
 
+const minimizeTask = (t: any) => ({
+  title: t.title,
+  plannedDate: t.plannedDate,
+  actualDate: t.actualDate,
+  isCompleted: t.isCompleted,
+  isLate: t.isLate
+});
+
 const getEffectiveFollowUpDate = (record: any) => {
   if (record.latestNextDate) return record.latestNextDate;
   if (record.lastOrderDate) {
@@ -90,17 +98,33 @@ export async function GET(request: Request) {
 
   try {
     const baseUrl = new URL(request.url).origin;
-    const [delegations, checklists, o2ds, stepConfigs, users, followUps, scotRes] = await Promise.all([
+    const [delegations, checklists, o2ds, stepConfigs, users, followUps, allCalls] = await Promise.all([
       getDelegations(),
       getChecklists(),
       getO2Ds(),
       getO2DStepConfig(),
       getUsers(),
       getFollowUpData(),
-      fetch(`${baseUrl}/api/scot?tab=calls&skipO2D=true`, { headers: { cookie: request.headers.get('cookie') || '' } })
+      getCallData()
     ]);
 
-    const scotCalls = await scotRes.json();
+    const latestFollowUps = followUps.reduce((acc: any, curr: any) => {
+      const existing = acc[curr.partyName];
+      if (!existing || new Date(curr.createdAt) > new Date(existing.createdAt)) {
+        acc[curr.partyName] = curr;
+      }
+      return acc;
+    }, {} as Record<string, any>);
+
+    const scotCalls = allCalls.map((call: any) => {
+      const latest = latestFollowUps[call.partyName];
+      return {
+        ...call,
+        latestStatus: latest?.status || "Pending",
+        latestNextDate: latest?.nextFollowUpDate || "",
+      };
+    }).filter((c: any) => c.latestStatus !== 'Order Lost');
+
     const allTasks: any[] = [];
 
     // Process Delegations
@@ -297,10 +321,10 @@ export async function GET(request: Request) {
           department: u.department
         },
         ...metrics,
-        delegationStats: { ...delegation, items: userTasks.filter(t => t.category === 'delegation' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))) },
-        checklistStats: { ...checklist, items: userTasks.filter(t => t.category === 'checklist' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))) },
-        o2dStats: { ...o2d, items: userTasks.filter(t => t.category === 'o2d' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))) },
-        scotStats: { ...scot, items: userTasks.filter(t => t.category === 'scot' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))) },
+        delegationStats: { ...delegation, items: userTasks.filter(t => t.category === 'delegation' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))).map(minimizeTask) },
+        checklistStats: { ...checklist, items: userTasks.filter(t => t.category === 'checklist' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))).map(minimizeTask) },
+        o2dStats: { ...o2d, items: userTasks.filter(t => t.category === 'o2d' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))).map(minimizeTask) },
+        scotStats: { ...scot, items: userTasks.filter(t => t.category === 'scot' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))).map(minimizeTask) },
         trendData
       };
     });
