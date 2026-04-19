@@ -3,7 +3,9 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm ci --cache .npm --prefer-offline
+        - node -v
+        - npm -v
+        - npm install --prefer-offline
     build:
       commands:
         # Bridging environment variables from Amplify to Next.js (.env)
