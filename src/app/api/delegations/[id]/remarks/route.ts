@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { addDelegationRemark, getDelegations } from "@/lib/delegation-sheets";
+import { Amplify } from "aws-amplify";
+import { generateClient } from 'aws-amplify/data';
+import outputs from '@/../amplify_outputs.json';
+import type { Schema } from '@/../amplify/data/resource';
 import { auth } from "@/auth";
-import { DelegationRemark } from "@/types/delegation";
 import { v4 as uuidv4 } from "uuid";
 import { sendWhatsAppMessage } from "@/lib/maytapi";
 import { getUserByUsernameOrEmail } from "@/lib/google-sheets";
 import { formatDate } from "@/lib/dateUtils";
+
+Amplify.configure(outputs);
+const client = generateClient<Schema>();
 
 export async function POST(
   req: NextRequest,
@@ -25,47 +30,45 @@ export async function POST(
       return NextResponse.json({ error: "Remark is required" }, { status: 400 });
     }
 
-    const newRemark: DelegationRemark = {
-      id: uuidv4(),
+    const usernameStr = (session.user as any).username || session.user.name || "Unknown User";
+
+    const payload = {
       delegation_id: id,
       user_id: session.user.id || "unknown",
-      // @ts-ignore
-      username: session.user.username || session.user.name || "Unknown User",
+      username: usernameStr,
       remark: remark,
       created_at: new Date().toISOString(),
     };
 
-    const success = await addDelegationRemark(newRemark);
+    const { data: newRemark, errors } = await client.models.DelegationRemark.create(payload);
+    
+    if (errors) throw new Error(errors[0].message);
 
-    if (success) {
-      // Send WhatsApp notification for new remark
-      try {
-        const delegations = await getDelegations();
-        const delegation = delegations.find(d => String(d.id) === String(id));
-        if (delegation) {
-          const formattedNow = formatDate(new Date().toISOString());
-          const message = `💬 *New Delegation Comment*\n━━━━━━━━━━━━━━━━━\n📌 *Task:* ${delegation.title}\n🎯 *Priority:* ${delegation.priority}\n👤 *Assigned To:* ${delegation.assigned_to}\n👨‍💼 *Assigned By:* ${delegation.assigned_by}\n📊 *Status:* ${delegation.status}\n\n🗣️ *Comment By:* ${newRemark.username}\n📝 *Comment:* _${remark}_\n⏱️ *At:* ${formattedNow}`;
+    // Send WhatsApp notification for new remark
+    try {
+      const { data: delegation } = await client.models.Delegation.get({ id });
+      
+      if (delegation) {
+        const formattedNow = formatDate(payload.created_at);
+        const message = `💬 *New Delegation Comment*\n━━━━━━━━━━━━━━━━━\n📌 *Task:* ${delegation.title}\n🎯 *Priority:* ${delegation.priority}\n👤 *Assigned To:* ${delegation.assigned_to}\n👨‍💼 *Assigned By:* ${delegation.assigned_by}\n📊 *Status:* ${delegation.status}\n\n🗣️ *Comment By:* ${usernameStr}\n📝 *Comment:* _${remark}_\n⏱️ *At:* ${formattedNow}`;
 
-          const parties = [delegation.assigned_to, delegation.assigned_by];
-          const uniqueParties = [...new Set(parties)];
-          for (const username of uniqueParties) {
-            if (!username) continue;
-            const user = await getUserByUsernameOrEmail(username);
-            if (user && user.phone) {
-              await sendWhatsAppMessage(user.phone, message);
-            }
+        const parties = [delegation.assigned_to, delegation.assigned_by];
+        const uniqueParties = [...new Set(parties)];
+        for (const username of uniqueParties) {
+          if (!username) continue;
+          const user = await getUserByUsernameOrEmail(username);
+          if (user && user.phone) {
+            await sendWhatsAppMessage(user.phone, message);
           }
         }
-      } catch (err) {
-        console.error("Error sending WhatsApp notification for remark:", err);
       }
-
-      return NextResponse.json({ message: "Remark added successfully", remark: newRemark });
-    } else {
-      return NextResponse.json({ error: "Failed to add remark" }, { status: 500 });
+    } catch (err) {
+      console.error("Error sending WhatsApp notification for remark:", err);
     }
-  } catch (error) {
-    console.error("API Error adding remark:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+
+    return NextResponse.json({ message: "Remark added successfully via AWS", remark: newRemark });
+  } catch (error: any) {
+    console.error("API Error adding remark to AWS:", error);
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }

@@ -1,6 +1,24 @@
-import { NextResponse } from "next/server";
-import { saveActionLogItems } from "@/lib/action-log-sheets";
-import { deleteActionLogItem, updateActionLogItem } from "./delete-update-utils";
+import { NextRequest, NextResponse } from "next/server";
+import { Amplify } from "aws-amplify";
+import { generateClient } from "aws-amplify/data";
+import outputs from "@/../amplify_outputs.json";
+import type { Schema } from "@/../amplify/data/resource";
+
+Amplify.configure(outputs);
+const client = generateClient<Schema>();
+
+export const dynamic = "force-dynamic";
+
+// Action Log uses batch POST (array of items)
+export async function GET() {
+  try {
+    const { data, errors } = await client.models.EaMdActionLog.list();
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ items: data });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
 
 export async function POST(req: Request) {
   try {
@@ -11,13 +29,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid or empty items array" }, { status: 400 });
     }
 
-    const result = await saveActionLogItems(items);
-
-    if (result.success) {
-      return NextResponse.json({ success: true, ids: result.ids });
-    } else {
-      return NextResponse.json({ error: "Failed to save to sheets", details: result.error }, { status: 500 });
+    const ids: string[] = [];
+    for (const item of items) {
+      const { __typename, createdAt, updatedAt, id, ...clean } = item;
+      const { data, errors } = await client.models.EaMdActionLog.create({
+        ...clean,
+        timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+      });
+      if (errors) throw new Error(errors[0].message);
+      if (data?.id) ids.push(data.id);
     }
+
+    return NextResponse.json({ success: true, ids });
   } catch (error: any) {
     return NextResponse.json({ error: "Server error: " + error.message }, { status: 500 });
   }
@@ -26,18 +49,14 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const itemId = searchParams.get("id");
-
-    if (!itemId) return NextResponse.json({ error: "Missing item id" }, { status: 400 });
+    const id = searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "Missing item id" }, { status: 400 });
 
     const updates = await req.json();
-    const result = await updateActionLogItem(itemId, updates);
-
-    if (result.success) {
-      return NextResponse.json({ success: true });
-    } else {
-      return NextResponse.json({ error: "Failed to update item", details: result.error }, { status: 500 });
-    }
+    const { __typename, createdAt, updatedAt, ...clean } = updates;
+    const { errors } = await client.models.EaMdActionLog.update({ ...clean, id });
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -46,17 +65,12 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const itemId = searchParams.get("id");
+    const id = searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "Missing item id" }, { status: 400 });
 
-    if (!itemId) return NextResponse.json({ error: "Missing item id" }, { status: 400 });
-
-    const result = await deleteActionLogItem(itemId);
-
-    if (result.success) {
-      return NextResponse.json({ success: true });
-    } else {
-      return NextResponse.json({ error: "Failed to delete item", details: result.error }, { status: 500 });
-    }
+    const { errors } = await client.models.EaMdActionLog.delete({ id });
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

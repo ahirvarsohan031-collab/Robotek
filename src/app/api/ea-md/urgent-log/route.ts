@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUrgentLogs, saveUrgentLog } from "@/lib/urgent-log-sheets";
-import { updateUrgentLogRow, deleteUrgentLogRow } from "./urgent-log-utils";
+import { Amplify } from "aws-amplify";
+import { generateClient } from "aws-amplify/data";
+import outputs from "@/../amplify_outputs.json";
+import type { Schema } from "@/../amplify/data/resource";
 
-export const dynamic = 'force-dynamic';
+Amplify.configure(outputs);
+const client = generateClient<Schema>();
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const items = await getUrgentLogs();
-    return NextResponse.json({ items });
+    const { data, errors } = await client.models.EaMdUrgentLog.list();
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ items: data });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -16,12 +22,10 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const item = await req.json();
-    const result = await saveUrgentLog(item);
-    if (result.success) {
-      return NextResponse.json({ success: true, id: result.id });
-    } else {
-      return NextResponse.json({ error: result.error }, { status: 500 });
-    }
+    const { __typename, createdAt, updatedAt, ...clean } = item;
+    const { data, errors } = await client.models.EaMdUrgentLog.create(clean);
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ success: true, id: data?.id });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -33,14 +37,11 @@ export async function PUT(req: NextRequest) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
-    const updatedData = await req.json();
-    const result = await updateUrgentLogRow(id, updatedData);
-
-    if (result.success) {
-      return NextResponse.json({ success: true });
-    } else {
-      return NextResponse.json({ error: result.error }, { status: 500 });
-    }
+    const body = await req.json();
+    const { __typename, createdAt, updatedAt, ...clean } = body;
+    const { errors } = await client.models.EaMdUrgentLog.update({ ...clean, id });
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -52,12 +53,9 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
-    const result = await deleteUrgentLogRow(id);
-    if (result.success) {
-      return NextResponse.json({ success: true });
-    } else {
-      return NextResponse.json({ error: result.error }, { status: 500 });
-    }
+    const { errors } = await client.models.EaMdUrgentLog.delete({ id });
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

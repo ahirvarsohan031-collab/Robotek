@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSyncMeetings, saveSyncMeeting } from "@/lib/sync-meeting-sheets";
-import { updateSyncMeetingRow, deleteSyncMeetingRow } from "./sync-meeting-utils";
+import { Amplify } from "aws-amplify";
+import { generateClient } from "aws-amplify/data";
+import outputs from "@/../amplify_outputs.json";
+import type { Schema } from "@/../amplify/data/resource";
 
-export const dynamic = 'force-dynamic';
+Amplify.configure(outputs);
+const client = generateClient<Schema>();
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const items = await getSyncMeetings();
-    return NextResponse.json({ items });
+    const { data, errors } = await client.models.EaMdSyncMeeting.list();
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ items: data });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -16,12 +22,19 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const item = await req.json();
-    const result = await saveSyncMeeting(item);
-    if (result.success) {
-      return NextResponse.json({ success: true, id: result.id });
-    } else {
-      return NextResponse.json({ error: result.error }, { status: 500 });
-    }
+    const { __typename, createdAt, updatedAt, id, ...clean } = item;
+
+    // agenda and actionItems are arrays — store as JSON strings
+    const payload = {
+      ...clean,
+      agenda: typeof clean.agenda === "string" ? clean.agenda : JSON.stringify(clean.agenda || []),
+      actionItems: typeof clean.actionItems === "string" ? clean.actionItems : JSON.stringify(clean.actionItems || []),
+      timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+    };
+
+    const { data, errors } = await client.models.EaMdSyncMeeting.create(payload);
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ success: true, id: data?.id });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -33,14 +46,18 @@ export async function PUT(req: NextRequest) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
-    const updatedData = await req.json();
-    const result = await updateSyncMeetingRow(id, updatedData);
+    const body = await req.json();
+    const { __typename, createdAt, updatedAt, ...clean } = body;
+    const payload = {
+      ...clean,
+      id,
+      agenda: typeof clean.agenda === "string" ? clean.agenda : JSON.stringify(clean.agenda || []),
+      actionItems: typeof clean.actionItems === "string" ? clean.actionItems : JSON.stringify(clean.actionItems || []),
+    };
 
-    if (result.success) {
-      return NextResponse.json({ success: true });
-    } else {
-      return NextResponse.json({ error: result.error }, { status: 500 });
-    }
+    const { errors } = await client.models.EaMdSyncMeeting.update(payload);
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -52,12 +69,9 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
-    const result = await deleteSyncMeetingRow(id);
-    if (result.success) {
-      return NextResponse.json({ success: true });
-    } else {
-      return NextResponse.json({ error: result.error }, { status: 500 });
-    }
+    const { errors } = await client.models.EaMdSyncMeeting.delete({ id });
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

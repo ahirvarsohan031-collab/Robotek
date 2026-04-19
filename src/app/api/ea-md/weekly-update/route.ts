@@ -1,132 +1,77 @@
-import { NextResponse } from "next/server";
-import { saveWeeklyUpdateItems } from "@/lib/ea-md-sheets";
-import { deleteWeeklyUpdateItem, updateWeeklyUpdateItem } from "./delete-update-utils";
+import { NextRequest, NextResponse } from "next/server";
+import { Amplify } from "aws-amplify";
+import { generateClient } from "aws-amplify/data";
+import outputs from "@/../amplify_outputs.json";
+import type { Schema } from "@/../amplify/data/resource";
 
-export async function POST(req: Request) {
+Amplify.configure(outputs);
+const client = generateClient<Schema>();
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
   try {
-    console.log("[Weekly Update API] ===== REQUEST RECEIVED =====");
-    
-    // Check environment variables
-    const hasClientId = !!process.env.GOOGLE_CLIENT_ID;
-    const hasClientSecret = !!process.env.GOOGLE_CLIENT_SECRET;
-    const hasTokens = !!process.env.GOOGLE_OAUTH_TOKENS;
-    
-    console.log("[Weekly Update API] Env Check:", {
-      hasClientId,
-      hasClientSecret,
-      hasTokens,
-      clientIdLength: process.env.GOOGLE_CLIENT_ID?.length,
-      clientSecretLength: process.env.GOOGLE_CLIENT_SECRET?.length,
-      tokensLength: process.env.GOOGLE_OAUTH_TOKENS?.length,
-    });
-
-    const body = await req.json();
-    const { items } = body;
-
-    console.log("[Weekly Update API] Received", items?.length, "items");
-    console.log("[Weekly Update API] First item sample:", items?.[0]);
-
-    if (!items || !Array.isArray(items)) {
-      const errMsg = "Invalid payload - items must be an array";
-      console.error("[Weekly Update API]", errMsg);
-      return NextResponse.json({ error: errMsg }, { status: 400 });
-    }
-
-    if (items.length === 0) {
-      const errMsg = "No items to save";
-      console.error("[Weekly Update API]", errMsg);
-      return NextResponse.json({ success: false, error: errMsg }, { status: 400 });
-    }
-
-    console.log("[Weekly Update API] Calling saveWeeklyUpdateItems...");
-    const result = await saveWeeklyUpdateItems(items);
-
-    console.log("[Weekly Update API] Save result:", result);
-
-    if (result.success) {
-      console.log("[Weekly Update API] ===== SUCCESS =====");
-      return NextResponse.json({ success: true, ids: result.ids });
-    } else {
-      console.error("[Weekly Update API] Save failed:", result.error);
-      return NextResponse.json(
-        { 
-          error: "Failed to save to sheets", 
-          details: result.error,
-          message: result.error?.message 
-        }, 
-        { status: 500 }
-      );
-    }
+    const { data, errors } = await client.models.EaMdWeeklyUpdate.list();
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ items: data });
   } catch (error: any) {
-    console.error("[Weekly Update API] ===== EXCEPTION =====");
-    console.error("[Weekly Update API] Error:", error.message);
-    console.error("[Weekly Update API] Stack:", error.stack);
-    console.error("[Weekly Update API] Full error:", error);
-    
-    return NextResponse.json(
-      { 
-        error: "Server error: " + error.message,
-        details: error.message,
-        stack: error.stack
-      }, 
-      { status: 500 }
-    );
-  }
-}
-
-// PUT /api/ea-md/weekly-update?id=xxx  — update a single item
-export async function PUT(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const itemId = searchParams.get("id");
-
-    if (!itemId) {
-      return NextResponse.json({ error: "Missing item id" }, { status: 400 });
-    }
-
-    const updates = await req.json();
-    console.log("[Weekly Update API] PUT - updating item:", itemId, updates);
-
-    const result = await updateWeeklyUpdateItem(itemId, updates);
-
-    if (result.success) {
-      return NextResponse.json({ success: true });
-    } else {
-      return NextResponse.json(
-        { error: "Failed to update item", details: result.error },
-        { status: 500 }
-      );
-    }
-  } catch (error: any) {
-    console.error("[Weekly Update API] PUT error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-// DELETE /api/ea-md/weekly-update?id=xxx  — delete a single item
+// Weekly Update also uses batch POST (array of items)
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { items } = body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ error: "Invalid or empty items array" }, { status: 400 });
+    }
+
+    const ids: string[] = [];
+    for (const item of items) {
+      const { __typename, createdAt, updatedAt, id, ...clean } = item;
+      const { data, errors } = await client.models.EaMdWeeklyUpdate.create({
+        ...clean,
+        timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+      });
+      if (errors) throw new Error(errors[0].message);
+      if (data?.id) ids.push(data.id);
+    }
+
+    return NextResponse.json({ success: true, ids });
+  } catch (error: any) {
+    return NextResponse.json({ error: "Server error: " + error.message }, { status: 500 });
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "Missing item id" }, { status: 400 });
+
+    const updates = await req.json();
+    const { __typename, createdAt, updatedAt, ...clean } = updates;
+    const { errors } = await client.models.EaMdWeeklyUpdate.update({ ...clean, id });
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const itemId = searchParams.get("id");
+    const id = searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "Missing item id" }, { status: 400 });
 
-    if (!itemId) {
-      return NextResponse.json({ error: "Missing item id" }, { status: 400 });
-    }
-
-    console.log("[Weekly Update API] DELETE - removing item:", itemId);
-
-    const result = await deleteWeeklyUpdateItem(itemId);
-
-    if (result.success) {
-      return NextResponse.json({ success: true });
-    } else {
-      return NextResponse.json(
-        { error: "Failed to delete item", details: result.error },
-        { status: 500 }
-      );
-    }
+    const { errors } = await client.models.EaMdWeeklyUpdate.delete({ id });
+    if (errors) throw new Error(errors[0].message);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("[Weekly Update API] DELETE error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

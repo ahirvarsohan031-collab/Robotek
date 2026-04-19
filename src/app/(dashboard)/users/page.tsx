@@ -29,6 +29,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [isSavingPermissions, setIsSavingPermissions] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -126,9 +127,16 @@ export default function UsersPage() {
     try {
       const res = await fetch("/api/users");
       const data = await res.json();
-      setUsers(data);
-    } catch (error) {
+      if (Array.isArray(data)) {
+        setUsers(data);
+        setError(null);
+      } else if (data.error) {
+        setError(data.error);
+        setUsers([]);
+      }
+    } catch (error: any) {
       console.error("Failed to fetch users:", error);
+      setError("Failed to connect to AWS Users database");
     } finally {
       setIsLoading(false);
     }
@@ -406,11 +414,11 @@ export default function UsersPage() {
     }
   };
 
-  const filteredUsers = users.filter((u) =>
+  const filteredUsers = Array.isArray(users) ? users.filter((u) =>
     Object.values(u).some((val) =>
       val?.toString().toLowerCase().includes(searchTerm.toLowerCase())
     )
-  );
+  ) : [];
 
   const handleSort = (key: keyof User) => {
     let direction: 'asc' | 'desc' = 'asc';
