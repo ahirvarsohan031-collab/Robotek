@@ -5,6 +5,7 @@ frontend:
       commands:
         - node -v
         - npm -v
+        - npm cache clean --force
         - npm install --prefer-offline
     build:
       commands:
@@ -26,4 +27,4 @@ frontend:
   cache:
     paths:
       - .next/cache/**/*
-      - node_modules/**/*
+
